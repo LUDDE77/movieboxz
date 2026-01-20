@@ -153,7 +153,51 @@ router.post('/channels/import', async (req, res, next) => {
             })
         }
 
-        // Step 3: Create curation job
+        // Step 3: Ensure channel exists in database
+        try {
+            const existingChannel = await dbOperations.getChannelById(channelId).catch(() => null)
+
+            if (existingChannel) {
+                // Update existing channel with latest info
+                await dbOperations.updateChannel(channelId, {
+                    title: channelInfo.title,
+                    description: channelInfo.description,
+                    thumbnail_url: channelInfo.thumbnailUrl,
+                    banner_url: channelInfo.bannerUrl,
+                    subscriber_count: channelInfo.subscriberCount,
+                    view_count: channelInfo.viewCount,
+                    video_count: channelInfo.videoCount,
+                    is_verified: channelInfo.isVerified,
+                    country: channelInfo.country
+                })
+            } else {
+                // Create new channel
+                await dbOperations.createChannel({
+                    id: channelInfo.id,
+                    title: channelInfo.title,
+                    description: channelInfo.description,
+                    thumbnail_url: channelInfo.thumbnailUrl,
+                    banner_url: channelInfo.bannerUrl,
+                    subscriber_count: channelInfo.subscriberCount,
+                    view_count: channelInfo.viewCount,
+                    video_count: channelInfo.videoCount,
+                    is_verified: channelInfo.isVerified,
+                    country: channelInfo.country,
+                    is_curated: false
+                })
+            }
+
+            logger.info(`Channel ready in database: ${channelInfo.title}`)
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                error: 'Database Error',
+                message: 'Failed to ensure channel exists in database',
+                details: error.message
+            })
+        }
+
+        // Step 4: Create curation job
         const job = await dbOperations.createCurationJob({
             jobType: 'channel_scan',
             channelId: channelId,
@@ -165,7 +209,7 @@ router.post('/channels/import', async (req, res, next) => {
 
         logger.info(`Created curation job: ${job.id} for channel: ${channelInfo.title}`)
 
-        // Step 4: Start import process asynchronously
+        // Step 5: Start import process asynchronously
         // (Run in background, don't wait for completion)
         movieCurator.curateChannelMovies(channelId, { jobId: job.id })
             .then(results => {
@@ -175,7 +219,7 @@ router.post('/channels/import', async (req, res, next) => {
                 logger.error(`Channel import failed for ${channelInfo.title}:`, error.message)
             })
 
-        // Step 5: Return job info immediately
+        // Step 6: Return job info immediately
         res.json({
             success: true,
             data: {
