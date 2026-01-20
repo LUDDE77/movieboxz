@@ -8,7 +8,7 @@ import slowDown from 'express-slow-down'
 import dotenv from 'dotenv'
 
 // Import routes
-import moviesRouter from './routes/movies.js'
+import moviesRouter from './routes/moviesV2.js'
 import channelsRouter from './routes/channels.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
