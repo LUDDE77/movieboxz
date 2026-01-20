@@ -1,38 +1,40 @@
 import { createClient } from '@supabase/supabase-js'
 import { logger } from '../utils/logger.js'
+import dotenv from 'dotenv'
 
-// Initialize Supabase client
+// Load environment variables
+dotenv.config()
+
+// Supabase client configuration
 const supabaseUrl = process.env.SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseServiceKey) {
-    logger.error('Missing required Supabase environment variables')
-    process.exit(1)
+if (!supabaseUrl || !supabaseKey) {
+    logger.error('❌ Supabase credentials missing')
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY/SUPABASE_ANON_KEY must be set')
 }
 
-// Service client (for backend operations)
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+// Initialize Supabase client
+const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: {
-        autoRefreshToken: false,
-        persistSession: false
+        persistSession: false,
+        autoRefreshToken: false
+    },
+    db: {
+        schema: 'public'
     }
 })
 
-// Public client (for user-facing operations)
-export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey)
+logger.info('✅ Supabase client initialized')
 
-// Database connection test
-export const testDatabaseConnection = async () => {
+// Test database connection
+export async function testConnection() {
     try {
         const { data, error } = await supabase
             .from('movies')
-            .select('count(*)')
-            .limit(1)
+            .select('count', { count: 'exact', head: true })
 
-        if (error) {
-            throw error
-        }
+        if (error) throw error
 
         logger.info('✅ Database connection successful')
         return true
@@ -92,8 +94,18 @@ export const dbOperations = {
             throw error
         }
 
+        // Transform data to flatten nested structures for iOS compatibility
+        const transformedMovies = (data || []).map(movie => ({
+            ...movie,
+            channel_title: movie.channels?.title,
+            channel_thumbnail: movie.channels?.thumbnail_url,
+            genres: movie.movie_genres?.map(mg => mg.genres) || [],
+            channels: undefined,        // Remove nested object
+            movie_genres: undefined     // Remove nested array
+        }))
+
         return {
-            movies: data || [],
+            movies: transformedMovies,
             total: count,
             limit,
             offset
@@ -116,7 +128,17 @@ export const dbOperations = {
             throw error
         }
 
-        return data
+        // Transform data to flatten nested structures for iOS compatibility
+        const transformedMovie = {
+            ...data,
+            channel_title: data.channels?.title,
+            channel_thumbnail: data.channels?.thumbnail_url,
+            genres: data.movie_genres?.map(mg => mg.genres) || [],
+            channels: undefined,        // Remove nested object
+            movie_genres: undefined     // Remove nested array
+        }
+
+        return transformedMovie
     },
 
     async getMovieByYouTubeId(youtubeVideoId) {
@@ -134,7 +156,17 @@ export const dbOperations = {
             throw error
         }
 
-        return data
+        // Transform data to flatten nested structures for iOS compatibility
+        const transformedMovie = {
+            ...data,
+            channel_title: data.channels?.title,
+            channel_thumbnail: data.channels?.thumbnail_url,
+            genres: data.movie_genres?.map(mg => mg.genres) || [],
+            channels: undefined,        // Remove nested object
+            movie_genres: undefined     // Remove nested array
+        }
+
+        return transformedMovie
     },
 
     async createMovie(movieData) {
@@ -169,46 +201,44 @@ export const dbOperations = {
         return data
     },
 
-    async updateMovieStats(youtubeVideoId, stats) {
-        const { data, error } = await supabase
+    async deleteMovie(id) {
+        const { error } = await supabase
             .from('movies')
-            .update({
-                view_count: stats.viewCount,
-                like_count: stats.likeCount,
-                comment_count: stats.commentCount,
-                last_validated: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .eq('youtube_video_id', youtubeVideoId)
-            .select()
+            .delete()
+            .eq('id', id)
 
         if (error) {
             throw error
         }
 
-        return data
+        return true
     },
 
     // Channels
-    async getChannels(limit = 50, offset = 0) {
-        const { data, error } = await supabase
+    async getChannels(limit = 20, offset = 0) {
+        const { data, error, count } = await supabase
             .from('channels')
-            .select('*')
-            .order('subscriber_count', { ascending: false })
+            .select('*', { count: 'exact' })
+            .order('title', { ascending: true })
             .range(offset, offset + limit - 1)
 
         if (error) {
             throw error
         }
 
-        return data || []
+        return {
+            channels: data || [],
+            total: count,
+            limit,
+            offset
+        }
     },
 
-    async getChannelById(channelId) {
+    async getChannelById(id) {
         const { data, error } = await supabase
             .from('channels')
             .select('*')
-            .eq('id', channelId)
+            .eq('id', id)
             .single()
 
         if (error) {
@@ -232,14 +262,14 @@ export const dbOperations = {
         return data
     },
 
-    async updateChannel(channelId, updateData) {
+    async updateChannel(id, updateData) {
         const { data, error } = await supabase
             .from('channels')
             .update({
                 ...updateData,
                 updated_at: new Date().toISOString()
             })
-            .eq('id', channelId)
+            .eq('id', id)
             .select()
             .single()
 
@@ -250,26 +280,12 @@ export const dbOperations = {
         return data
     },
 
-    // Genres
-    async getGenres() {
+    // Users
+    async createUser(userData) {
         const { data, error } = await supabase
-            .from('genres')
-            .select('*')
-            .order('name')
-
-        if (error) {
-            throw error
-        }
-
-        return data || []
-    },
-
-    // User operations
-    async getUserProfile(userId) {
-        const { data, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
+            .from('users')
+            .insert([userData])
+            .select()
             .single()
 
         if (error) {
@@ -279,27 +295,89 @@ export const dbOperations = {
         return data
     },
 
-    async getUserFavorites(userId, limit = 50) {
+    async getUserById(id) {
         const { data, error } = await supabase
-            .from('user_favorites')
-            .select(`
-                *,
-                movies(*)
-            `)
-            .eq('user_id', userId)
-            .order('added_at', { ascending: false })
-            .limit(limit)
+            .from('users')
+            .select('*')
+            .eq('id', id)
+            .single()
 
         if (error) {
             throw error
         }
 
-        return data || []
+        return data
     },
 
-    async addToFavorites(userId, movieId) {
+    async updateUser(id, updateData) {
         const { data, error } = await supabase
-            .from('user_favorites')
+            .from('users')
+            .update({
+                ...updateData,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) {
+            throw error
+        }
+
+        return data
+    },
+
+    // Watch History
+    async addToWatchHistory(userId, movieId, progress = 0) {
+        const { data, error } = await supabase
+            .from('watch_history')
+            .upsert([
+                {
+                    user_id: userId,
+                    movie_id: movieId,
+                    progress,
+                    last_watched: new Date().toISOString()
+                }
+            ], {
+                onConflict: 'user_id,movie_id'
+            })
+            .select()
+            .single()
+
+        if (error) {
+            throw error
+        }
+
+        return data
+    },
+
+    async getWatchHistory(userId, limit = 20, offset = 0) {
+        const { data, error, count } = await supabase
+            .from('watch_history')
+            .select(`
+                *,
+                movies(*)
+            `, { count: 'exact' })
+            .eq('user_id', userId)
+            .order('last_watched', { ascending: false })
+            .range(offset, offset + limit - 1)
+
+        if (error) {
+            throw error
+        }
+
+        return {
+            history: data || [],
+            total: count,
+            limit,
+            offset
+        }
+    },
+
+    // My List
+    async addToMyList(userId, movieId) {
+        const { data, error } = await supabase
+            .from('my_list')
             .insert([{
                 user_id: userId,
                 movie_id: movieId
@@ -314,9 +392,9 @@ export const dbOperations = {
         return data
     },
 
-    async removeFromFavorites(userId, movieId) {
+    async removeFromMyList(userId, movieId) {
         const { error } = await supabase
-            .from('user_favorites')
+            .from('my_list')
             .delete()
             .eq('user_id', userId)
             .eq('movie_id', movieId)
@@ -328,15 +406,38 @@ export const dbOperations = {
         return true
     },
 
-    // Watch history
-    async updateWatchHistory(userId, movieId, progressData) {
+    async getMyList(userId, limit = 20, offset = 0) {
+        const { data, error, count } = await supabase
+            .from('my_list')
+            .select(`
+                *,
+                movies(*)
+            `, { count: 'exact' })
+            .eq('user_id', userId)
+            .order('added_at', { ascending: false })
+            .range(offset, offset + limit - 1)
+
+        if (error) {
+            throw error
+        }
+
+        return {
+            movies: data?.map(item => item.movies) || [],
+            total: count,
+            limit,
+            offset
+        }
+    },
+
+    // Curation Jobs
+    async createCurationJob(jobData) {
         const { data, error } = await supabase
-            .from('watch_history')
-            .upsert({
-                user_id: userId,
-                movie_id: movieId,
-                ...progressData
-            })
+            .from('curation_jobs')
+            .insert([{
+                ...jobData,
+                status: 'pending',
+                created_at: new Date().toISOString()
+            }])
             .select()
             .single()
 
@@ -347,81 +448,11 @@ export const dbOperations = {
         return data
     },
 
-    async getWatchHistory(userId, limit = 50) {
-        const { data, error } = await supabase
-            .from('watch_history')
-            .select(`
-                *,
-                movies(*)
-            `)
-            .eq('user_id', userId)
-            .order('last_watched_at', { ascending: false })
-            .limit(limit)
-
-        if (error) {
-            throw error
-        }
-
-        return data || []
-    },
-
-    // API usage tracking
-    async logApiUsage(service, endpoint, method, quotaCost = 1, responseStatus = 200, responseTime = 0, error = null) {
-        const { data, error: logError } = await supabase
-            .from('api_usage')
-            .insert([{
-                service,
-                endpoint,
-                method,
-                quota_cost: quotaCost,
-                response_status: responseStatus,
-                response_time_ms: responseTime,
-                error_message: error
-            }])
-
-        if (logError) {
-            logger.error('Failed to log API usage:', logError)
-        }
-
-        return data
-    },
-
-    // Collections
-    async getCollections(isPublic = true) {
-        const { data, error } = await supabase
-            .from('movie_collections')
-            .select(`
-                *,
-                collection_movies(
-                    sort_order,
-                    movies(*)
-                )
-            `)
-            .eq('is_public', isPublic)
-            .order('sort_order')
-
-        if (error) {
-            throw error
-        }
-
-        return data || []
-    },
-
-    // Curation Jobs
-    async createCurationJob(jobData) {
+    async updateCurationJob(jobId, updateData) {
         const { data, error } = await supabase
             .from('curation_jobs')
-            .insert([{
-                job_type: jobData.jobType || 'channel_scan',
-                status: 'pending',
-                channel_id: jobData.channelId,
-                total_items: 0,
-                processed_items: 0,
-                successful_items: 0,
-                failed_items: 0,
-                result_summary: jobData.resultSummary || {},
-                error_log: []
-            }])
+            .update(updateData)
+            .eq('id', jobId)
             .select()
             .single()
 
@@ -449,14 +480,15 @@ export const dbOperations = {
         return data
     },
 
-    async getCurationJobs(filters = {}, limit = 50, offset = 0) {
+    async getCurationJobs(filters = {}, limit = 20, offset = 0) {
         let query = supabase
             .from('curation_jobs')
             .select(`
                 *,
                 channels(id, title)
-            `)
+            `, { count: 'exact' })
 
+        // Apply filters
         if (filters.status) {
             query = query.eq('status', filters.status)
         }
@@ -469,9 +501,13 @@ export const dbOperations = {
             query = query.eq('channel_id', filters.channelId)
         }
 
-        query = query
-            .order('created_at', { ascending: false })
-            .range(offset, offset + limit - 1)
+        // Sort by created_at descending
+        query = query.order('created_at', { ascending: false })
+
+        // Pagination
+        if (limit) {
+            query = query.range(offset, offset + limit - 1)
+        }
 
         const { data, error } = await query
 
@@ -480,101 +516,6 @@ export const dbOperations = {
         }
 
         return data || []
-    },
-
-    async updateCurationJob(jobId, updateData) {
-        const { data, error } = await supabase
-            .from('curation_jobs')
-            .update(updateData)
-            .eq('id', jobId)
-            .select()
-            .single()
-
-        if (error) {
-            throw error
-        }
-
-        return data
-    },
-
-    async startCurationJob(jobId) {
-        const { data, error } = await supabase
-            .from('curation_jobs')
-            .update({
-                status: 'running',
-                started_at: new Date().toISOString()
-            })
-            .eq('id', jobId)
-            .select()
-            .single()
-
-        if (error) {
-            throw error
-        }
-
-        return data
-    },
-
-    async completeCurationJob(jobId, results) {
-        const { data, error } = await supabase
-            .from('curation_jobs')
-            .update({
-                status: results.errors && results.errors.length > 0 ? 'completed' : 'completed',
-                completed_at: new Date().toISOString(),
-                total_items: results.moviesFound || 0,
-                processed_items: results.moviesFound || 0,
-                successful_items: results.moviesAdded || 0,
-                failed_items: (results.moviesFound || 0) - (results.moviesAdded || 0),
-                result_summary: results,
-                error_log: results.errors || []
-            })
-            .eq('id', jobId)
-            .select()
-            .single()
-
-        if (error) {
-            throw error
-        }
-
-        return data
-    },
-
-    async failCurationJob(jobId, errorMessage) {
-        const { data, error } = await supabase
-            .from('curation_jobs')
-            .update({
-                status: 'failed',
-                completed_at: new Date().toISOString(),
-                error_log: [errorMessage]
-            })
-            .eq('id', jobId)
-            .select()
-            .single()
-
-        if (error) {
-            throw error
-        }
-
-        return data
-    },
-
-    async updateCurationJobProgress(jobId, progress) {
-        const { data, error } = await supabase
-            .from('curation_jobs')
-            .update({
-                processed_items: progress.processed || 0,
-                successful_items: progress.successful || 0,
-                failed_items: progress.failed || 0
-            })
-            .eq('id', jobId)
-            .select()
-            .single()
-
-        if (error) {
-            throw error
-        }
-
-        return data
     }
 }
 
