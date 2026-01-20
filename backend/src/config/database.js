@@ -95,14 +95,15 @@ export const dbOperations = {
         }
 
         // Transform data to flatten nested structures for iOS compatibility
-        const transformedMovies = (data || []).map(movie => ({
-            ...movie,
-            channel_title: movie.channels?.title,
-            channel_thumbnail: movie.channels?.thumbnail_url,
-            genres: movie.movie_genres?.map(mg => mg.genres) || [],
-            channels: undefined,        // Remove nested object
-            movie_genres: undefined     // Remove nested array
-        }))
+        const transformedMovies = (data || []).map(movie => {
+            const { channels, movie_genres, ...movieData } = movie
+            return {
+                ...movieData,
+                channel_title: channels?.title || null,
+                channel_thumbnail: channels?.thumbnail_url || null,
+                genres: movie_genres?.map(mg => mg.genres) || []
+            }
+        })
 
         return {
             movies: transformedMovies,
@@ -129,16 +130,13 @@ export const dbOperations = {
         }
 
         // Transform data to flatten nested structures for iOS compatibility
-        const transformedMovie = {
-            ...data,
-            channel_title: data.channels?.title,
-            channel_thumbnail: data.channels?.thumbnail_url,
-            genres: data.movie_genres?.map(mg => mg.genres) || [],
-            channels: undefined,        // Remove nested object
-            movie_genres: undefined     // Remove nested array
+        const { channels, movie_genres, ...movieData } = data
+        return {
+            ...movieData,
+            channel_title: channels?.title || null,
+            channel_thumbnail: channels?.thumbnail_url || null,
+            genres: movie_genres?.map(mg => mg.genres) || []
         }
-
-        return transformedMovie
     },
 
     async getMovieByYouTubeId(youtubeVideoId) {
@@ -157,16 +155,13 @@ export const dbOperations = {
         }
 
         // Transform data to flatten nested structures for iOS compatibility
-        const transformedMovie = {
-            ...data,
-            channel_title: data.channels?.title,
-            channel_thumbnail: data.channels?.thumbnail_url,
-            genres: data.movie_genres?.map(mg => mg.genres) || [],
-            channels: undefined,        // Remove nested object
-            movie_genres: undefined     // Remove nested array
+        const { channels, movie_genres, ...movieData } = data
+        return {
+            ...movieData,
+            channel_title: channels?.title || null,
+            channel_thumbnail: channels?.thumbnail_url || null,
+            genres: movie_genres?.map(mg => mg.genres) || []
         }
-
-        return transformedMovie
     },
 
     async createMovie(movieData) {
@@ -514,7 +509,6 @@ export const dbOperations = {
         if (error) {
             throw error
         }
-
         return data || []
     }
 }
