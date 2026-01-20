@@ -8,7 +8,7 @@ import slowDown from 'express-slow-down'
 import dotenv from 'dotenv'
 
 // Import routes
-import moviesRouter from './routes/moviesV2.js'
+import moviesRouter from './routes/movies.js'
 import channelsRouter from './routes/channels.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
@@ -73,7 +73,7 @@ const speedLimiter = slowDown({
     windowMs: 15 * 60 * 1000, // 15 minutes
     delayAfter: 50, // allow 50 requests per 15 minutes, then...
     delayMs: 500, // begin adding 500ms of delay per request above 50
-    maxDelayMs: 20000, // maximum delay of 20 seconds
+    maxDelayMs: 20000, // maximum delay of 20 seconds,
 })
 
 app.use('/api', limiter)
