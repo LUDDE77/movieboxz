@@ -205,7 +205,9 @@ struct VideoPlayerView: View {
                     }
                 }
             }
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {

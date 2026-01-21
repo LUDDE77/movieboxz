@@ -180,6 +180,7 @@ struct MovieDetailView: View {
                 .buttonStyle(.plain)
 
                 // Share button
+                #if os(iOS)
                 Button {
                     if let url = movie.youtubeURL {
                         let activityVC = UIActivityViewController(
@@ -204,6 +205,7 @@ struct MovieDetailView: View {
                     .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
+                #endif
             }
         }
         .padding(.top, 16)
