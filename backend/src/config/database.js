@@ -29,7 +29,7 @@ export const testDatabaseConnection = async () => {
 
         const { data, error } = await supabase
             .from('movies')
-            .select('count(*)')
+            .select('id')
             .limit(1)
 
         if (error) {
@@ -85,6 +85,7 @@ export const dbOperations = {
         if (filters.channelId) {
             query = query.eq('channel_id', filters.channelId)
         }
+
         if (filters.search) {
             query = query.textSearch('search_vector', filters.search)
         }
@@ -441,7 +442,6 @@ export const dbOperations = {
         if (error) {
             throw error
         }
-
         return data || []
     },
 
@@ -466,6 +466,7 @@ export const dbOperations = {
         if (error) {
             throw error
         }
+
         return data
     },
 
