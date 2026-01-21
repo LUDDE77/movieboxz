@@ -110,6 +110,11 @@ struct VideoPlayerView: View {
             )
             .ignoresSafeArea()
         }
+        #if os(tvOS)
+        .onExitCommand {
+            showingSafariPlayer = false
+        }
+        #endif
     }
     #endif
 
@@ -235,6 +240,11 @@ struct VideoPlayerView: View {
             Text("MovieBoxZ requires the YouTube app to watch movies. Videos cannot play in Safari/web browser.\n\nPlease install the YouTube app from the App Store.")
         }
         .preferredColorScheme(.dark)
+        #if os(tvOS)
+        .onExitCommand {
+            dismiss()
+        }
+        #endif
     }
 
     // MARK: - Helper Methods

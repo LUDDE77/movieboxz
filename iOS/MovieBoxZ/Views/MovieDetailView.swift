@@ -61,6 +61,11 @@ struct MovieDetailView: View {
         .sheet(isPresented: $showingVideoPlayer) {
             VideoPlayerView(movie: movie)
         }
+        #if os(tvOS)
+        .onExitCommand {
+            dismiss()
+        }
+        #endif
     }
 
     // MARK: - Header Section
