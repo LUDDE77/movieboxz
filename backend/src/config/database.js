@@ -565,7 +565,7 @@ export const dbOperations = {
     },
 
     async failCurationJob(jobId, errorMessage) {
-        const { data, error} = await supabase
+        const { data, error } = await supabase
             .from('curation_jobs')
             .update({
                 status: 'failed',
