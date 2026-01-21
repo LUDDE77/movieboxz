@@ -50,6 +50,40 @@ struct MainBrowseView: View {
                 }
 
                 // Movie Categories
+                #if os(tvOS)
+                // tvOS: Extra spacing to accommodate focus effects
+                VStack(spacing: 60) {
+                    if !trendingMovies.isEmpty {
+                        MovieRowView(
+                            title: "Trending Now",
+                            movies: trendingMovies,
+                            movieService: movieService,
+                            onPlayVideo: playVideo
+                        )
+                    }
+
+                    if !popularMovies.isEmpty {
+                        MovieRowView(
+                            title: "Popular Movies",
+                            movies: popularMovies,
+                            movieService: movieService,
+                            onPlayVideo: playVideo
+                        )
+                    }
+
+                    if !recentMovies.isEmpty {
+                        MovieRowView(
+                            title: "Recently Added",
+                            movies: recentMovies,
+                            movieService: movieService,
+                            onPlayVideo: playVideo
+                        )
+                    }
+                }
+                .padding(.horizontal, 60)
+                .padding(.bottom, 100)
+                #else
+                // iOS: Standard spacing
                 VStack(spacing: 30) {
                     if !trendingMovies.isEmpty {
                         MovieRowView(
@@ -80,6 +114,7 @@ struct MainBrowseView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 50)
+                #endif
             }
         }
         .background(Color.black)
@@ -257,6 +292,17 @@ struct MovieRowView: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
+                #if os(tvOS)
+                // tvOS: Larger spacing to accommodate focus scaling
+                LazyHStack(spacing: 40) {
+                    ForEach(movies) { movie in
+                        MovieCard(movie: movie, movieService: movieService, onPlayVideo: onPlayVideo)
+                            .frame(width: 250, height: 375)
+                    }
+                }
+                .padding(.horizontal, 60)
+                #else
+                // iOS: Compact spacing for touch interface
                 LazyHStack(spacing: 15) {
                     ForEach(movies) { movie in
                         MovieCard(movie: movie, movieService: movieService, onPlayVideo: onPlayVideo)
@@ -264,6 +310,7 @@ struct MovieRowView: View {
                     }
                 }
                 .padding(.horizontal, 20)
+                #endif
             }
         }
     }
