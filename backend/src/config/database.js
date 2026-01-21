@@ -603,4 +603,7 @@ export const dbOperations = {
     }
 }
 
+// Alias for backwards compatibility with health.js
+export const testConnection = testDatabaseConnection
+
 export default supabase
