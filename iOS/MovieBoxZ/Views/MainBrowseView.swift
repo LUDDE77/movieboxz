@@ -105,7 +105,7 @@ struct MainBrowseView: View {
         }
         .sheet(isPresented: $showingVideoPlayer) {
             if let movie = currentMovie {
-                VideoPlayerView(movie: movie)
+                MovieDetailView(movie: movie)
             }
         }
     }
@@ -276,8 +276,35 @@ struct MovieCard: View {
     let movieService: MovieService
     let onPlayVideo: (String) -> Void
     @State private var isPressed = false
+    #if os(tvOS)
+    @Environment(\.isFocused) private var isFocused
+    #endif
 
     var body: some View {
+        #if os(tvOS)
+        // tvOS: Use Button for proper remote control support
+        Button {
+            onPlayVideo(movie.youtubeVideoId)
+        } label: {
+            cardContent
+        }
+        .buttonStyle(.card)
+        #else
+        // iOS: Use tap gesture
+        cardContent
+            .onTapGesture {
+                onPlayVideo(movie.youtubeVideoId)
+            }
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+            .onLongPressGesture(minimumDuration: 0.1) {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isPressed.toggle()
+                }
+            }
+        #endif
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Movie Poster
             AsyncImage(url: movie.posterURL) { image in
@@ -301,8 +328,10 @@ struct MovieCard: View {
             }
             .cornerRadius(8)
             .clipped()
+            #if os(iOS)
             .scaleEffect(isPressed ? 0.95 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: isPressed)
+            #endif
 
             // Movie Info
             VStack(alignment: .leading, spacing: 4) {
@@ -319,18 +348,6 @@ struct MovieCard: View {
                     .lineLimit(1)
             }
         }
-        .onTapGesture {
-            onPlayVideo(movie.youtubeVideoId)
-        }
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .onLongPressGesture(minimumDuration: 0.1) {
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed.toggle()
-            }
-        }
-        #if os(tvOS)
-        .focusable()
-        #endif
     }
 }
 
