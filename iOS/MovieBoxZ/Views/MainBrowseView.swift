@@ -197,8 +197,9 @@ struct FeaturedMovieBanner: View {
                             Text(overview)
                                 .font(.body)
                                 .foregroundColor(.white.opacity(0.8))
-                                .lineLimit(3)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                                .padding(.bottom, 5)
                         }
 
                         HStack(spacing: 15) {
@@ -218,9 +219,10 @@ struct FeaturedMovieBanner: View {
                             }
                             .buttonStyle(.plain)
 
-                            Text("Channel: \(movie.channelTitle)")
+                            Text("Ch: \(movie.channelTitle)")
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.7))
+                                .lineLimit(1)
                                 .padding(.vertical, 12)
                         }
                     }
@@ -228,7 +230,7 @@ struct FeaturedMovieBanner: View {
                     Spacer()
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 40)
+                .padding(.bottom, 30)
             }
         }
     }
