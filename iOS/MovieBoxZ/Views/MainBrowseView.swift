@@ -223,16 +223,17 @@ struct FeaturedMovieBanner: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(movie.title)
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .font(.tvTitle1)
+                            .foregroundColor(.tvPrimary)
                             .lineLimit(2)
+                            .lineSpacing(4)
 
                         if let overview = movie.description {
                             Text(overview)
-                                .font(.body)
-                                .foregroundColor(.white.opacity(0.8))
+                                .font(.tvBody)
+                                .foregroundColor(.tvSecondary)
                                 .lineLimit(2)
+                                .lineSpacing(3)
                                 .multilineTextAlignment(.leading)
                                 .padding(.bottom, 5)
                         }
@@ -245,7 +246,7 @@ struct FeaturedMovieBanner: View {
                                     Image(systemName: "play.fill")
                                     Text("Play")
                                 }
-                                .font(.headline)
+                                .font(.tvHeadline)
                                 .foregroundColor(.black)
                                 .padding(.horizontal, 25)
                                 .padding(.vertical, 12)
@@ -253,10 +254,13 @@ struct FeaturedMovieBanner: View {
                                 .cornerRadius(8)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Play \(movie.title)")
+                            .accessibilityHint("Opens YouTube to play the movie")
+                            .accessibilityAddTraits(.isButton)
 
                             Text("Ch: \(movie.channelTitle)")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                                .font(.tvCaption)
+                                .foregroundColor(.tvTertiary)
                                 .lineLimit(1)
                                 .padding(.vertical, 12)
                         }
@@ -283,10 +287,10 @@ struct MovieRowView: View {
         VStack(alignment: .leading, spacing: 15) {
             HStack {
                 Text(title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
+                    .font(.tvTitle2)
+                    .foregroundColor(.tvPrimary)
                     .padding(.horizontal, 20)
+                    .accessibilityAddTraits(.isHeader)
 
                 Spacer()
             }
@@ -336,6 +340,12 @@ struct MovieCard: View {
             cardContent
         }
         .buttonStyle(.card)
+        .scaleEffect(isFocused ? 1.08 : 1.0)
+        .shadow(radius: isFocused ? 20 : 5)
+        .animation(.easeInOut(duration: 0.15), value: isFocused)
+        .accessibilityLabel(movie.title)
+        .accessibilityHint("Double tap to view movie details and play")
+        .accessibilityAddTraits(.isButton)
         #else
         // iOS: Use tap gesture
         cardContent
@@ -348,6 +358,9 @@ struct MovieCard: View {
                     isPressed.toggle()
                 }
             }
+            .accessibilityLabel(movie.title)
+            .accessibilityHint("Tap to view movie details")
+            .accessibilityAddTraits(.isButton)
         #endif
     }
 
@@ -383,15 +396,15 @@ struct MovieCard: View {
             // Movie Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(movie.title)
-                    .font(.caption)
+                    .font(.tvCaption)
                     .fontWeight(.medium)
-                    .foregroundColor(.white)
+                    .foregroundColor(.tvPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
                 Text(movie.channelTitle)
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.tvCaption)
+                    .foregroundColor(.tvSecondary)
                     .lineLimit(1)
             }
         }
