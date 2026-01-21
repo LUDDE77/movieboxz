@@ -1,7 +1,7 @@
 import express from 'express'
 import { movieCurator } from '../services/movieCurator.js'
 import { youtubeService } from '../services/youtubeService.js'
-import { dbOperations } from '../config/database.js'
+import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
@@ -343,6 +343,100 @@ router.get('/jobs', async (req, res, next) => {
                 }
             },
             message: `Retrieved ${jobs.length} jobs`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/enrich-tmdb
+// Enrich existing movies with TMDB metadata (posters, ratings, etc.)
+// =============================================================================
+router.post('/enrich-tmdb', async (req, res, next) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50
+
+        logger.info(`Admin triggered TMDB enrichment (limit: ${limit})`)
+
+        // Get movies without TMDB data
+        const { data: movies, error } = await supabase
+            .from('movies')
+            .select('id, title, original_title, tmdb_id')
+            .is('tmdb_id', null)
+            .limit(limit)
+
+        if (error) {
+            throw new Error(`Failed to fetch movies: ${error.message}`)
+        }
+
+        logger.info(`Found ${movies.length} movies without TMDB data`)
+
+        let enriched = 0
+        let failed = 0
+        const results = []
+
+        for (const movie of movies) {
+            try {
+                // Try to enrich with TMDB
+                const tmdbData = await movieCurator.enrichWithTMDB(movie.title || movie.original_title)
+
+                if (tmdbData) {
+                    // Update movie with TMDB data
+                    await dbOperations.updateMovie(movie.id, tmdbData)
+
+                    // Add genres if present
+                    if (tmdbData.genres && tmdbData.genres.length > 0) {
+                        await movieCurator.addMovieGenres(movie.id, tmdbData.genres)
+                    }
+
+                    enriched++
+                    results.push({
+                        id: movie.id,
+                        title: movie.title,
+                        status: 'enriched',
+                        tmdb_id: tmdbData.tmdb_id,
+                        has_poster: !!tmdbData.poster_path
+                    })
+
+                    logger.info(`✅ Enriched: ${movie.title} (TMDB ID: ${tmdbData.tmdb_id})`)
+                } else {
+                    failed++
+                    results.push({
+                        id: movie.id,
+                        title: movie.title,
+                        status: 'not_found'
+                    })
+
+                    logger.warn(`❌ No TMDB match: ${movie.title}`)
+                }
+
+                // Small delay to respect rate limits
+                await new Promise(resolve => setTimeout(resolve, 300))
+
+            } catch (error) {
+                failed++
+                results.push({
+                    id: movie.id,
+                    title: movie.title,
+                    status: 'error',
+                    error: error.message
+                })
+
+                logger.error(`❌ Error enriching ${movie.title}:`, error.message)
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                total: movies.length,
+                enriched,
+                failed,
+                results
+            },
+            message: `TMDB enrichment completed: ${enriched} enriched, ${failed} failed`
         })
 
     } catch (error) {
