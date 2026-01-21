@@ -25,20 +25,33 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey)
 // Database connection test
 export const testDatabaseConnection = async () => {
     try {
+        logger.info(`Testing database connection to: ${supabaseUrl}`)
+
         const { data, error } = await supabase
             .from('movies')
             .select('count(*)')
             .limit(1)
 
         if (error) {
-            logger.error('❌ Database connection failed - Supabase error:', JSON.stringify(error))
+            logger.error('❌ Database connection failed - Supabase error:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code,
+                full: JSON.stringify(error)
+            })
             throw error
         }
 
-        logger.info('✅ Database connection successful')
+        logger.info('✅ Database connection successful', { data })
         return true
     } catch (error) {
-        logger.error('❌ Database connection failed - Exception:', error.message || JSON.stringify(error))
+        logger.error('❌ Database connection failed - Exception:', {
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            stack: error.stack?.split('\n').slice(0, 3).join('\n')
+        })
         return false
     }
 }
@@ -72,7 +85,6 @@ export const dbOperations = {
         if (filters.channelId) {
             query = query.eq('channel_id', filters.channelId)
         }
-
         if (filters.search) {
             query = query.textSearch('search_vector', filters.search)
         }
@@ -231,7 +243,7 @@ export const dbOperations = {
     },
 
     async getChannelById(channelId) {
-        const { data, error} = await supabase
+        const { data, error } = await supabase
             .from('channels')
             .select('*')
             .eq('id', channelId)
@@ -454,7 +466,6 @@ export const dbOperations = {
         if (error) {
             throw error
         }
-
         return data
     },
 
@@ -494,6 +505,7 @@ export const dbOperations = {
         if (filters.channelId) {
             query = query.eq('channel_id', filters.channelId)
         }
+
         query = query
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
