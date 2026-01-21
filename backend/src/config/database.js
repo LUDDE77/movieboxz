@@ -31,13 +31,14 @@ export const testDatabaseConnection = async () => {
             .limit(1)
 
         if (error) {
+            logger.error('❌ Database connection failed - Supabase error:', JSON.stringify(error))
             throw error
         }
 
         logger.info('✅ Database connection successful')
         return true
     } catch (error) {
-        logger.error('❌ Database connection failed:', error.message)
+        logger.error('❌ Database connection failed - Exception:', error.message || JSON.stringify(error))
         return false
     }
 }
@@ -230,7 +231,7 @@ export const dbOperations = {
     },
 
     async getChannelById(channelId) {
-        const { data, error } = await supabase
+        const { data, error} = await supabase
             .from('channels')
             .select('*')
             .eq('id', channelId)
@@ -493,7 +494,6 @@ export const dbOperations = {
         if (filters.channelId) {
             query = query.eq('channel_id', filters.channelId)
         }
-
         query = query
             .order('created_at', { ascending: false })
             .range(offset, offset + limit - 1)
