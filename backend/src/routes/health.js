@@ -1,5 +1,5 @@
 import express from 'express'
-import { testDatabaseConnection } from '../config/database.js'
+import { testConnection } from '../config/database.js'
 import { youtubeService } from '../services/youtubeService.js'
 import { tmdbService } from '../services/tmdbService.js'
 import { logger } from '../utils/logger.js'
@@ -8,29 +8,24 @@ const router = express.Router()
 
 // =============================================================================
 // GET /api/health
-// Basic health check - Always returns 200 for Railway deployment
+// Basic health check
 // =============================================================================
 router.get('/', async (req, res) => {
     const startTime = Date.now()
 
     try {
-        // Check database connection (non-blocking)
-        let dbHealthy = false
-        try {
-            dbHealthy = await testDatabaseConnection()
-        } catch (error) {
-            logger.warn('Database connection check failed, but health endpoint will still return 200:', error.message)
-        }
+        // Check database connection
+        const dbHealthy = await testConnection()
 
         // Check external APIs (light check)
         const youtubeHealthy = await youtubeService.healthCheck()
         const tmdbHealthy = await tmdbService.healthCheck()
 
         const responseTime = Date.now() - startTime
+        const allHealthy = dbHealthy && youtubeHealthy && tmdbHealthy
 
-        // Always return 200 for Railway health check to pass
-        res.status(200).json({
-            status: 'healthy',
+        res.status(allHealthy ? 200 : 503).json({
+            status: allHealthy ? 'healthy' : 'unhealthy',
             timestamp: new Date().toISOString(),
             version: '1.0.0',
             environment: process.env.NODE_ENV || 'development',
@@ -39,8 +34,7 @@ router.get('/', async (req, res) => {
             services: {
                 database: {
                     status: dbHealthy ? 'healthy' : 'unhealthy',
-                    provider: 'supabase',
-                    note: dbHealthy ? null : 'Connection failed but service is operational'
+                    provider: 'supabase'
                 },
                 youtube: {
                     status: youtubeHealthy ? 'healthy' : 'unhealthy',
@@ -60,13 +54,11 @@ router.get('/', async (req, res) => {
     } catch (error) {
         logger.error('Health check failed:', error)
 
-        // Still return 200 to pass Railway health check
-        res.status(200).json({
-            status: 'partial',
+        res.status(503).json({
+            status: 'unhealthy',
             timestamp: new Date().toISOString(),
-            error: 'Some health checks failed',
-            responseTime: `${Date.now() - startTime}ms`,
-            note: 'Service is running but some dependencies may be unavailable'
+            error: error.message,
+            responseTime: `${Date.now() - startTime}ms`
         })
     }
 })
@@ -81,7 +73,7 @@ router.get('/detailed', async (req, res) => {
     try {
         // More comprehensive checks
         const checks = await Promise.allSettled([
-            testDatabaseConnection(),
+            testConnection(),
             youtubeService.quotaCheck(),
             tmdbService.quotaCheck()
         ])
