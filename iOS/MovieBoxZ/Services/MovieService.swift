@@ -73,7 +73,33 @@ class MovieService: ObservableObject {
             }
 
             let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
+            decoder.dateDecodingStrategy = .custom { decoder in
+                let container = try decoder.singleValueContainer()
+                let dateString = try container.decode(String.self)
+
+                // Try ISO8601 with fractional seconds first (e.g., "2026-01-19T16:02:17.722648+00:00")
+                let iso8601Formatter = ISO8601DateFormatter()
+                iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let date = iso8601Formatter.date(from: dateString) {
+                    return date
+                }
+
+                // Fall back to standard ISO8601 (e.g., "2026-01-19T16:02:17+00:00")
+                iso8601Formatter.formatOptions = [.withInternetDateTime]
+                if let date = iso8601Formatter.date(from: dateString) {
+                    return date
+                }
+
+                // Try simple date format (e.g., "1968-10-01")
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+                if let date = dateFormatter.date(from: dateString) {
+                    return date
+                }
+
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date string \(dateString)")
+            }
             return try decoder.decode(type, from: data)
 
         } catch {
