@@ -383,12 +383,15 @@ router.post('/enrich-tmdb', async (req, res, next) => {
                 const tmdbData = await movieCurator.enrichWithTMDB(movie.title || movie.original_title)
 
                 if (tmdbData) {
-                    // Update movie with TMDB data
-                    await dbOperations.updateMovie(movie.id, tmdbData)
+                    // Extract genres before updating movie (genres go in separate table)
+                    const { genres, ...movieUpdateData } = tmdbData
+
+                    // Update movie with TMDB data (without genres)
+                    await dbOperations.updateMovie(movie.id, movieUpdateData)
 
                     // Add genres if present
-                    if (tmdbData.genres && tmdbData.genres.length > 0) {
-                        await movieCurator.addMovieGenres(movie.id, tmdbData.genres)
+                    if (genres && genres.length > 0) {
+                        await movieCurator.addMovieGenres(movie.id, genres)
                     }
 
                     enriched++
