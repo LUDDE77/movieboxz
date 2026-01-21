@@ -327,9 +327,7 @@ struct MovieDetailView: View {
 
                 // Release date
                 if let releaseDate = movie.releaseDate {
-                    let formatter = DateFormatter()
-                    formatter.dateStyle = .medium
-                    infoRow(label: "Release Date", value: formatter.string(from: releaseDate))
+                    infoRow(label: "Release Date", value: formatDate(releaseDate))
                 }
             }
         }
@@ -406,6 +404,12 @@ struct MovieDetailView: View {
                 .font(.subheadline)
                 .foregroundColor(.white)
         }
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
     }
 }
 
