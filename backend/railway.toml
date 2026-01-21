@@ -1,4 +1,4 @@
-# Force rebuild: 2026-01-20-v1.0.1
+# Force rebuild: 2026-01-21-add-tmdb-enrichment
 [build]
 builder = "nixpacks"
 buildCommand = "npm install"
