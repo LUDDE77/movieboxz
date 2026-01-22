@@ -123,11 +123,18 @@ struct WelcomeView: View {
                     // Get started button
                     VStack(spacing: 12) {
                         Button {
+                            #if os(tvOS)
+                            // On tvOS, skip YouTube detection and proceed directly
+                            // User can browse regardless of YouTube app installation
+                            hasSeenWelcome = true
+                            #else
+                            // On iOS, check if YouTube is installed
                             if YouTubePlayerService.shared.isYouTubeAppInstalled() {
                                 hasSeenWelcome = true
                             } else {
                                 showYouTubeAlert = true
                             }
+                            #endif
                         } label: {
                             HStack {
                                 Text("Get Started")
@@ -147,6 +154,9 @@ struct WelcomeView: View {
                             .foregroundColor(.white)
                             .cornerRadius(12)
                         }
+                        #if os(tvOS)
+                        .buttonStyle(.card)
+                        #endif
                         .shadow(radius: 10)
 
                         Text("By continuing, you agree to YouTube's Terms of Service")
