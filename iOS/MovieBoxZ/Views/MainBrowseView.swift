@@ -87,7 +87,7 @@ struct MainBrowseView: View {
                                 )
                             }
                         }
-                        .padding(.top, 50)
+                        .padding(.top, 80)
                         .padding(.horizontal, 60)
                         .padding(.bottom, 100)
                         #else
