@@ -126,7 +126,6 @@ struct MainBrowseView: View {
                             }
                         }
                         .padding(.top, 30)
-                        .padding(.horizontal, 20)
                         .padding(.bottom, 50)
                         #endif
                     }
@@ -324,7 +323,7 @@ struct FeaturedMovieBanner: View {
                 .padding(.horizontal, 80)
                 .padding(.bottom, 60)
                 #else
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
                 .padding(.bottom, 30)
                 #endif
             }
@@ -369,7 +368,7 @@ struct MovieRowView: View {
             #if os(tvOS)
             .padding(.horizontal, 80)
             #else
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             #endif
 
             // Movie carousel
@@ -397,7 +396,7 @@ struct MovieRowView: View {
                         )
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.leading, 16)
                 #endif
             }
         }
