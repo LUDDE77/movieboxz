@@ -336,9 +336,9 @@ router.post('/channels/import-all', async (req, res, next) => {
                 channelUrl: channelInfo.customUrl,
                 fullImport: true
             }
-        })
+        });
 
-        logger.info(`Created FULL curation job: ${job.id} for channel: ${channelInfo.title}`)
+        logger.info(`Created FULL curation job: ${job.id} for channel: ${channelInfo.title}`);
 
         // Step 5: Start FULL import process with pagination (run in background)
         (async () => {
