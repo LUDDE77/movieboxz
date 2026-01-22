@@ -6,6 +6,7 @@ import SwiftUI
 struct WelcomeView: View {
     @Binding var hasSeenWelcome: Bool
     @State private var showYouTubeAlert = false
+    @FocusState private var buttonFocused: Bool  // Focus management for tvOS
 
     var body: some View {
         ZStack {
@@ -157,6 +158,7 @@ struct WelcomeView: View {
                         #if os(tvOS)
                         .buttonStyle(.card)
                         #endif
+                        .focused($buttonFocused)  // Attach focus state for tvOS
                         .shadow(radius: 10)
 
                         Text("By continuing, you agree to YouTube's Terms of Service")
@@ -170,6 +172,14 @@ struct WelcomeView: View {
                         .frame(height: 40)
                 }
             }
+        }
+        .onAppear {
+            // tvOS: Set initial focus on button after view renders
+            #if os(tvOS)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                buttonFocused = true
+            }
+            #endif
         }
         .alert("YouTube App Required", isPresented: $showYouTubeAlert) {
             #if os(iOS)

@@ -1,19 +1,19 @@
 import SwiftUI
 
 struct SplashScreenView: View {
-    @State private var isActive = false
-    @State private var splashOpacity = 1.0
-    @State private var contentOpacity = 0.0
+    @State private var showContent = false
+    @State private var isReady = false  // Ensures view is ready before animating
     @State private var scale = 0.8
 
     var body: some View {
         ZStack {
             // Content View (behind splash)
             ContentView()
-                .opacity(contentOpacity)
+                .opacity(showContent ? 1 : 0)
+                .animation(.easeInOut(duration: 0.5), value: showContent)
 
             // Splash Screen (on top, fades out)
-            if !isActive {
+            if !showContent || !isReady {
                 ZStack {
                     Color.black.ignoresSafeArea()
 
@@ -48,24 +48,23 @@ struct SplashScreenView: View {
                         .padding(.top, 20)
                     }
                 }
-                .opacity(splashOpacity)
-                .onAppear {
-                    withAnimation(.easeIn(duration: 0.5)) {
-                        scale = 1.0
-                    }
+                .opacity(isReady && !showContent ? 1 : 0)
+                .animation(.easeInOut(duration: 0.5), value: showContent)
+            }
+        }
+        .onAppear {
+            // Step 1: Mark view as ready (synchronous)
+            isReady = true
 
-                    // Show splash for 2 seconds, then fade out
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        withAnimation(.easeOut(duration: 0.5)) {
-                            splashOpacity = 0.0
-                            contentOpacity = 1.0
-                        }
+            // Step 2: Animate logo scale
+            withAnimation(.easeIn(duration: 0.5)) {
+                scale = 1.0
+            }
 
-                        // Remove splash from view hierarchy after animation
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            isActive = true
-                        }
-                    }
+            // Step 3: Start transition after 2 second delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.easeOut(duration: 0.5)) {
+                    showContent = true
                 }
             }
         }
