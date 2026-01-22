@@ -420,20 +420,6 @@ class YouTubeService {
             return false
         }
 
-        // Title keywords that suggest full movies
-        const movieKeywords = [
-            'full movie',
-            'complete film',
-            'full film',
-            'movie',
-            'film',
-            'cinema',
-            'feature film',
-            'classic movie',
-            'vintage movie',
-            'public domain'
-        ]
-
         // Negative keywords that suggest it's NOT a movie
         const negativeKeywords = [
             'trailer',
@@ -446,20 +432,19 @@ class YouTubeService {
             'analysis',
             'reaction',
             'part 1',
-            'episode'
+            'part 2',
+            'episode',
+            'documentary' // Added: most movie channels don't include documentaries
         ]
-
-        // Check for positive keywords
-        const hasMovieKeyword = movieKeywords.some(keyword =>
-            title.includes(keyword) || description.includes(keyword)
-        )
 
         // Check for negative keywords
         const hasNegativeKeyword = negativeKeywords.some(keyword =>
             title.includes(keyword) || description.includes(keyword)
         )
 
-        return hasMovieKeyword && !hasNegativeKeyword
+        // For dedicated movie channels, any 60+ minute video without negative keywords
+        // is likely a full movie (even if title is just "Casablanca (1942)")
+        return !hasNegativeKeyword
     }
 
     parseDuration(isoDuration) {
