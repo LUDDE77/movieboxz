@@ -243,6 +243,268 @@ router.post('/channels/import', async (req, res, next) => {
 })
 
 // =============================================================================
+// POST /api/admin/channels/import-all
+// Import ALL movies from a YouTube channel (with pagination)
+// =============================================================================
+router.post('/channels/import-all', async (req, res, next) => {
+    try {
+        const { channel } = req.body
+
+        if (!channel) {
+            return res.status(400).json({
+                success: false,
+                error: 'Bad Request',
+                message: 'Channel identifier is required (name, ID, or URL)'
+            })
+        }
+
+        logger.info(`Admin requested FULL channel import: ${channel}`)
+
+        // Step 1: Resolve channel identifier to channel ID
+        let channelId
+        try {
+            channelId = await youtubeService.resolveChannelIdentifier(channel)
+            logger.info(`Resolved to channel ID: ${channelId}`)
+        } catch (error) {
+            return res.status(404).json({
+                success: false,
+                error: 'Channel Not Found',
+                message: `Could not find YouTube channel: ${channel}`,
+                details: error.message
+            })
+        }
+
+        // Step 2: Get channel info
+        let channelInfo
+        try {
+            channelInfo = await youtubeService.getChannelInfo(channelId)
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                error: 'Channel Info Failed',
+                message: 'Failed to fetch channel information',
+                details: error.message
+            })
+        }
+
+        // Step 3: Ensure channel exists in database
+        try {
+            const existingChannel = await dbOperations.getChannelById(channelId).catch(() => null)
+
+            if (existingChannel) {
+                await dbOperations.updateChannel(channelId, {
+                    title: channelInfo.title,
+                    description: channelInfo.description,
+                    thumbnail_url: channelInfo.thumbnailUrl,
+                    banner_url: channelInfo.bannerUrl,
+                    subscriber_count: channelInfo.subscriberCount,
+                    view_count: channelInfo.viewCount,
+                    video_count: channelInfo.videoCount,
+                    is_verified: channelInfo.isVerified,
+                    country: channelInfo.country
+                })
+            } else {
+                await dbOperations.createChannel({
+                    id: channelInfo.id,
+                    title: channelInfo.title,
+                    description: channelInfo.description,
+                    thumbnail_url: channelInfo.thumbnailUrl,
+                    banner_url: channelInfo.bannerUrl,
+                    subscriber_count: channelInfo.subscriberCount,
+                    view_count: channelInfo.viewCount,
+                    video_count: channelInfo.videoCount,
+                    is_verified: channelInfo.isVerified,
+                    country: channelInfo.country,
+                    is_curated: false
+                })
+            }
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                error: 'Database Error',
+                message: 'Failed to ensure channel exists in database',
+                details: error.message
+            })
+        }
+
+        // Step 4: Create curation job
+        const job = await dbOperations.createCurationJob({
+            jobType: 'channel_scan',
+            channelId: channelId,
+            resultSummary: {
+                channelTitle: channelInfo.title,
+                channelUrl: channelInfo.customUrl,
+                fullImport: true
+            }
+        })
+
+        logger.info(`Created FULL curation job: ${job.id} for channel: ${channelInfo.title}`)
+
+        // Step 5: Start FULL import process with pagination (run in background)
+        (async () => {
+            try {
+                await dbOperations.startCurationJob(job.id)
+
+                const results = {
+                    moviesFound: 0,
+                    moviesAdded: 0,
+                    moviesSkipped: 0,
+                    errors: [],
+                    channelInfo: channelInfo,
+                    pagesFetched: 0
+                }
+
+                let pageToken = null
+                const maxPages = 20 // Safety limit: 20 pages × 50 results = 1000 videos max
+
+                do {
+                    try {
+                        logger.info(`Fetching page ${results.pagesFetched + 1} for channel ${channelInfo.title}`)
+
+                        // Fetch videos with pagination
+                        const searchParams = {
+                            part: ['snippet'],
+                            channelId: channelId,
+                            type: 'video',
+                            order: 'date',
+                            maxResults: 50
+                        }
+
+                        if (pageToken) {
+                            searchParams.pageToken = pageToken
+                        }
+
+                        const searchResponse = await youtubeService.youtube.search.list(searchParams)
+                        youtubeService.updateQuotaUsage(100)
+
+                        if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
+                            break
+                        }
+
+                        // Get video IDs for detailed info
+                        const videoIds = searchResponse.data.items.map(item => item.id.videoId)
+
+                        // Get detailed video information
+                        const videosResponse = await youtubeService.youtube.videos.list({
+                            part: ['snippet', 'contentDetails', 'status', 'statistics'],
+                            id: videoIds
+                        })
+                        youtubeService.updateQuotaUsage(1)
+
+                        const videos = videosResponse.data.items.map(video => ({
+                            id: video.id,
+                            title: video.snippet.title,
+                            description: video.snippet.description,
+                            channelId: video.snippet.channelId,
+                            channelTitle: video.snippet.channelTitle,
+                            publishedAt: video.snippet.publishedAt,
+                            thumbnails: video.snippet.thumbnails,
+                            duration: video.contentDetails.duration,
+                            embeddable: video.status.embeddable,
+                            uploadStatus: video.status.uploadStatus,
+                            privacyStatus: video.status.privacyStatus,
+                            viewCount: parseInt(video.statistics.viewCount) || 0,
+                            likeCount: parseInt(video.statistics.likeCount) || 0,
+                            commentCount: parseInt(video.statistics.commentCount) || 0
+                        }))
+
+                        // Process each video
+                        for (const video of videos) {
+                            try {
+                                if (movieCurator.isLikelyMovie(video)) {
+                                    results.moviesFound++
+
+                                    // Check if movie already exists
+                                    try {
+                                        await dbOperations.getMovieByYouTubeId(video.id)
+                                        results.moviesSkipped++
+                                        continue
+                                    } catch (error) {
+                                        // Movie doesn't exist, continue processing
+                                    }
+
+                                    // Process and add movie
+                                    const success = await movieCurator.processMovie(video)
+                                    if (success) {
+                                        results.moviesAdded++
+                                        logger.info(`✅ [${results.moviesAdded}] Added: ${video.title}`)
+                                    } else {
+                                        results.errors.push({
+                                            videoId: video.id,
+                                            title: video.title,
+                                            error: 'Failed to process movie'
+                                        })
+                                    }
+                                }
+                            } catch (error) {
+                                logger.error(`Error processing video ${video.id}:`, error.message)
+                                results.errors.push({
+                                    videoId: video.id,
+                                    title: video.title,
+                                    error: error.message
+                                })
+                            }
+                        }
+
+                        // Update job progress
+                        await dbOperations.updateCurationJobProgress(job.id, {
+                            processed: results.moviesFound,
+                            successful: results.moviesAdded,
+                            failed: results.errors.length
+                        })
+
+                        results.pagesFetched++
+                        pageToken = searchResponse.data.nextPageToken
+
+                        // Small delay to respect rate limits
+                        await new Promise(resolve => setTimeout(resolve, 1000))
+
+                    } catch (error) {
+                        logger.error(`Error fetching page for channel ${channelInfo.title}:`, error.message)
+                        results.errors.push({
+                            page: results.pagesFetched + 1,
+                            error: error.message
+                        })
+                        break
+                    }
+
+                } while (pageToken && results.pagesFetched < maxPages)
+
+                logger.info(`✅ FULL import completed for ${channelInfo.title}: ${results.moviesAdded} movies added from ${results.pagesFetched} pages`)
+
+                await dbOperations.completeCurationJob(job.id, results)
+
+            } catch (error) {
+                logger.error(`FULL import failed for ${channelInfo.title}:`, error.message)
+                await dbOperations.failCurationJob(job.id, error.message)
+            }
+        })()
+
+        // Step 6: Return job info immediately
+        res.json({
+            success: true,
+            data: {
+                job: {
+                    id: job.id,
+                    status: job.status,
+                    channelId: channelId,
+                    channelTitle: channelInfo.title,
+                    channelUrl: channelInfo.customUrl,
+                    subscriberCount: channelInfo.subscriberCount,
+                    videoCount: channelInfo.videoCount,
+                    createdAt: job.created_at,
+                    fullImport: true
+                }
+            },
+            message: `FULL channel import started: ${channelInfo.title}. This will fetch ALL videos using pagination. Use GET /api/admin/jobs/${job.id} to check progress.`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
 // GET /api/admin/jobs/:jobId
 // Get status of a curation job
 // =============================================================================
