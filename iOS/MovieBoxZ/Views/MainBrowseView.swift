@@ -481,10 +481,10 @@ struct MovieCard: View {
                 }
             }
             #if os(tvOS)
-            .frame(width: 350, height: 525)
+            .frame(width: 245, height: 368)
             .cornerRadius(12)
             #else
-            .frame(width: 180, height: 270)
+            .frame(width: 126, height: 189)
             .cornerRadius(8)
             #endif
             .clipped()
@@ -535,9 +535,9 @@ struct MovieCard: View {
             }
         }
         #if os(tvOS)
-        .frame(width: 350)
+        .frame(width: 245)
         #else
-        .frame(width: 180)
+        .frame(width: 126)
         #endif
     }
 }
