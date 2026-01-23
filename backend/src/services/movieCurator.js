@@ -61,7 +61,7 @@ class MovieCurator {
         this.requirements = {
             minDurationMinutes: parseInt(process.env.MIN_MOVIE_DURATION_MINUTES) || 60,
             maxDurationMinutes: parseInt(process.env.MAX_MOVIE_DURATION_MINUTES) || 360,
-            minViewCount: parseInt(process.env.MIN_VIEW_COUNT) || 1000
+            minViewCount: parseInt(process.env.MIN_VIEW_COUNT) || 100  // Lowered from 1000 to 100
         }
     }
 
