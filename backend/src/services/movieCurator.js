@@ -300,10 +300,11 @@ class MovieCurator {
             return false
         }
 
-        // Must be embeddable
-        if (!video.embeddable) {
-            return false
-        }
+        // NOTE: We do NOT check embeddable status!
+        // The embeddable flag only affects web IFrame embedding.
+        // Since MovieBoxZ uses deep linking (youtube:// URL scheme) to open videos
+        // in the native YouTube app, embeddable status is irrelevant.
+        // This allows us to access ALL full-length movies on the channel.
 
         // Must be public and processed
         if (video.uploadStatus !== 'processed' || video.privacyStatus !== 'public') {
