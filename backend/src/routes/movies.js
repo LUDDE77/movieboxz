@@ -9,6 +9,147 @@ import { tmdbService } from '../services/tmdbService.js'
 const router = express.Router()
 
 // =============================================================================
+// YOUTUBE TOS COMPLIANCE HELPERS
+// =============================================================================
+
+/**
+ * Check if movie metadata needs refreshing per YouTube TOS
+ * TOS Section II.F: Cache data for max 30 days, refresh after 24 hours recommended
+ * @param {Object} movie - Movie object with last_refreshed timestamp
+ * @returns {boolean} - True if needs refresh
+ */
+const needsRefresh = (movie) => {
+    if (!movie.last_refreshed) return true
+
+    const lastRefreshed = new Date(movie.last_refreshed)
+    const now = new Date()
+    const hoursSinceRefresh = (now - lastRefreshed) / (1000 * 60 * 60)
+
+    // Refresh if older than 24 hours (TOS recommended)
+    return hoursSinceRefresh > 24
+}
+
+/**
+ * Refresh YouTube metadata from API
+ * @param {string} movieId - Database movie ID
+ * @param {string} youtubeVideoId - YouTube video ID
+ */
+const refreshYouTubeMetadata = async (movieId, youtubeVideoId) => {
+    try {
+        logger.debug(`Refreshing YouTube metadata for movie ${movieId}`)
+
+        // Fetch fresh data from YouTube API
+        const videoData = await youtubeService.getVideoDetails(youtubeVideoId)
+
+        if (videoData) {
+            // Fetch channel thumbnail
+            const channelData = await youtubeService.getChannelDetails(videoData.channelId)
+
+            // Update database with fresh YouTube TOS fields
+            await dbOperations.updateMovie(movieId, {
+                youtube_video_title: videoData.title,
+                channel_thumbnail: channelData?.thumbnail,
+                last_refreshed: new Date().toISOString()
+            })
+
+            logger.info(`Refreshed YouTube metadata for movie ${movieId}`)
+            return true
+        }
+    } catch (error) {
+        logger.error(`Failed to refresh YouTube metadata for movie ${movieId}:`, error.message)
+        return false
+    }
+}
+
+// =============================================================================
+// GET /api/movies
+// Comprehensive movies endpoint with filtering, sorting, and pagination
+// Query params:
+//   - genre: Filter by genre ID
+//   - channel: Filter by channel ID
+//   - search: Full-text search
+//   - sort: popular, recent, rating (default: popular)
+//   - page: Page number (default: 1)
+//   - limit: Items per page (default: 20)
+// =============================================================================
+router.get('/', async (req, res, next) => {
+    try {
+        const {
+            genre,
+            channel,
+            search,
+            sort = 'popular',
+            page = 1,
+            limit = 20
+        } = req.query
+
+        const pageNum = parseInt(page)
+        const limitNum = parseInt(limit)
+        const offset = (pageNum - 1) * limitNum
+
+        logger.info(`Fetching movies with filters:`, { genre, channel, search, sort, page, limit })
+
+        // Build filters object
+        const filters = {}
+
+        if (channel) {
+            filters.channelId = channel
+        }
+
+        if (search) {
+            filters.search = search
+        }
+
+        // Map sort parameter to database fields
+        const sortOptions = {
+            popular: { sortBy: 'view_count', sortOrder: 'desc' },
+            recent: { sortBy: 'published_at', sortOrder: 'desc' },
+            rating: { sortBy: 'vote_average', sortOrder: 'desc' }
+        }
+
+        const sortConfig = sortOptions[sort] || sortOptions.popular
+        filters.sortBy = sortConfig.sortBy
+        filters.sortOrder = sortConfig.sortOrder
+
+        // If genre filter is provided, use genre-specific query
+        let result
+        if (genre) {
+            result = await dbOperations.getMoviesByGenre(
+                genre,
+                limitNum,
+                offset,
+                sortConfig.sortBy,
+                sortConfig.sortOrder
+            )
+        } else {
+            result = await dbOperations.getMovies(filters, limitNum, offset)
+        }
+
+        res.json({
+            success: true,
+            data: {
+                movies: result.movies,
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total: result.total,
+                    pages: Math.ceil(result.total / limitNum)
+                },
+                filters: {
+                    genre,
+                    channel,
+                    search,
+                    sort
+                }
+            },
+            message: `Retrieved ${result.movies.length} movies`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
 // GET /api/movies/featured
 // Get featured movies for homepage
 // =============================================================================
@@ -281,6 +422,14 @@ router.get('/:id', validateRequest(movieIdSchema), async (req, res, next) => {
                 success: false,
                 error: 'Movie not found',
                 message: `No movie found with ID: ${id}`
+            })
+        }
+
+        // YouTube TOS Compliance: Refresh metadata if stale (> 24 hours)
+        if (needsRefresh(movie)) {
+            // Don't await - refresh in background to avoid blocking response
+            refreshYouTubeMetadata(id, movie.youtube_video_id).catch(err => {
+                logger.error(`Background refresh failed for movie ${id}:`, err)
             })
         }
 
