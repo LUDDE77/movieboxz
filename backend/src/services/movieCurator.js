@@ -100,7 +100,7 @@ class MovieCurator {
             }
         }
 
-        logger.info(`🎉 Curation completed: ${results.moviesAdded} movies added from ${results.channelsProcessors} channels`)
+        logger.info(`🎉 Curation completed: ${results.moviesAdded} movies added from ${results.channelsProcessed} channels`)
         return results
     }
 
@@ -127,9 +127,9 @@ class MovieCurator {
             const channel = await this.ensureChannelExists(channelId)
             results.channelInfo = channel
 
-            // Get videos from channel
+            // Get videos from channel (with pagination support)
             const videos = await youtubeService.getChannelVideos(channelId, {
-                maxResults: 50,
+                maxResults: 500,  // Increased from 50 to 500 to fetch all channel videos
                 order: 'date'
             })
 
