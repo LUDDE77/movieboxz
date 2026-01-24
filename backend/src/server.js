@@ -10,6 +10,7 @@ import dotenv from 'dotenv'
 // Import routes
 import moviesRouter from './routes/movies.js'
 import channelsRouter from './routes/channels.js'
+import browseRouter from './routes/browse.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
 import healthRouter from './routes/health.js'
@@ -73,7 +74,7 @@ const speedLimiter = slowDown({
     windowMs: 15 * 60 * 1000, // 15 minutes
     delayAfter: 50, // allow 50 requests per 15 minutes, then...
     delayMs: 500, // begin adding 500ms of delay per request above 50
-    maxDelayMs: 20000, // maximum delay of 20 seconds,
+    maxDelayMs: 20000, // maximum delay of 20 seconds
 })
 
 app.use('/api', limiter)
@@ -89,6 +90,7 @@ app.use('/api/health', healthRouter)
 // API routes
 app.use('/api/movies', moviesRouter)
 app.use('/api/channels', channelsRouter)
+app.use('/api/browse', browseRouter)
 app.use('/api/user', userRouter)
 app.use('/api/admin', adminRouter)
 
@@ -105,6 +107,7 @@ app.get('/', (req, res) => {
             health: '/api/health',
             movies: '/api/movies',
             channels: '/api/channels',
+            browse: '/api/browse',
             user: '/api/user',
             admin: '/api/admin'
         }
@@ -120,6 +123,7 @@ app.all('*', (req, res) => {
             health: 'GET /api/health',
             movies: 'GET /api/movies/*',
             channels: 'GET /api/channels/*',
+            browse: 'GET /api/browse/*',
             user: 'GET /api/user/*',
             admin: 'POST /api/admin/*'
         }
