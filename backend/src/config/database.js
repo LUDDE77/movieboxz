@@ -303,6 +303,107 @@ export const dbOperations = {
         return data || []
     },
 
+    async getGenresWithCounts() {
+        const { data, error } = await supabase
+            .from('genres')
+            .select(`
+                id,
+                tmdb_id,
+                name,
+                movie_genres(count)
+            `)
+            .order('name')
+
+        if (error) {
+            throw error
+        }
+
+        // Transform to include movie_count
+        return (data || []).map(genre => ({
+            id: genre.id,
+            tmdb_id: genre.tmdb_id,
+            name: genre.name,
+            movie_count: genre.movie_genres?.[0]?.count || 0
+        }))
+    },
+
+    async getGenreById(genreId) {
+        const { data, error } = await supabase
+            .from('genres')
+            .select(`
+                id,
+                tmdb_id,
+                name,
+                movie_genres(count)
+            `)
+            .eq('id', genreId)
+            .single()
+
+        if (error) {
+            if (error.code === 'PGRST116') {
+                return null // Not found
+            }
+            throw error
+        }
+
+        // Add movie count
+        return {
+            id: data.id,
+            tmdb_id: data.tmdb_id,
+            name: data.name,
+            movie_count: data.movie_genres?.[0]?.count || 0
+        }
+    },
+
+    async getMoviesByGenre(genreId, limit = 20, offset = 0, sortBy = 'view_count', sortOrder = 'desc') {
+        // Get movies that have this genre
+        let query = supabase
+            .from('movie_genres')
+            .select(`
+                movies!inner(
+                    *,
+                    channels(id, title, thumbnail_url),
+                    movie_genres(genres(id, name))
+                )
+            `, { count: 'exact' })
+            .eq('genre_id', genreId)
+            .eq('movies.is_available', true)
+
+        // Apply sorting on the movies relation
+        query = query.order(sortBy, {
+            foreignTable: 'movies',
+            ascending: sortOrder === 'asc'
+        })
+
+        // Pagination
+        query = query.range(offset, offset + limit - 1)
+
+        const { data, error, count } = await query
+
+        if (error) {
+            throw error
+        }
+
+        // Extract and transform movies from the junction table
+        const movies = (data || []).map(item => {
+            const movie = item.movies
+            const { channels, movie_genres, ...movieData } = movie
+            return {
+                ...movieData,
+                channel_title: channels?.title || null,
+                channel_thumbnail: channels?.thumbnail_url || null,
+                genres: movie_genres?.map(mg => mg.genres) || []
+            }
+        })
+
+        return {
+            movies,
+            total: count,
+            limit,
+            offset
+        }
+    },
+
     // User operations
     async getUserProfile(userId) {
         const { data, error } = await supabase
@@ -442,6 +543,7 @@ export const dbOperations = {
         if (error) {
             throw error
         }
+
         return data || []
     },
 
