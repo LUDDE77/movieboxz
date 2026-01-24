@@ -160,76 +160,111 @@ class YouTubeService {
 
         try {
             const {
-                maxResults = 50,
+                maxResults = 500,  // Increased default from 50 to 500
                 order = 'date',
                 publishedAfter = null,
                 publishedBefore = null
             } = options
 
-            logger.info(`Fetching videos from channel: ${channelId}`)
+            logger.info(`Fetching up to ${maxResults} videos from channel: ${channelId}`)
 
-            // First, search for videos in the channel
-            const searchParams = {
-                part: ['snippet'],
-                channelId: channelId,
-                type: 'video',
-                order: order,
-                maxResults: maxResults
-            }
+            let allVideos = []
+            let nextPageToken = null
+            let totalFetched = 0
+            let pageCount = 0
+            let totalQuotaUsed = 0
 
-            if (publishedAfter) {
-                searchParams.publishedAfter = publishedAfter
-            }
+            // Loop to fetch all pages until we reach maxResults or no more pages
+            do {
+                pageCount++
+                const pageSize = Math.min(50, maxResults - totalFetched)  // API max is 50 per request
 
-            if (publishedBefore) {
-                searchParams.publishedBefore = publishedBefore
-            }
+                // Search for videos in the channel
+                const searchParams = {
+                    part: ['snippet'],
+                    channelId: channelId,
+                    type: 'video',
+                    order: order,
+                    maxResults: pageSize,
+                    pageToken: nextPageToken  // Pagination support
+                }
 
-            const searchResponse = await this.youtube.search.list(searchParams)
+                if (publishedAfter) {
+                    searchParams.publishedAfter = publishedAfter
+                }
 
-            this.updateQuotaUsage(100) // search.list costs 100 units
+                if (publishedBefore) {
+                    searchParams.publishedBefore = publishedBefore
+                }
 
-            if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
-                return []
-            }
+                logger.info(`Fetching page ${pageCount} (${pageSize} videos)...`)
 
-            // Get video IDs for detailed info
-            const videoIds = searchResponse.data.items.map(item => item.id.videoId)
+                const searchResponse = await this.youtube.search.list(searchParams)
+                this.updateQuotaUsage(100) // search.list costs 100 units
+                totalQuotaUsed += 100
 
-            // Get detailed video information
-            const videosResponse = await this.youtube.videos.list({
-                part: ['snippet', 'contentDetails', 'status', 'statistics'],
-                id: videoIds
-            })
+                if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
+                    logger.info('No more videos found')
+                    break
+                }
 
-            this.updateQuotaUsage(1) // videos.list costs 1 unit
+                // Get video IDs for detailed info
+                const videoIds = searchResponse.data.items.map(item => item.id.videoId)
+
+                // Get detailed video information
+                const videosResponse = await this.youtube.videos.list({
+                    part: ['snippet', 'contentDetails', 'status', 'statistics'],
+                    id: videoIds
+                })
+
+                this.updateQuotaUsage(1) // videos.list costs 1 unit
+                totalQuotaUsed += 1
+
+                // Map video data
+                const videos = videosResponse.data.items.map(video => ({
+                    id: video.id,
+                    title: video.snippet.title,
+                    description: video.snippet.description,
+                    channelId: video.snippet.channelId,
+                    channelTitle: video.snippet.channelTitle,
+                    publishedAt: video.snippet.publishedAt,
+                    thumbnails: video.snippet.thumbnails,
+                    duration: video.contentDetails.duration,
+                    embeddable: video.status.embeddable,
+                    uploadStatus: video.status.uploadStatus,
+                    privacyStatus: video.status.privacyStatus,
+                    viewCount: parseInt(video.statistics.viewCount) || 0,
+                    likeCount: parseInt(video.statistics.likeCount) || 0,
+                    commentCount: parseInt(video.statistics.commentCount) || 0
+                }))
+
+                allVideos.push(...videos)
+                totalFetched += videos.length
+
+                // Get next page token
+                nextPageToken = searchResponse.data.nextPageToken
+
+                logger.info(`Fetched ${videos.length} videos (Total: ${totalFetched}/${maxResults}, Quota: ${totalQuotaUsed} units)`)
+
+                // Small delay to avoid rate limiting (100ms)
+                await new Promise(resolve => setTimeout(resolve, 100))
+
+            } while (nextPageToken && totalFetched < maxResults)
+
+            logger.info(`✅ Completed fetching ${totalFetched} videos across ${pageCount} page(s), used ${totalQuotaUsed} quota units`)
 
             // Log API usage
             await dbOperations.logApiUsage(
                 'youtube',
-                'search.list + videos.list',
+                `search.list + videos.list (${pageCount} pages)`,
                 'GET',
-                101, // 100 + 1
+                totalQuotaUsed,
                 200,
                 Date.now() - startTime
             )
 
-            return videosResponse.data.items.map(video => ({
-                id: video.id,
-                title: video.snippet.title,
-                description: video.snippet.description,
-                channelId: video.snippet.channelId,
-                channelTitle: video.snippet.channelTitle,
-                publishedAt: video.snippet.publishedAt,
-                thumbnails: video.snippet.thumbnails,
-                duration: video.contentDetails.duration,
-                embeddable: video.status.embeddable,
-                uploadStatus: video.status.uploadStatus,
-                privacyStatus: video.status.privacyStatus,
-                viewCount: parseInt(video.statistics.viewCount) || 0,
-                likeCount: parseInt(video.statistics.likeCount) || 0,
-                commentCount: parseInt(video.statistics.commentCount) || 0
-            }))
+            return allVideos
+
         } catch (error) {
             logger.error(`Error fetching channel videos ${channelId}:`, error.message)
 
@@ -237,7 +272,7 @@ class YouTubeService {
                 'youtube',
                 'search.list + videos.list',
                 'GET',
-                101,
+                0,
                 error.response?.status || 500,
                 Date.now() - startTime,
                 error.message
