@@ -2,6 +2,7 @@ import { youtubeService } from './youtubeService.js'
 import { tmdbService } from './tmdbService.js'
 import { dbOperations } from '../config/database.js'
 import { logger } from '../utils/logger.js'
+import { channelPatternDetector } from './channelPatternDetector.js'
 import duplicateDetector from './duplicateDetector.js'
 
 class MovieCurator {
@@ -209,11 +210,18 @@ class MovieCurator {
         try {
             logger.debug(`Processing potential movie: ${video.title}`)
 
-            // Get channel thumbnail from database (or fetch if needed)
+            // Get channel thumbnail and title pattern from database
             let channelThumbnail = null
+            let titlePattern = null
             try {
                 const channel = await dbOperations.getChannelById(video.channelId)
                 channelThumbnail = channel?.thumbnail_url || null
+
+                // Load stored title pattern for intelligent extraction
+                titlePattern = await channelPatternDetector.getPattern(video.channelId)
+                if (titlePattern) {
+                    logger.debug(`Using pattern for ${video.channelId}: ${titlePattern.type} (${titlePattern.title_position})`)
+                }
             } catch (error) {
                 logger.debug(`Channel ${video.channelId} not in database, will be created`)
             }
@@ -221,7 +229,7 @@ class MovieCurator {
             // Enhanced movie data with YouTube info
             const movieData = {
                 youtube_video_id: video.id,
-                title: this.cleanMovieTitle(video.title),
+                title: this.cleanMovieTitle(video.title, titlePattern),
                 original_title: video.title,
                 // YouTube TOS Compliance fields (Phase 0)
                 youtube_video_title: video.title,  // REQUIRED: Original YouTube video title (TOS Section III.D.8)
@@ -377,47 +385,94 @@ class MovieCurator {
         return !hasExcludeKeyword
     }
 
-    cleanMovieTitle(title) {
-        // Step 1: Handle pipe-separated channel branding patterns
-        // Many channels use format: "Movie Title | Category | Actor | Channel Name"
-        // We want only the FIRST segment (the actual movie title)
+    cleanMovieTitle(title, pattern = null) {
+        /**
+         * Intelligent title cleaning with pattern-aware extraction
+         *
+         * Uses AI-detected channel patterns to extract correct title segment:
+         * - Pattern A: "Movie Title | Genre | Actor | Channel" → Extract FIRST
+         * - Pattern B: "Clickbait | Actual Movie Title" → Extract LAST
+         * - Mixed/Unknown: Try both and pick shortest cleaned result
+         */
+
+        let candidateTitles = []
+
+        // Step 1: Extract title segment(s) based on detected pattern
         if (title.includes('|')) {
             const segments = title.split('|').map(s => s.trim())
 
-            // First segment is usually the movie title
-            title = segments[0]
+            if (pattern && pattern.pipe_separator) {
+                // Use AI-detected pattern
+                logger.debug(`Using detected pattern: ${pattern.type} (position: ${pattern.title_position})`)
 
-            // Log what we extracted for debugging
-            logger.debug(`Extracted title from pipe segments: "${title}" (from ${segments.length} total segments)`)
+                if (pattern.title_position === 'first') {
+                    // Title is in FIRST segment (e.g., "Movie | Genre | Actor | Channel")
+                    candidateTitles.push(segments[0])
+                } else if (pattern.title_position === 'last') {
+                    // Title is in LAST segment (e.g., "Clickbait | Actual Title")
+                    candidateTitles.push(segments[segments.length - 1])
+                } else if (pattern.title_position === 'both' || pattern.confidence < 0.7) {
+                    // Low confidence or mixed patterns: try both
+                    candidateTitles.push(segments[0])
+                    if (segments.length > 1) {
+                        candidateTitles.push(segments[segments.length - 1])
+                    }
+                    logger.debug(`Low confidence pattern, trying both segments`)
+                }
+            } else {
+                // No pattern: try both first and last segments (fallback)
+                candidateTitles.push(segments[0])
+                if (segments.length > 1) {
+                    candidateTitles.push(segments[segments.length - 1])
+                }
+                logger.debug(`No pattern available, trying both first and last segments`)
+            }
+        } else {
+            // No pipes: use full title
+            candidateTitles.push(title)
         }
 
-        // Step 2: Remove common YouTube video indicators
-        title = title
-            // Remove "FULL MOVIE", "Full Movie", "full movie", etc.
-            .replace(/\b(full movie|complete film|full film|feature film)\b/gi, '')
+        // Step 2: Clean all candidate titles
+        const cleanedCandidates = candidateTitles.map(candidate => {
+            let cleaned = candidate
 
-            // Remove years in parentheses like "(2021)" or "(1998)"
-            .replace(/\(\d{4}\)/g, '')
+            // Remove common YouTube video indicators
+            cleaned = cleaned
+                // Remove "FULL MOVIE", "Full Movie", "full movie", etc.
+                .replace(/\b(full movie|complete film|full film|feature film)\b/gi, '')
 
-            // Remove brackets and their content like "[HD]" or "[Restored]"
-            .replace(/\[.*?\]/g, '')
+                // Remove years in parentheses like "(2021)" or "(1998)"
+                .replace(/\(\d{4}\)/g, '')
 
-            // Remove quality indicators like "HD", "4K", "1080p"
-            .replace(/\b(HD|4K|1080p|720p|480p|DVD|BLURAY|BLU-RAY)\b/gi, '')
+                // Remove brackets and their content like "[HD]" or "[Restored]"
+                .replace(/\[.*?\]/g, '')
 
-            // Remove "Official", "Original", etc.
-            .replace(/\b(official|original|remastered|restored)\b/gi, '')
+                // Remove quality indicators like "HD", "4K", "1080p"
+                .replace(/\b(HD|4K|1080p|720p|480p|DVD|BLURAY|BLU-RAY)\b/gi, '')
 
-            // Remove dashes at the end (often used before channel names)
-            .replace(/\s*-\s*$/, '')
+                // Remove "Official", "Original", etc.
+                .replace(/\b(official|original|remastered|restored)\b/gi, '')
 
-            // Remove extra whitespace (multiple spaces become single space)
-            .replace(/\s+/g, ' ')
+                // Remove dashes at the end (often used before channel names)
+                .replace(/\s*-\s*$/, '')
 
-            // Trim leading/trailing whitespace
-            .trim()
+                // Remove extra whitespace (multiple spaces become single space)
+                .replace(/\s+/g, ' ')
 
-        return title
+                // Trim leading/trailing whitespace
+                .trim()
+
+            return cleaned
+        })
+
+        // Step 3: Pick best candidate (shortest is usually best for TMDB matching)
+        const bestTitle = cleanedCandidates.reduce((shortest, current) => {
+            return current.length < shortest.length ? current : shortest
+        })
+
+        logger.debug(`Extracted title: "${bestTitle}" (from ${candidateTitles.length} candidates)`)
+
+        return bestTitle
     }
 
     determineVideoQuality(video) {
