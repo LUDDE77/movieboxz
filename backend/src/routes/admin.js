@@ -739,7 +739,7 @@ router.post('/enrich-omdb', async (req, res, next) => {
         logger.info(`Admin triggered OMDb enrichment (limit: ${limit})`)
 
         // Find movies without TMDB or OMDb data
-        const { data: movies } = await dbOperations.supabase
+        const { data: movies } = await supabase
             .from('movies')
             .select('id, title, original_title, tmdb_id, imdb_id')
             .is('tmdb_id', null)
@@ -759,7 +759,7 @@ router.post('/enrich-omdb', async (req, res, next) => {
 
                 if (omdbData) {
                     // Update movie with OMDb data
-                    await dbOperations.supabase
+                    await supabase
                         .from('movies')
                         .update({
                             imdb_id: omdbData.imdb_id,
