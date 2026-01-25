@@ -124,7 +124,7 @@ class ChannelPatternDetector {
      */
     analyzePipeSeparators(titles) {
         const titlesWithPipes = titles.filter(t => t.includes('|'))
-        const hasPipes = titlesWithPipes.length > titles.length * 0.7 // 70% threshold
+        const hasPipes = titlesWithPipes.length > titles.length * 0.4 // 40% threshold (lowered from 70%)
 
         if (!hasPipes) {
             return { hasPipes: false }
@@ -260,7 +260,7 @@ class ChannelPatternDetector {
         }
 
         // Contains movie-specific punctuation (colon, period)
-        if (/[:\.]/.test(segment)) {
+        if (/[:.]/.test(segment)) {
             score += 0.1
         }
 

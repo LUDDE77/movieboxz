@@ -308,7 +308,39 @@ class MovieCurator {
             // CREATE MOVIE IN DATABASE
             // =============================================================================
 
-            const movie = await dbOperations.createMovie(movieData)
+            // Check if this specific YouTube video is already in the database
+            let existingMovie = null
+            try {
+                existingMovie = await dbOperations.getMovieByYouTubeId(video.id)
+            } catch (error) {
+                // Video doesn't exist, which is fine - we'll create it
+            }
+
+            let movie
+            if (existingMovie) {
+                // This specific YouTube video is already imported
+                logger.info(`YouTube video already exists in database: ${video.title}`, {
+                    existing_movie_id: existingMovie.id,
+                    group_id: existingMovie.movie_group_id
+                })
+
+                // Update the existing movie's stats instead of inserting a duplicate
+                await dbOperations.updateMovieStats(video.id, {
+                    viewCount: movieData.view_count,
+                    likeCount: movieData.like_count,
+                    commentCount: movieData.comment_count
+                })
+
+                logger.info(`Updated stats for existing video`, {
+                    movie_id: existingMovie.id,
+                    views: movieData.view_count
+                })
+
+                return true
+            } else {
+                // New YouTube video - create it
+                movie = await dbOperations.createMovie(movieData)
+            }
 
             // Step 4: If this is now primary, demote the old primary
             if (isPrimary && existingPrimaryId) {
@@ -394,6 +426,22 @@ class MovieCurator {
          * - Pattern B: "Clickbait | Actual Movie Title" → Extract LAST
          * - Mixed/Unknown: Try both and pick shortest cleaned result
          */
+
+        // SAFETY CHECK: Override pattern if it contradicts actual title structure
+        if (pattern && !pattern.pipe_separator && title.includes('|')) {
+            logger.warn(`Pattern mismatch detected: pattern says no pipes but title has pipes`, {
+                title: title,
+                detected_pattern: pattern.type
+            })
+            // Override pattern to use pipe-based extraction
+            pattern = {
+                pipe_separator: true,
+                title_position: 'first',
+                type: 'first_segment_override',
+                confidence: 0.6
+            }
+            logger.info(`Applied fallback pattern: first_segment with 60% confidence`)
+        }
 
         let candidateTitles = []
 
