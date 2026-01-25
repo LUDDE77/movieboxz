@@ -489,9 +489,6 @@ class MovieCurator {
                 // Remove "FULL MOVIE", "Full Movie", "full movie", etc.
                 .replace(/\b(full movie|complete film|full film|feature film)\b/gi, '')
 
-                // Remove years in parentheses like "(2021)" or "(1998)"
-                .replace(/\(\d{4}\)/g, '')
-
                 // Remove brackets and their content like "[HD]" or "[Restored]"
                 .replace(/\[.*?\]/g, '')
 
@@ -510,6 +507,7 @@ class MovieCurator {
                 // Trim leading/trailing whitespace
                 .trim()
 
+            // NOTE: We keep years in parentheses like "(1975)" because they help with TMDB matching!
             return cleaned
         })
 
