@@ -2,6 +2,7 @@ import { youtubeService } from './youtubeService.js'
 import { tmdbService } from './tmdbService.js'
 import { dbOperations } from '../config/database.js'
 import { logger } from '../utils/logger.js'
+import duplicateDetector from './duplicateDetector.js'
 
 class MovieCurator {
     constructor() {
@@ -208,11 +209,25 @@ class MovieCurator {
         try {
             logger.debug(`Processing potential movie: ${video.title}`)
 
+            // Get channel thumbnail from database (or fetch if needed)
+            let channelThumbnail = null
+            try {
+                const channel = await dbOperations.getChannelById(video.channelId)
+                channelThumbnail = channel?.thumbnail_url || null
+            } catch (error) {
+                logger.debug(`Channel ${video.channelId} not in database, will be created`)
+            }
+
             // Enhanced movie data with YouTube info
             const movieData = {
                 youtube_video_id: video.id,
                 title: this.cleanMovieTitle(video.title),
                 original_title: video.title,
+                // YouTube TOS Compliance fields (Phase 0)
+                youtube_video_title: video.title,  // REQUIRED: Original YouTube video title (TOS Section III.D.8)
+                channel_thumbnail: channelThumbnail,  // Channel avatar/thumbnail URL
+                last_refreshed: new Date().toISOString(),  // Cache timestamp (TOS: max 30 days)
+                // Regular YouTube metadata
                 description: video.description,
                 channel_id: video.channelId,
                 view_count: video.viewCount,
@@ -241,8 +256,72 @@ class MovieCurator {
             // Determine category
             movieData.category = this.categorizeMovie(movieData)
 
-            // Create movie in database
+            // =============================================================================
+            // DUPLICATE DETECTION (Phase 2)
+            // =============================================================================
+
+            // Step 1: Find or create movie group (detects duplicates)
+            const { group, matchType, confidence } = await duplicateDetector.findOrCreateMovieGroup({
+                tmdb_id: movieData.tmdb_id,
+                title: movieData.title,
+                release_year: movieData.release_date ? new Date(movieData.release_date).getFullYear() : null,
+                youtube_video_id: video.id
+            })
+
+            // Log duplicate detection result
+            if (matchType === 'new_group') {
+                logger.info(`New movie: ${movieData.title}`, { group_id: group.id })
+            } else {
+                logger.info(`Duplicate detected: ${movieData.title} (${matchType}, ${(confidence * 100).toFixed(0)}% match)`, {
+                    group_id: group.id,
+                    canonical_title: group.canonical_title
+                })
+            }
+
+            // Step 2: Calculate quality score for this version
+            const qualityScore = duplicateDetector.calculateQualityScore(movieData)
+            logger.debug(`Quality score: ${qualityScore}/100`, {
+                views: movieData.view_count,
+                embeddable: movieData.is_embeddable
+            })
+
+            // Step 3: Check if this should be the primary version
+            const { isPrimary, existingPrimaryId } = await duplicateDetector.shouldBePrimary(
+                group.id,
+                qualityScore
+            )
+
+            // Add duplicate detection fields to movieData
+            movieData.movie_group_id = group.id
+            movieData.is_primary = isPrimary
+            movieData.quality_score = qualityScore
+
+            // =============================================================================
+            // CREATE MOVIE IN DATABASE
+            // =============================================================================
+
             const movie = await dbOperations.createMovie(movieData)
+
+            // Step 4: If this is now primary, demote the old primary
+            if (isPrimary && existingPrimaryId) {
+                await duplicateDetector.demotePrimary(existingPrimaryId)
+                logger.info(`Promoted to primary (better quality score), demoted previous primary`, {
+                    new_primary: movie.id,
+                    old_primary: existingPrimaryId,
+                    new_score: qualityScore
+                })
+            } else if (isPrimary) {
+                logger.info(`Set as primary (first version in group)`, {
+                    primary: movie.id,
+                    group_id: group.id
+                })
+            } else {
+                logger.info(`Added as backup version`, {
+                    backup: movie.id,
+                    group_id: group.id,
+                    quality_score: qualityScore
+                })
+            }
 
             // Add genres if available
             if (movieData.genres && movie.id) {
