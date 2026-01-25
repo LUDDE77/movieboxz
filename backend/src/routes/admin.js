@@ -739,12 +739,29 @@ router.post('/enrich-omdb', async (req, res, next) => {
         logger.info(`Admin triggered OMDb enrichment (limit: ${limit})`)
 
         // Find movies without TMDB or OMDb data
-        const { data: movies } = await supabase
+        const { data: movies, error: queryError } = await supabase
             .from('movies')
             .select('id, title, original_title, tmdb_id, imdb_id')
             .is('tmdb_id', null)
             .is('imdb_id', null)
             .limit(limit)
+
+        if (queryError) {
+            throw new Error(`Database query failed: ${queryError.message}`)
+        }
+
+        if (!movies || movies.length === 0) {
+            return res.json({
+                success: true,
+                data: {
+                    total: 0,
+                    enriched: 0,
+                    failed: 0,
+                    results: []
+                },
+                message: 'No movies found to enrich'
+            })
+        }
 
         let enriched = 0
         let failed = 0
