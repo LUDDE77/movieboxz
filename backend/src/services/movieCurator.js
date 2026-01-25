@@ -1,5 +1,6 @@
 import { youtubeService } from './youtubeService.js'
 import { tmdbService } from './tmdbService.js'
+import { omdbService } from './omdbService.js'
 import { dbOperations } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import { channelPatternDetector } from './channelPatternDetector.js'
@@ -252,10 +253,29 @@ class MovieCurator {
                 const tmdbData = await this.enrichWithTMDB(titleForTMDB)
                 if (tmdbData) {
                     Object.assign(movieData, tmdbData)
+                    movieData.enrichment_source = 'tmdb'
                     logger.debug(`Enhanced with TMDB data: ${tmdbData.title}`)
+                } else {
+                    // FALLBACK TO OMDB when TMDB fails
+                    logger.info(`TMDB not found, trying OMDb for: ${video.title}`)
+                    const omdbData = await this.enrichWithOMDb(video.title)
+                    if (omdbData) {
+                        Object.assign(movieData, omdbData)
+                        logger.info(`✅ Enhanced with OMDb data: ${omdbData.title} (${omdbData.imdb_id})`)
+                    }
                 }
             } catch (tmdbError) {
                 logger.warn(`TMDB enrichment failed for "${video.title}":`, tmdbError.message)
+                // Try OMDb as fallback even on error
+                try {
+                    const omdbData = await this.enrichWithOMDb(video.title)
+                    if (omdbData) {
+                        Object.assign(movieData, omdbData)
+                        logger.info(`✅ Enhanced with OMDb data: ${omdbData.title} (${omdbData.imdb_id})`)
+                    }
+                } catch (omdbError) {
+                    logger.warn(`OMDb enrichment also failed for "${video.title}":`, omdbError.message)
+                }
             }
 
             // Determine category
@@ -627,6 +647,70 @@ class MovieCurator {
 
         } catch (error) {
             logger.warn(`TMDB enrichment failed for "${movieTitle}":`, error.message)
+            return null
+        }
+    }
+
+    // =============================================================================
+    // OMDB INTEGRATION (FALLBACK)
+    // =============================================================================
+
+    async enrichWithOMDb(movieTitle) {
+        /**
+         * Enrich with OMDb (IMDB database) as fallback when TMDB fails
+         * OMDb searches both movies AND TV shows (unlike TMDB which only searches movies)
+         */
+        try {
+            if (!omdbService || !omdbService.apiKey) {
+                return null
+            }
+
+            // Extract year from title if present (e.g., "Movie (2008)")
+            const year = omdbService.extractYearFromTitle(movieTitle)
+            const titleWithoutYear = movieTitle.replace(/\s*\(\d{4}\)$/, '')
+
+            // Try exact title first
+            let omdbData = await omdbService.searchByTitle(movieTitle)
+
+            if (!omdbData && year) {
+                // Try without year suffix
+                logger.debug(`OMDb: Retrying without year suffix`)
+                omdbData = await omdbService.searchByTitle(titleWithoutYear, year)
+            }
+
+            if (!omdbData) {
+                // Try without "The" prefix
+                const titleWithoutThe = titleWithoutYear.replace(/^The\s+/i, '')
+                if (titleWithoutThe !== titleWithoutYear) {
+                    logger.debug(`OMDb: Retrying without "The" prefix`)
+                    omdbData = await omdbService.searchByTitle(titleWithoutThe, year)
+                }
+            }
+
+            if (omdbData) {
+                // OMDb returns data in different format than TMDB, already transformed
+                return {
+                    imdb_id: omdbData.imdb_id,
+                    poster_path: omdbData.poster_path,
+                    description: omdbData.description,
+                    release_date: omdbData.release_date,
+                    runtime_minutes: omdbData.runtime_minutes,
+                    imdb_rating: omdbData.imdb_rating,
+                    imdb_votes: omdbData.imdb_votes,
+                    rated: omdbData.rated,
+                    director: omdbData.director,
+                    actors: omdbData.actors,
+                    language: omdbData.language,
+                    country: omdbData.country,
+                    is_tv_show: omdbData.is_tv_show,
+                    enrichment_source: 'omdb'
+                }
+            }
+
+            return null
+
+        } catch (error) {
+            logger.warn(`OMDb enrichment failed for "${movieTitle}":`, error.message)
             return null
         }
     }
