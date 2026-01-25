@@ -729,6 +729,105 @@ router.post('/enrich-tmdb', async (req, res, next) => {
 })
 
 // =============================================================================
+// POST /api/admin/enrich-omdb
+// Re-enrich movies that failed TMDB using OMDb (IMDB database)
+// =============================================================================
+router.post('/enrich-omdb', async (req, res, next) => {
+    try {
+        const { limit = 100 } = req.body
+
+        logger.info(`Admin triggered OMDb enrichment (limit: ${limit})`)
+
+        // Find movies without TMDB or OMDb data
+        const { data: movies } = await dbOperations.supabase
+            .from('movies')
+            .select('id, title, original_title, tmdb_id, imdb_id')
+            .is('tmdb_id', null)
+            .is('imdb_id', null)
+            .limit(limit)
+
+        let enriched = 0
+        let failed = 0
+        const results = []
+
+        for (const movie of movies) {
+            try {
+                // Try OMDb enrichment
+                const omdbData = await movieCurator.enrichWithOMDb(
+                    movie.title || movie.original_title
+                )
+
+                if (omdbData) {
+                    // Update movie with OMDb data
+                    await dbOperations.supabase
+                        .from('movies')
+                        .update({
+                            imdb_id: omdbData.imdb_id,
+                            poster_path: omdbData.poster_path,
+                            description: omdbData.description,
+                            release_date: omdbData.release_date,
+                            runtime_minutes: omdbData.runtime_minutes,
+                            imdb_rating: omdbData.imdb_rating,
+                            imdb_votes: omdbData.imdb_votes,
+                            rated: omdbData.rated,
+                            director: omdbData.director,
+                            actors: omdbData.actors,
+                            language: omdbData.language,
+                            country: omdbData.country,
+                            is_tv_show: omdbData.is_tv_show,
+                            enrichment_source: 'omdb',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', movie.id)
+
+                    enriched++
+                    results.push({
+                        id: movie.id,
+                        title: movie.title,
+                        status: 'enriched',
+                        imdb_id: omdbData.imdb_id,
+                        has_poster: !!omdbData.poster_path
+                    })
+
+                    logger.info(`✅ OMDb enriched: ${movie.title} (IMDB: ${omdbData.imdb_id})`)
+                } else {
+                    failed++
+                    results.push({
+                        id: movie.id,
+                        title: movie.title,
+                        status: 'not_found'
+                    })
+                }
+
+            } catch (error) {
+                logger.error(`❌ Error enriching ${movie.title}:`, error.message)
+                failed++
+                results.push({
+                    id: movie.id,
+                    title: movie.title,
+                    status: 'error',
+                    error: error.message
+                })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                total: movies.length,
+                enriched,
+                failed,
+                results
+            },
+            message: `OMDb enrichment completed: ${enriched} enriched, ${failed} failed`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
 // TV SERIES ADMIN ROUTES
 // =============================================================================
 
