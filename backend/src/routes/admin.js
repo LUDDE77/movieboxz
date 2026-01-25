@@ -3,6 +3,7 @@ import { movieCurator } from '../services/movieCurator.js'
 import { seriesCurator } from '../services/seriesCurator.js'
 import { youtubeService } from '../services/youtubeService.js'
 import { channelPatternDetector } from '../services/channelPatternDetector.js'
+import { titleFixer } from '../scripts/fixMovieTitles.js'
 import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 
@@ -1061,6 +1062,68 @@ router.post('/series/:seriesId/toggle-availability', async (req, res, next) => {
                 series: data
             },
             message: `Series ${field} set to ${value}`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/movies/fix-titles
+// Bulk fix movie titles by re-cleaning with current channel patterns
+// Query params:
+//   - dryRun: boolean (default: false) - Preview changes without applying
+//   - limit: number (optional) - Limit number of movies to process
+//   - channelId: string (optional) - Only fix titles for specific channel
+// =============================================================================
+router.post('/movies/fix-titles', async (req, res, next) => {
+    try {
+        const {
+            dryRun = false,
+            limit = null,
+            channelId = null
+        } = req.body
+
+        logger.info('Admin triggered title fix:', { dryRun, limit, channelId })
+
+        const results = await titleFixer.fixAllTitles({
+            dryRun,
+            limit: limit ? parseInt(limit) : null,
+            channelId
+        })
+
+        res.json({
+            success: true,
+            data: results,
+            message: dryRun
+                ? `Dry run completed: ${results.updated} titles would be updated`
+                : `Title fix completed: ${results.updated} titles updated`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/movies/:movieId/fix-title
+// Fix title for a single movie
+// =============================================================================
+router.post('/movies/:movieId/fix-title', async (req, res, next) => {
+    try {
+        const { movieId } = req.params
+
+        logger.info(`Admin triggered title fix for movie: ${movieId}`)
+
+        const result = await titleFixer.fixSingleMovie(movieId)
+
+        res.json({
+            success: true,
+            data: result,
+            message: result.newTitle
+                ? `Title updated: ${result.oldTitle} → ${result.newTitle}`
+                : result.message
         })
 
     } catch (error) {
