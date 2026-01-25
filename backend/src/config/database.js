@@ -87,7 +87,15 @@ export const dbOperations = {
         }
 
         if (filters.search) {
-            query = query.textSearch('search_vector', filters.search)
+            // Sanitize search query for PostgreSQL full-text search
+            // Convert "big stan" to "big & stan" (AND operator)
+            const sanitizedQuery = filters.search
+                .trim()
+                .split(/\s+/)  // Split on whitespace
+                .filter(word => word.length > 0)  // Remove empty strings
+                .join(' & ')  // Join with AND operator
+
+            query = query.textSearch('search_vector', sanitizedQuery)
         }
 
         // Sorting
@@ -177,7 +185,7 @@ export const dbOperations = {
     },
 
     async createMovie(movieData) {
-        const { data, error } = await supabase
+        const { data, error} = await supabase
             .from('movies')
             .insert([movieData])
             .select()
