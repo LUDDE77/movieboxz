@@ -378,18 +378,46 @@ class MovieCurator {
     }
 
     cleanMovieTitle(title) {
-        return title
-            // Remove common movie indicators
+        // Step 1: Handle pipe-separated channel branding patterns
+        // Many channels use format: "Movie Title | Category | Actor | Channel Name"
+        // We want only the FIRST segment (the actual movie title)
+        if (title.includes('|')) {
+            const segments = title.split('|').map(s => s.trim())
+
+            // First segment is usually the movie title
+            title = segments[0]
+
+            // Log what we extracted for debugging
+            logger.debug(`Extracted title from pipe segments: "${title}" (from ${segments.length} total segments)`)
+        }
+
+        // Step 2: Remove common YouTube video indicators
+        title = title
+            // Remove "FULL MOVIE", "Full Movie", "full movie", etc.
             .replace(/\b(full movie|complete film|full film|feature film)\b/gi, '')
-            // Remove years in parentheses
+
+            // Remove years in parentheses like "(2021)" or "(1998)"
             .replace(/\(\d{4}\)/g, '')
-            // Remove brackets and their content
+
+            // Remove brackets and their content like "[HD]" or "[Restored]"
             .replace(/\[.*?\]/g, '')
-            // Remove quality indicators
-            .replace(/\b(HD|4K|1080p|720p|480p)\b/gi, '')
-            // Remove extra whitespace
+
+            // Remove quality indicators like "HD", "4K", "1080p"
+            .replace(/\b(HD|4K|1080p|720p|480p|DVD|BLURAY|BLU-RAY)\b/gi, '')
+
+            // Remove "Official", "Original", etc.
+            .replace(/\b(official|original|remastered|restored)\b/gi, '')
+
+            // Remove dashes at the end (often used before channel names)
+            .replace(/\s*-\s*$/, '')
+
+            // Remove extra whitespace (multiple spaces become single space)
             .replace(/\s+/g, ' ')
+
+            // Trim leading/trailing whitespace
             .trim()
+
+        return title
     }
 
     determineVideoQuality(video) {
