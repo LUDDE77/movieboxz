@@ -1,5 +1,5 @@
 import { youtubeService } from './youtubeService.js'
-import { dbOperations } from '../config/database.js'
+import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 
 /**
@@ -300,7 +300,7 @@ class ChannelPatternDetector {
      */
     async storePattern(channelId, pattern) {
         try {
-            const { error } = await dbOperations.supabase
+            const { error } = await supabase
                 .from('channels')
                 .update({
                     title_pattern: pattern,
@@ -325,7 +325,7 @@ class ChannelPatternDetector {
      */
     async getPattern(channelId) {
         try {
-            const { data, error } = await dbOperations.supabase
+            const { data, error } = await supabase
                 .from('channels')
                 .select('title_pattern, pattern_analyzed')
                 .eq('id', channelId)
