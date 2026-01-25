@@ -210,26 +210,21 @@ class MovieCurator {
         try {
             logger.debug(`Processing potential movie: ${video.title}`)
 
-            // Get channel thumbnail and title pattern from database
+            // Get channel thumbnail from database
             let channelThumbnail = null
-            let titlePattern = null
             try {
                 const channel = await dbOperations.getChannelById(video.channelId)
                 channelThumbnail = channel?.thumbnail_url || null
-
-                // Load stored title pattern for intelligent extraction
-                titlePattern = await channelPatternDetector.getPattern(video.channelId)
-                if (titlePattern) {
-                    logger.debug(`Using pattern for ${video.channelId}: ${titlePattern.type} (${titlePattern.title_position})`)
-                }
             } catch (error) {
                 logger.debug(`Channel ${video.channelId} not in database, will be created`)
             }
 
             // Enhanced movie data with YouTube info
+            // APPROACH 1: Store original YouTube title, clean later via bulk cleanup job
+            // This allows flexible iteration on cleaning logic without re-importing
             const movieData = {
                 youtube_video_id: video.id,
-                title: this.cleanMovieTitle(video.title, titlePattern),
+                title: video.title,  // Store original YouTube title (clean later with POST /api/admin/movies/fix-titles)
                 original_title: video.title,
                 // YouTube TOS Compliance fields (Phase 0)
                 youtube_video_title: video.title,  // REQUIRED: Original YouTube video title (TOS Section III.D.8)
@@ -251,14 +246,16 @@ class MovieCurator {
             }
 
             // Try to enhance with TMDB data
+            // Quick clean for TMDB search only (don't store this cleaned version)
             try {
-                const tmdbData = await this.enrichWithTMDB(movieData.title)
+                const titleForTMDB = this.quickCleanForTMDB(video.title)
+                const tmdbData = await this.enrichWithTMDB(titleForTMDB)
                 if (tmdbData) {
                     Object.assign(movieData, tmdbData)
                     logger.debug(`Enhanced with TMDB data: ${tmdbData.title}`)
                 }
             } catch (tmdbError) {
-                logger.warn(`TMDB enrichment failed for "${movieData.title}":`, tmdbError.message)
+                logger.warn(`TMDB enrichment failed for "${video.title}":`, tmdbError.message)
             }
 
             // Determine category
@@ -415,6 +412,30 @@ class MovieCurator {
         )
 
         return !hasExcludeKeyword
+    }
+
+    quickCleanForTMDB(title) {
+        /**
+         * Quick title cleaning for TMDB search only
+         * Used during import to find TMDB matches without storing cleaned title
+         * Simple extraction: first segment before pipe, remove common keywords
+         */
+        let cleaned = title
+
+        // Extract first segment before pipe (most common pattern)
+        if (cleaned.includes('|')) {
+            cleaned = cleaned.split('|')[0].trim()
+        }
+
+        // Remove common YouTube indicators
+        cleaned = cleaned
+            .replace(/\b(full movie|complete film|full film|feature film)\b/gi, '')
+            .replace(/\[.*?\]/g, '')
+            .replace(/\b(HD|4K|1080p|720p|480p)\b/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+
+        return cleaned
     }
 
     cleanMovieTitle(title, pattern = null) {
