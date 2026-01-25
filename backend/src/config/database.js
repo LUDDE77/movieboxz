@@ -308,7 +308,6 @@ export const dbOperations = {
             .from('genres')
             .select(`
                 id,
-                tmdb_id,
                 name,
                 movie_genres(count)
             `)
@@ -321,7 +320,6 @@ export const dbOperations = {
         // Transform to include movie_count
         return (data || []).map(genre => ({
             id: genre.id,
-            tmdb_id: genre.tmdb_id,
             name: genre.name,
             movie_count: genre.movie_genres?.[0]?.count || 0
         }))
@@ -332,7 +330,6 @@ export const dbOperations = {
             .from('genres')
             .select(`
                 id,
-                tmdb_id,
                 name,
                 movie_genres(count)
             `)
@@ -349,7 +346,6 @@ export const dbOperations = {
         // Add movie count
         return {
             id: data.id,
-            tmdb_id: data.tmdb_id,
             name: data.name,
             movie_count: data.movie_genres?.[0]?.count || 0
         }
