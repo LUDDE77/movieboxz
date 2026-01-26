@@ -10,8 +10,8 @@ class YouTubeService {
         const secondaryKey = process.env.YOUTUBE_API_KEY_SECONDARY
 
         this.apiKeys = [primaryKey]
-        if (secondaryKey) {
-            this.apiKeys.push(secondaryKey)
+        if (secondaryKey && secondaryKey.trim() !== '') {
+            this.apiKeys.push(secondaryKey.trim())
         }
 
         // Track quota per key
@@ -61,20 +61,35 @@ class YouTubeService {
     // =============================================================================
 
     async healthCheck() {
-        try {
-            // Simple API call to test connection
-            await this.youtube.search.list({
-                part: ['snippet'],
-                q: 'test',
-                maxResults: 1,
-                type: 'video'
-            })
+        // Try each API key until one works
+        for (let i = 0; i < this.apiKeys.length; i++) {
+            try {
+                // Test with current key
+                await this.youtube.search.list({
+                    part: ['snippet'],
+                    q: 'test',
+                    maxResults: 1,
+                    type: 'video'
+                })
 
-            return true
-        } catch (error) {
-            logger.error('YouTube API health check failed:', error.message)
-            return false
+                logger.info(`YouTube API health check passed (using key #${this.currentKeyIndex + 1}/${this.apiKeys.length})`)
+                return true
+            } catch (error) {
+                logger.warn(`YouTube API health check failed for key #${this.currentKeyIndex + 1}/${this.apiKeys.length}: ${error.message}`)
+
+                // If this is the last key, report failure
+                if (i === this.apiKeys.length - 1) {
+                    logger.error('All YouTube API keys failed health check')
+                    return false
+                }
+
+                // Try next key
+                logger.info(`Trying next API key...`)
+                this.switchToNextKey()
+            }
         }
+
+        return false
     }
 
     async quotaCheck() {
