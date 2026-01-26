@@ -203,11 +203,11 @@ router.post('/channels/import', async (req, res, next) => {
         // Step 4: Analyze channel title pattern
         let titlePattern = null
         try {
-            logger.info(`🔍 Analyzing title pattern for channel: ${channelInfo.title}`)
+            logger.info(`\ud83d\udd0d Analyzing title pattern for channel: ${channelInfo.title}`)
             titlePattern = await channelPatternDetector.analyzeChannel(channelId, 25)
-            logger.info(`✅ Pattern detected: ${titlePattern.type} (confidence: ${titlePattern.confidence})`)
+            logger.info(`\u2705 Pattern detected: ${titlePattern.type} (confidence: ${titlePattern.confidence})`)
         } catch (error) {
-            logger.warn(`⚠️ Pattern analysis failed (will use fallback): ${error.message}`)
+            logger.warn(`\u26a0\ufe0f Pattern analysis failed (will use fallback): ${error.message}`)
             // Continue with import even if pattern detection fails
         }
 
@@ -374,7 +374,7 @@ router.post('/channels/import-all', async (req, res, next) => {
                 }
 
                 let pageToken = null
-                const maxPages = 20 // Safety limit: 20 pages × 50 results = 1000 videos max
+                const maxPages = 20 // Safety limit: 20 pages \u00d7 50 results = 1000 videos max
 
                 do {
                     try {
@@ -446,7 +446,7 @@ router.post('/channels/import-all', async (req, res, next) => {
                                     const success = await movieCurator.processMovie(video)
                                     if (success) {
                                         results.moviesAdded++
-                                        logger.info(`✅ [${results.moviesAdded}] Added: ${video.title}`)
+                                        logger.info(`\u2705 [${results.moviesAdded}] Added: ${video.title}`)
                                     } else {
                                         results.errors.push({
                                             videoId: video.id,
@@ -489,7 +489,7 @@ router.post('/channels/import-all', async (req, res, next) => {
 
                 } while (pageToken && results.pagesFetched < maxPages)
 
-                logger.info(`✅ FULL import completed for ${channelInfo.title}: ${results.moviesAdded} movies added from ${results.pagesFetched} pages`)
+                logger.info(`\u2705 FULL import completed for ${channelInfo.title}: ${results.moviesAdded} movies added from ${results.pagesFetched} pages`)
 
                 await dbOperations.completeCurationJob(job.id, results)
 
@@ -684,7 +684,7 @@ router.post('/enrich-tmdb', async (req, res, next) => {
                         has_poster: !!tmdbData.poster_path
                     })
 
-                    logger.info(`✅ Enriched: ${movie.title} (TMDB ID: ${tmdbData.tmdb_id})`)
+                    logger.info(`\u2705 Enriched: ${movie.title} (TMDB ID: ${tmdbData.tmdb_id})`)
                 } else {
                     failed++
                     results.push({
@@ -693,7 +693,7 @@ router.post('/enrich-tmdb', async (req, res, next) => {
                         status: 'not_found'
                     })
 
-                    logger.warn(`❌ No TMDB match: ${movie.title}`)
+                    logger.warn(`\u274c No TMDB match: ${movie.title}`)
                 }
 
                 // Small delay to respect rate limits
@@ -708,7 +708,7 @@ router.post('/enrich-tmdb', async (req, res, next) => {
                     error: error.message
                 })
 
-                logger.error(`❌ Error enriching ${movie.title}:`, error.message)
+                logger.error(`\u274c Error enriching ${movie.title}:`, error.message)
             }
         }
 
@@ -739,11 +739,13 @@ router.post('/enrich-omdb', async (req, res, next) => {
         logger.info(`Admin triggered OMDb enrichment (limit: ${limit})`)
 
         // Find movies without TMDB or OMDb data
+        // Order by updated_at DESC to prioritize recently cleaned titles
         const { data: movies, error: queryError } = await supabase
             .from('movies')
-            .select('id, title, original_title, tmdb_id, imdb_id')
+            .select('id, title, original_title, tmdb_id, imdb_id, updated_at')
             .is('tmdb_id', null)
             .is('imdb_id', null)
+            .order('updated_at', { ascending: false })
             .limit(limit)
 
         if (queryError) {
@@ -810,7 +812,7 @@ router.post('/enrich-omdb', async (req, res, next) => {
                         has_poster: !!omdbData.poster_path
                     })
 
-                    logger.info(`✅ OMDb enriched: ${movie.title} (IMDB: ${omdbData.imdb_id})`)
+                    logger.info(`\u2705 OMDb enriched: ${movie.title} (IMDB: ${omdbData.imdb_id})`)
                 } else {
                     failed++
                     results.push({
@@ -821,7 +823,7 @@ router.post('/enrich-omdb', async (req, res, next) => {
                 }
 
             } catch (error) {
-                logger.error(`❌ Error enriching ${movie.title}:`, error.message)
+                logger.error(`\u274c Error enriching ${movie.title}:`, error.message)
                 failed++
                 results.push({
                     id: movie.id,
@@ -1115,7 +1117,7 @@ router.post('/series/confirm-link', async (req, res, next) => {
             })
         }
 
-        logger.info(`Admin confirmed link: Episode ${episodeId} → Video ${videoId}`)
+        logger.info(`Admin confirmed link: Episode ${episodeId} \u2192 Video ${videoId}`)
 
         // Get video info from YouTube
         const videoInfo = await youtubeService.getVideoDetails(videoId)
@@ -1242,7 +1244,7 @@ router.post('/movies/:movieId/fix-title', async (req, res, next) => {
             success: true,
             data: result,
             message: result.newTitle
-                ? `Title updated: ${result.oldTitle} → ${result.newTitle}`
+                ? `Title updated: ${result.oldTitle} \u2192 ${result.newTitle}`
                 : result.message
         })
 
