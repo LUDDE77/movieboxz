@@ -3,22 +3,28 @@ import Foundation
 struct Movie: Codable, Identifiable {
     let id: String
     let youtubeVideoId: String
+
+    // TMDB Metadata (Primary Display)
     let title: String
     let originalTitle: String?
     let description: String?
     let releaseDate: Date?
     let runtimeMinutes: Int?
 
-    // Channel information (YouTube compliance)
+    // YouTube Metadata (Required for TOS Compliance)
+    let youtubeVideoTitle: String  // Original YouTube video title (REQUIRED)
     let channelId: String
     let channelTitle: String
     let channelThumbnail: String?
 
-    // Statistics
+    // YouTube Statistics
     let viewCount: Int
     let likeCount: Int?
     let commentCount: Int?
     let publishedAt: Date?
+
+    // Cache Management
+    let lastRefreshed: Date?
 
     // TMDB metadata
     let tmdbId: Int?
@@ -52,6 +58,7 @@ struct Movie: Codable, Identifiable {
         case description
         case releaseDate = "release_date"
         case runtimeMinutes = "runtime_minutes"
+        case youtubeVideoTitle = "youtube_video_title"
         case channelId = "channel_id"
         case channelTitle = "channel_title"
         case channelThumbnail = "channel_thumbnail"
@@ -59,6 +66,7 @@ struct Movie: Codable, Identifiable {
         case likeCount = "like_count"
         case commentCount = "comment_count"
         case publishedAt = "published_at"
+        case lastRefreshed = "last_refreshed"
         case tmdbId = "tmdb_id"
         case imdbId = "imdb_id"
         case posterPath = "poster_path"
@@ -78,22 +86,48 @@ struct Movie: Codable, Identifiable {
     }
 
     // Computed properties for UI
+
+    /// Display title with fallback logic
+    /// Uses TMDB title if available, falls back to YouTube video title if TMDB title is empty
+    var displayTitle: String {
+        let tmdbTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if tmdbTitle.isEmpty {
+            return youtubeVideoTitle
+        }
+        return tmdbTitle
+    }
+
     var posterURL: URL? {
-        // Try TMDB poster first
+        // Try TMDB/OMDb poster first (clean, professional)
         if let posterPath = posterPath {
+            // Check if it's already a full URL (OMDb format)
+            if posterPath.starts(with: "http://") || posterPath.starts(with: "https://") {
+                return URL(string: posterPath)
+            }
+            // Otherwise, it's a TMDB relative path - prepend base URL
             return URL(string: "https://image.tmdb.org/t/p/w500\(posterPath)")
         }
-        // Fallback to YouTube thumbnail (high quality)
-        return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
+        // Fallback to YouTube thumbnail
+        return youtubeThumbURL
     }
 
     var backdropURL: URL? {
-        // Try TMDB backdrop first
+        // Try TMDB/OMDb backdrop first (clean, professional)
         if let backdropPath = backdropPath {
+            // Check if it's already a full URL (OMDb format)
+            if backdropPath.starts(with: "http://") || backdropPath.starts(with: "https://") {
+                return URL(string: backdropPath)
+            }
+            // Otherwise, it's a TMDB relative path - prepend base URL
             return URL(string: "https://image.tmdb.org/t/p/original\(backdropPath)")
         }
         // Fallback to YouTube thumbnail (max quality)
         return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/maxresdefault.jpg")
+    }
+
+    var youtubeThumbURL: URL {
+        // Direct YouTube thumbnail (for attribution section)
+        URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")!
     }
 
     var youtubeURL: URL? {
@@ -139,11 +173,27 @@ struct Movie: Codable, Identifiable {
             return "\(viewCount) views"
         }
     }
+
+    // Cache Management
+    var needsRefresh: Bool {
+        guard let lastRefreshed = lastRefreshed else { return true }
+        let hoursSinceRefresh = Date().timeIntervalSince(lastRefreshed) / 3600
+        return hoursSinceRefresh > 24 // Refresh after 24 hours
+    }
 }
 
 struct Genre: Codable, Identifiable {
     let id: Int
     let name: String
+    let tmdbId: Int?
+    let movieCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case tmdbId = "tmdb_id"
+        case movieCount = "movie_count"
+    }
 }
 
 // API Response structures
@@ -164,4 +214,27 @@ struct Pagination: Codable {
     let limit: Int
     let total: Int?
     let pages: Int?
+}
+
+// Genre API Response structures
+struct GenresResponse: Codable {
+    let success: Bool
+    let data: GenresData
+    let message: String?
+}
+
+struct GenresData: Codable {
+    let genres: [Genre]
+}
+
+struct GenreMoviesResponse: Codable {
+    let success: Bool
+    let data: GenreMoviesData
+    let message: String?
+}
+
+struct GenreMoviesData: Codable {
+    let genre: Genre
+    let movies: [Movie]
+    let pagination: Pagination
 }
