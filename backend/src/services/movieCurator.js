@@ -630,10 +630,13 @@ class MovieCurator {
             // Get detailed movie info
             const movieDetails = await tmdbService.getMovieDetails(tmdbMovie.id)
 
-            // Return TMDB data WITHOUT genres (genres are handled separately via addMovieGenres)
+            // Return TMDB data WITH clean title and description
             return {
                 tmdb_id: movieDetails.id,
                 imdb_id: movieDetails.imdb_id,
+                title: movieDetails.title,  // Clean TMDB title (replaces YouTube title)
+                original_title: movieDetails.original_title,
+                description: movieDetails.overview,  // Clean TMDB plot (replaces YouTube description)
                 poster_path: movieDetails.poster_path,
                 backdrop_path: movieDetails.backdrop_path,
                 vote_average: movieDetails.vote_average,
