@@ -4,7 +4,7 @@ import Foundation
 /// INCREMENT THIS NUMBER EVERY TIME YOU UPDATE THE PROJECT
 struct AppVersion {
     static let current = "1.0.0"
-    static let build = 45
+    static let build = 46
 
     static var fullVersion: String {
         "\(current) (Build \(build))"
