@@ -35,6 +35,10 @@ struct Movie: Codable, Identifiable {
     let voteCount: Int?
     let popularity: Double?
 
+    // OMDb metadata
+    let imdbRating: Double?  // IMDB rating from OMDb (fallback when voteAverage is null)
+    let rated: String?       // MPAA rating (G, PG, PG-13, R, etc.)
+
     // App metadata
     let category: String?
     let quality: String?
@@ -74,6 +78,8 @@ struct Movie: Codable, Identifiable {
         case voteAverage = "vote_average"
         case voteCount = "vote_count"
         case popularity
+        case imdbRating = "imdb_rating"
+        case rated
         case category
         case quality
         case featured
@@ -153,8 +159,14 @@ struct Movie: Codable, Identifiable {
     }
 
     var formattedRating: String {
-        guard let rating = voteAverage else { return "N/A" }
-        return String(format: "%.1f", rating)
+        // Prefer TMDB rating, fallback to IMDB rating (OMDb)
+        if let rating = voteAverage {
+            return String(format: "%.1f", rating)
+        }
+        if let rating = imdbRating {
+            return String(format: "%.1f", rating)
+        }
+        return "N/A"
     }
 
     var formattedReleaseYear: String? {
