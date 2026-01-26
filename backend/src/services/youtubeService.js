@@ -61,35 +61,36 @@ class YouTubeService {
     // =============================================================================
 
     async healthCheck() {
-        // Try each API key until one works
-        for (let i = 0; i < this.apiKeys.length; i++) {
-            try {
-                // Test with current key
-                await this.youtube.search.list({
-                    part: ['snippet'],
-                    q: 'test',
-                    maxResults: 1,
-                    type: 'video'
-                })
+        // Lightweight check - just verify API keys are configured
+        // Don't make actual API calls to avoid wasting quota on health checks
+        const hasApiKeys = this.apiKeys && this.apiKeys.length > 0
+        const hasValidKeys = this.apiKeys.every(key => key && key.length > 0)
 
-                logger.info(`YouTube API health check passed (using key #${this.currentKeyIndex + 1}/${this.apiKeys.length})`)
-                return true
-            } catch (error) {
-                logger.warn(`YouTube API health check failed for key #${this.currentKeyIndex + 1}/${this.apiKeys.length}: ${error.message}`)
-
-                // If this is the last key, report failure
-                if (i === this.apiKeys.length - 1) {
-                    logger.error('All YouTube API keys failed health check')
-                    return false
-                }
-
-                // Try next key
-                logger.info(`Trying next API key...`)
-                this.switchToNextKey()
-            }
+        if (hasApiKeys && hasValidKeys) {
+            logger.debug(`YouTube API health check passed (${this.apiKeys.length} keys configured)`)
+            return true
         }
 
+        logger.error('YouTube API health check failed: No valid API keys configured')
         return false
+    }
+
+    async testApiConnection() {
+        // Actual API test - only call this when you need to verify connectivity
+        // This costs 100 quota units, so use sparingly!
+        try {
+            await this.youtube.search.list({
+                part: ['snippet'],
+                q: 'test',
+                maxResults: 1,
+                type: 'video'
+            })
+            logger.info(`YouTube API connection test passed (using key #${this.currentKeyIndex + 1}/${this.apiKeys.length})`)
+            return true
+        } catch (error) {
+            logger.error(`YouTube API connection test failed: ${error.message}`)
+            return false
+        }
     }
 
     async quotaCheck() {

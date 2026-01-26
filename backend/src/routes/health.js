@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
         // Check database connection
         const dbHealthy = await testConnection()
 
-        // Check external APIs (light check)
+        // Check external APIs (lightweight - just verifies keys exist, no API calls)
         const youtubeHealthy = await youtubeService.healthCheck()
         const tmdbHealthy = await tmdbService.healthCheck()
 

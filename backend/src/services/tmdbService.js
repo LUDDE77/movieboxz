@@ -113,12 +113,25 @@ class TMDBService {
     // =============================================================================
 
     async healthCheck() {
+        // Lightweight check - just verify API key is configured
+        // Don't make actual API calls to avoid unnecessary rate limiting
+        if (this.apiKey && this.apiKey.length > 0) {
+            logger.debug('TMDB API health check passed (key configured)')
+            return true
+        }
+
+        logger.error('TMDB API health check failed: No API key configured')
+        return false
+    }
+
+    async testApiConnection() {
+        // Actual API test - only call this when you need to verify connectivity
         try {
-            // Simple API call to test connection
             await this.makeRequest('/configuration')
+            logger.info('TMDB API connection test passed')
             return true
         } catch (error) {
-            logger.error('TMDB API health check failed:', error.message)
+            logger.error('TMDB API connection test failed:', error.message)
             return false
         }
     }
