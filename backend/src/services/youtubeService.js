@@ -4,14 +4,56 @@ import { dbOperations } from '../config/database.js'
 
 class YouTubeService {
     constructor() {
+        // Support multiple API keys for quota management
+        // Format: YOUTUBE_API_KEY=key1,key2,key3 or separate env vars
+        const primaryKey = process.env.YOUTUBE_API_KEY
+        const secondaryKey = process.env.YOUTUBE_API_KEY_SECONDARY
+
+        this.apiKeys = [primaryKey]
+        if (secondaryKey) {
+            this.apiKeys.push(secondaryKey)
+        }
+
+        // Track quota per key
+        this.currentKeyIndex = 0
+        this.dailyQuota = parseInt(process.env.YOUTUBE_QUOTA_PER_DAY) || 10000
+        this.quotaPerKey = this.apiKeys.map(() => ({
+            used: 0,
+            lastReset: new Date()
+        }))
+
+        // Initialize YouTube client with first key
         this.youtube = google.youtube({
             version: 'v3',
-            auth: process.env.YOUTUBE_API_KEY
+            auth: this.apiKeys[this.currentKeyIndex]
         })
 
-        this.dailyQuota = parseInt(process.env.YOUTUBE_QUOTA_PER_DAY) || 10000
-        this.quotaUsed = 0
-        this.lastQuotaReset = new Date()
+        logger.info(`YouTube API initialized with ${this.apiKeys.length} API key(s)`)
+    }
+
+    switchToNextKey() {
+        const nextIndex = (this.currentKeyIndex + 1) % this.apiKeys.length
+
+        // Check if next key is also exhausted
+        if (this.quotaPerKey[nextIndex].used >= this.dailyQuota) {
+            // All keys exhausted
+            if (nextIndex === 0) {
+                logger.error('All YouTube API keys exhausted their quota')
+                return false
+            }
+            // Try next key
+            this.currentKeyIndex = nextIndex
+            return this.switchToNextKey()
+        }
+
+        this.currentKeyIndex = nextIndex
+        this.youtube = google.youtube({
+            version: 'v3',
+            auth: this.apiKeys[this.currentKeyIndex]
+        })
+
+        logger.info(`Switched to YouTube API key #${this.currentKeyIndex + 1} (quota: ${this.quotaPerKey[this.currentKeyIndex].used}/${this.dailyQuota})`)
+        return true
     }
 
     // =============================================================================
@@ -36,25 +78,47 @@ class YouTubeService {
     }
 
     async quotaCheck() {
-        // Check if quota needs to reset (daily reset)
+        // Check if quota needs to reset for each key (daily reset)
         const now = new Date()
-        if (now.getDate() !== this.lastQuotaReset.getDate()) {
-            this.quotaUsed = 0
-            this.lastQuotaReset = now
-        }
+        this.quotaPerKey.forEach((quota, index) => {
+            if (now.getDate() !== quota.lastReset.getDate()) {
+                this.quotaPerKey[index].used = 0
+                this.quotaPerKey[index].lastReset = now
+            }
+        })
+
+        const currentQuota = this.quotaPerKey[this.currentKeyIndex]
+        const totalUsed = this.quotaPerKey.reduce((sum, q) => sum + q.used, 0)
+        const totalRemaining = (this.dailyQuota * this.apiKeys.length) - totalUsed
 
         return {
+            currentKey: this.currentKeyIndex + 1,
+            totalKeys: this.apiKeys.length,
             dailyLimit: this.dailyQuota,
-            used: this.quotaUsed,
-            remaining: this.dailyQuota - this.quotaUsed,
-            resetTime: this.lastQuotaReset.toISOString()
+            used: currentQuota.used,
+            remaining: this.dailyQuota - currentQuota.used,
+            totalUsed: totalUsed,
+            totalRemaining: totalRemaining,
+            resetTime: currentQuota.lastReset.toISOString()
         }
     }
 
     updateQuotaUsage(cost) {
-        this.quotaUsed += cost
-        if (this.quotaUsed >= this.dailyQuota) {
-            logger.warn(`YouTube API quota exhausted: ${this.quotaUsed}/${this.dailyQuota}`)
+        this.quotaPerKey[this.currentKeyIndex].used += cost
+        const currentUsed = this.quotaPerKey[this.currentKeyIndex].used
+
+        if (currentUsed >= this.dailyQuota) {
+            logger.warn(`YouTube API key #${this.currentKeyIndex + 1} quota exhausted: ${currentUsed}/${this.dailyQuota}`)
+
+            // Try to switch to next key
+            if (this.currentKeyIndex < this.apiKeys.length - 1) {
+                const switched = this.switchToNextKey()
+                if (switched) {
+                    logger.info(`✅ Auto-switched to API key #${this.currentKeyIndex + 1}`)
+                } else {
+                    logger.error('❌ All API keys exhausted, quota limit reached')
+                }
+            }
         }
     }
 
