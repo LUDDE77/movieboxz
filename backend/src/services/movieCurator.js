@@ -411,8 +411,12 @@ class MovieCurator {
         try {
             logger.debug(`Re-enriching existing movie: ${video.title}`)
 
+            // Clean title for TMDB search (same as in processMovie)
+            const titleForTMDB = this.quickCleanForTMDB(video.title)
+            logger.debug(`Cleaned title for TMDB: "${titleForTMDB}"`)
+
             // Re-run TMDB enrichment with year-based matching
-            const tmdbData = await this.enrichWithTMDB(video.title)
+            const tmdbData = await this.enrichWithTMDB(titleForTMDB)
 
             if (tmdbData) {
                 // Prepare update data
@@ -447,7 +451,7 @@ class MovieCurator {
             } else {
                 // TMDB failed, try OMDb fallback
                 logger.debug(`[RE-ENRICH] TMDB failed, trying OMDb fallback`)
-                const omdbData = await this.enrichWithOMDb(video.title)
+                const omdbData = await this.enrichWithOMDb(titleForTMDB)
 
                 if (omdbData) {
                     const updateData = {
