@@ -4,6 +4,7 @@ import { seriesCurator } from '../services/seriesCurator.js'
 import { youtubeService } from '../services/youtubeService.js'
 import { channelPatternDetector } from '../services/channelPatternDetector.js'
 import { titleFixer } from '../scripts/fixMovieTitles.js'
+import { enhancedEnrichment } from '../services/enhancedEnrichment.js'
 import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 
@@ -846,6 +847,187 @@ router.post('/enrich-omdb', async (req, res, next) => {
                 results
             },
             message: `OMDb enrichment completed: ${enriched} enriched, ${failed} failed`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/enrich-enhanced
+// Re-enrich movies using enhanced actor-based matching and IMDB scraping
+// Particularly useful for The Midnight Screening channel
+// =============================================================================
+router.post('/enrich-enhanced', async (req, res, next) => {
+    try {
+        const {
+            channelId = null,
+            channelTitle = null,
+            limit = 100,
+            onlyUnenriched = true
+        } = req.body
+
+        logger.info(`Admin triggered enhanced enrichment (limit: ${limit}, channel: ${channelTitle || channelId || 'all'})`)
+
+        // Build query with channel JOIN
+        let query = supabase
+            .from('movies')
+            .select(`
+                id,
+                youtube_video_id,
+                title,
+                youtube_video_title,
+                channel_id,
+                published_at,
+                tmdb_id,
+                imdb_id,
+                channels!inner(id, title)
+            `)
+
+        // Filter by channel if specified
+        if (channelId) {
+            query = query.eq('channel_id', channelId)
+        } else if (channelTitle) {
+            query = query.ilike('channels.title', `%${channelTitle}%`)
+        }
+
+        // Filter to unenriched movies only
+        if (onlyUnenriched) {
+            query = query.is('tmdb_id', null)
+        }
+
+        query = query.order('published_at', { ascending: false }).limit(limit)
+
+        const { data: movies, error } = await query
+
+        if (error) {
+            throw new Error(`Failed to fetch movies: ${error.message}`)
+        }
+
+        if (!movies || movies.length === 0) {
+            return res.json({
+                success: true,
+                data: {
+                    total: 0,
+                    enriched: 0,
+                    failed: 0,
+                    results: []
+                },
+                message: 'No movies found to enrich'
+            })
+        }
+
+        logger.info(`Found ${movies.length} movies for enhanced enrichment`)
+
+        let enriched = 0
+        let failed = 0
+        const results = []
+
+        for (const movie of movies) {
+            try {
+                logger.info(`\n🎬 Enriching: ${movie.youtube_video_title}`)
+
+                // Transform movie object to include channel_title (from JOIN)
+                const movieWithChannel = {
+                    ...movie,
+                    channel_title: movie.channels?.title || null
+                }
+
+                const enrichmentData = await enhancedEnrichment.enrichMovie(movieWithChannel)
+
+                if (enrichmentData && enrichmentData.confidence >= 50) {
+                    // Update movie with enrichment data
+                    const updateData = {
+                        tmdb_id: enrichmentData.tmdb_id,
+                        imdb_id: enrichmentData.imdb_id,
+                        title: enrichmentData.title || movie.title,
+                        original_title: enrichmentData.original_title,
+                        description: enrichmentData.description,
+                        release_date: enrichmentData.release_date,
+                        runtime_minutes: enrichmentData.runtime_minutes,
+                        poster_path: enrichmentData.poster_path,
+                        backdrop_path: enrichmentData.backdrop_path,
+                        vote_average: enrichmentData.vote_average,
+                        vote_count: enrichmentData.vote_count,
+                        popularity: enrichmentData.popularity,
+                        imdb_rating: enrichmentData.imdb_rating,
+                        imdb_votes: enrichmentData.imdb_votes,
+                        rated: enrichmentData.rated,
+                        director: enrichmentData.director,
+                        actors: enrichmentData.actors,
+                        country: enrichmentData.country,
+                        language: enrichmentData.language,
+                        is_tv_show: enrichmentData.media_type === 'tv',
+                        enrichment_source: enrichmentData.source,
+                        updated_at: new Date().toISOString()
+                    }
+
+                    const { error: updateError } = await supabase
+                        .from('movies')
+                        .update(updateData)
+                        .eq('id', movie.id)
+
+                    if (updateError) {
+                        throw new Error(`Database update failed: ${updateError.message}`)
+                    }
+
+                    // Add genres if present
+                    if (enrichmentData.genres && enrichmentData.genres.length > 0) {
+                        await movieCurator.addMovieGenres(movie.id, enrichmentData.genres)
+                    }
+
+                    enriched++
+                    results.push({
+                        id: movie.id,
+                        youtube_title: movie.youtube_video_title,
+                        status: 'enriched',
+                        matched_title: enrichmentData.title,
+                        tmdb_id: enrichmentData.tmdb_id,
+                        imdb_id: enrichmentData.imdb_id,
+                        media_type: enrichmentData.media_type,
+                        confidence: enrichmentData.confidence,
+                        actor_match: enrichmentData.actorMatch,
+                        has_poster: !!enrichmentData.poster_path
+                    })
+
+                    logger.info(`✅ Enriched: ${enrichmentData.title} (${enrichmentData.media_type}) - Confidence: ${enrichmentData.confidence}%`)
+                } else {
+                    failed++
+                    results.push({
+                        id: movie.id,
+                        youtube_title: movie.youtube_video_title,
+                        status: 'not_found',
+                        confidence: enrichmentData?.confidence || 0
+                    })
+
+                    logger.warn(`❌ Low confidence or no match: ${movie.youtube_video_title}`)
+                }
+
+                // Small delay to respect rate limits
+                await new Promise(resolve => setTimeout(resolve, 500))
+
+            } catch (error) {
+                logger.error(`❌ Error enriching ${movie.youtube_video_title}:`, error.message)
+                failed++
+                results.push({
+                    id: movie.id,
+                    youtube_title: movie.youtube_video_title,
+                    status: 'error',
+                    error: error.message
+                })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                total: movies.length,
+                enriched,
+                failed,
+                results
+            },
+            message: `Enhanced enrichment completed: ${enriched} enriched, ${failed} failed`
         })
 
     } catch (error) {
