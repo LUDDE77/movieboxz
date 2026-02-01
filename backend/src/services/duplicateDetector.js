@@ -333,6 +333,39 @@ class DuplicateDetector {
             return 0
         }
     }
+
+    /**
+     * Check if a movie already exists in the database
+     * This is a simpler duplicate check based on YouTube video ID
+     *
+     * @param {Object} movieData - Movie data to check
+     * @param {string} movieData.youtube_video_id - YouTube video ID
+     * @returns {Promise<boolean>} True if movie exists, false otherwise
+     */
+    async isDuplicate(movieData) {
+        try {
+            const { data, error } = await supabase
+                .from('movies')
+                .select('id')
+                .eq('youtube_video_id', movieData.youtube_video_id)
+                .single()
+
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    // No rows found - not a duplicate
+                    return false
+                }
+                logger.error('Error checking duplicate:', error)
+                return false
+            }
+
+            // Movie exists - is a duplicate
+            return !!data
+        } catch (error) {
+            logger.error('Error in isDuplicate:', error)
+            return false
+        }
+    }
 }
 
 // Export singleton instance
