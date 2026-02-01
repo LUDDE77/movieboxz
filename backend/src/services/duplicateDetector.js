@@ -344,23 +344,23 @@ class DuplicateDetector {
      */
     async isDuplicate(movieData) {
         try {
-            const { data, error } = await supabase
+            const { data, error, count } = await supabase
                 .from('movies')
-                .select('id')
+                .select('id', { count: 'exact', head: true })
                 .eq('youtube_video_id', movieData.youtube_video_id)
-                .single()
 
             if (error) {
-                if (error.code === 'PGRST116') {
-                    // No rows found - not a duplicate
-                    return false
-                }
                 logger.error('Error checking duplicate:', error)
                 return false
             }
 
-            // Movie exists - is a duplicate
-            return !!data
+            // Check if any rows exist
+            const exists = count > 0
+            if (exists) {
+                logger.debug(`Movie ${movieData.youtube_video_id} already exists in database`)
+            }
+
+            return exists
         } catch (error) {
             logger.error('Error in isDuplicate:', error)
             return false

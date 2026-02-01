@@ -332,14 +332,17 @@ class MovieCurator {
             for (const video of videos) {
                 try {
                     if (this.isLikelyMovie(video)) {
+                        logger.info(`Processing video: ${video.title}`)
                         const success = await this.processMovie(video, options)
                         if (success) {
                             results.moviesAdded++
                         } else {
                             results.moviesSkipped++
+                            logger.info(`Skipped due to duplicate or processing error: ${video.title}`)
                         }
                     } else {
                         results.moviesSkipped++
+                        logger.info(`Skipped - not a movie: ${video.title}, duration: ${this.parseDuration(video.duration)} mins`)
                     }
 
                     // Update progress
