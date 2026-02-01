@@ -362,11 +362,12 @@ class MovieCurator {
             }
 
             // Update channel last curated time
-            await dbOperations.updateChannel(channelId, {
-                last_curated: new Date().toISOString(),
-                video_count: channelInfo.videoCount,
-                subscriber_count: channelInfo.subscriberCount
-            })
+            // TODO: Fix database schema - last_curated column doesn't exist
+            // await dbOperations.updateChannel(channelId, {
+            //     last_curated: new Date().toISOString(),
+            //     video_count: channelInfo.videoCount,
+            //     subscriber_count: channelInfo.subscriberCount
+            // })
 
             // Complete job if provided
             if (options.jobId) {

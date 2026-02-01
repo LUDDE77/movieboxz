@@ -341,6 +341,59 @@ class ChannelPatternDetector {
             return null
         }
     }
+
+    /**
+     * Extract movie title from YouTube title using pattern
+     */
+    extractTitle(youtubeTitle, pattern) {
+        if (!pattern || !youtubeTitle) {
+            return youtubeTitle
+        }
+
+        // Handle no pipes pattern
+        if (pattern.type === 'no_pipes') {
+            // Remove common suffixes
+            return youtubeTitle
+                .replace(/\s*\(\d{4}\)\s*$/g, '') // Remove year
+                .replace(/\s*-?\s*Full Movie.*$/i, '') // Remove "Full Movie" suffix
+                .replace(/\s*HD.*$/i, '')
+                .replace(/\s*4K.*$/i, '')
+                .replace(/\s*1080p.*$/i, '')
+                .replace(/\s*720p.*$/i, '')
+                .trim()
+        }
+
+        // Handle pipe-separated patterns
+        if (!youtubeTitle.includes('|')) {
+            return youtubeTitle // Fallback if expected pipes not present
+        }
+
+        const segments = youtubeTitle.split('|').map(s => s.trim())
+
+        // Extract based on pattern position
+        if (pattern.type === 'first_segment' || pattern.title_position === 'first') {
+            return segments[0]
+        }
+
+        if (pattern.type === 'last_segment' || pattern.title_position === 'last') {
+            return segments[segments.length - 1]
+        }
+
+        // Mixed pattern - try both and use the shorter one (likely the actual title)
+        if (pattern.type === 'mixed' || pattern.title_position === 'both') {
+            const first = segments[0]
+            const last = segments[segments.length - 1]
+
+            // Score each segment
+            const firstScore = this.scoreSegmentAsTitle(first, 'first')
+            const lastScore = this.scoreSegmentAsTitle(last, 'last')
+
+            return firstScore > lastScore ? first : last
+        }
+
+        // Default fallback
+        return segments[0]
+    }
 }
 
 export const channelPatternDetector = new ChannelPatternDetector()
