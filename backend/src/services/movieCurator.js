@@ -226,29 +226,28 @@ class MovieCurator {
             try {
                 enrichmentData = await enhancedEnrichment.enrichMovie(movieData)
                 if (enrichmentData && enrichmentData.confidence >= 50) {
-                    Object.assign(movieData, {
-                        tmdb_id: enrichmentData.tmdb_id,
-                        imdb_id: enrichmentData.imdb_id,
-                        title: enrichmentData.title || movieData.title,
-                        original_title: enrichmentData.original_title,
-                        description: enrichmentData.description || movieData.description,
-                        release_date: enrichmentData.release_date,
-                        runtime_minutes: enrichmentData.runtime_minutes || movieData.duration_minutes,
-                        poster_path: enrichmentData.poster_path,
-                        backdrop_path: enrichmentData.backdrop_path,
-                        vote_average: enrichmentData.vote_average,
-                        vote_count: enrichmentData.vote_count,
-                        popularity: enrichmentData.popularity,
-                        imdb_rating: enrichmentData.imdb_rating,
-                        rated: enrichmentData.rated,
-                        director: enrichmentData.director,
-                        actors: enrichmentData.actors,
-                        country: enrichmentData.country,
-                        language: enrichmentData.language,
-                        is_tv_show: enrichmentData.media_type === 'tv',
-                        enrichment_source: enrichmentData.source
-                        // Removed enrichment_confidence - column doesn't exist in database
-                    })
+                    // Only assign database-valid fields, exclude confidence and other non-DB fields
+                    movieData.tmdb_id = enrichmentData.tmdb_id
+                    movieData.imdb_id = enrichmentData.imdb_id
+                    movieData.title = enrichmentData.title || movieData.title
+                    movieData.original_title = enrichmentData.original_title
+                    movieData.description = enrichmentData.description || movieData.description
+                    movieData.release_date = enrichmentData.release_date
+                    movieData.runtime_minutes = enrichmentData.runtime_minutes || movieData.duration_minutes
+                    movieData.poster_path = enrichmentData.poster_path
+                    movieData.backdrop_path = enrichmentData.backdrop_path
+                    movieData.vote_average = enrichmentData.vote_average
+                    movieData.vote_count = enrichmentData.vote_count
+                    movieData.popularity = enrichmentData.popularity
+                    movieData.imdb_rating = enrichmentData.imdb_rating
+                    movieData.rated = enrichmentData.rated
+                    movieData.director = enrichmentData.director
+                    movieData.actors = enrichmentData.actors
+                    movieData.country = enrichmentData.country
+                    movieData.language = enrichmentData.language
+                    movieData.is_tv_show = enrichmentData.media_type === 'tv'
+                    movieData.enrichment_source = enrichmentData.source
+                    // Note: Do NOT include confidence, actorMatch or other non-DB fields
                 }
             } catch (enrichError) {
                 logger.warn(`Failed to enrich ${movieTitle}: ${enrichError.message}`)
