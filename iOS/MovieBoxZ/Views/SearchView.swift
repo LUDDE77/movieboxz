@@ -9,6 +9,21 @@ struct SearchView: View {
     @State private var showingVideoPlayer = false
     @State private var currentMovie: Movie?
 
+    // Platform-specific grid columns (matching CategoryDetailView)
+    #if os(tvOS)
+    private let columns = [
+        GridItem(.adaptive(minimum: 245, maximum: 245), spacing: 40)
+    ]
+    private let cardTitleSize: CGFloat = 31
+    private let cardMetadataSize: CGFloat = 25
+    #else
+    private let columns = [
+        GridItem(.adaptive(minimum: 126, maximum: 180), spacing: 15)
+    ]
+    private let cardTitleSize: CGFloat = 18
+    private let cardMetadataSize: CGFloat = 14
+    #endif
+
     var body: some View {
         NavigationView {
             VStack {
@@ -120,22 +135,36 @@ struct SearchView: View {
 
     private var searchResultsGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 20) {
-                ForEach(searchResults) { movie in
-                    MovieCard(
-                        movie: movie,
-                        cardTitleSize: 16,
-                        cardMetadataSize: 12,
-                        onPlayVideo: playVideo
-                    )
-                    .frame(width: 120, height: 200)
+            VStack(alignment: .leading, spacing: 20) {
+                // Results count
+                Text("\(searchResults.count) \(searchResults.count == 1 ? "result" : "results")")
+                    .font(.system(size: cardTitleSize))
+                    .foregroundColor(.white.opacity(0.6))
+                    #if os(tvOS)
+                    .padding(.horizontal, 80)
+                    #else
+                    .padding(.horizontal, 16)
+                    #endif
+
+                // Grid of movies (matching CategoryDetailView layout)
+                LazyVGrid(columns: columns, spacing: 40) {
+                    ForEach(searchResults) { movie in
+                        MovieCard(
+                            movie: movie,
+                            cardTitleSize: cardTitleSize,
+                            cardMetadataSize: cardMetadataSize,
+                            onPlayVideo: playVideo
+                        )
+                    }
                 }
+                #if os(tvOS)
+                .padding(.horizontal, 80)
+                .padding(.bottom, 100)
+                #else
+                .padding(.horizontal, 16)
+                .padding(.bottom, 50)
+                #endif
             }
-            .padding(.horizontal, 20)
             .padding(.top, 20)
         }
     }

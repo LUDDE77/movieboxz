@@ -202,6 +202,75 @@ class MovieService: ObservableObject {
         )
         return response.data
     }
+
+    // MARK: - Genre API Methods (Phase 2)
+
+    func fetchAllGenres() async throws -> [Genre] {
+        let response = try await performRequest(
+            endpoint: "/browse/genres",
+            type: GenresResponse.self
+        )
+        return response.data.genres
+    }
+
+    func fetchMoviesByGenre(
+        genreId: Int,
+        page: Int = 1,
+        limit: Int = 20
+    ) async throws -> [Movie] {
+        let response = try await performRequest(
+            endpoint: "/browse/genres/\(genreId)?page=\(page)&limit=\(limit)",
+            type: GenreMoviesResponse.self
+        )
+        return response.data.movies
+    }
+
+    func fetchUncategorizedMovies(
+        page: Int = 1,
+        limit: Int = 20
+    ) async throws -> [Movie] {
+        let response = try await performRequest(
+            endpoint: "/browse/uncategorized?page=\(page)&limit=\(limit)",
+            type: MoviesResponse.self
+        )
+        return response.data.movies
+    }
+
+    // Convenience method for fetching all movies with filters
+    func fetchAllMovies(
+        genre: Int? = nil,
+        channel: String? = nil,
+        search: String? = nil,
+        sort: String = "popular",
+        page: Int = 1,
+        limit: Int = 20
+    ) async throws -> [Movie] {
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "sort", value: sort)
+        ]
+
+        if let genre = genre {
+            components.queryItems?.append(URLQueryItem(name: "genre", value: String(genre)))
+        }
+
+        if let channel = channel {
+            components.queryItems?.append(URLQueryItem(name: "channel", value: channel))
+        }
+
+        if let search = search {
+            components.queryItems?.append(URLQueryItem(name: "search", value: search))
+        }
+
+        let queryString = components.percentEncodedQuery ?? ""
+        let response = try await performRequest(
+            endpoint: "/movies?\(queryString)",
+            type: MoviesResponse.self
+        )
+        return response.data.movies
+    }
 }
 
 // MARK: - HTTP Method Enum
@@ -289,3 +358,4 @@ struct PlaybackOptions: Codable {
         case embed
     }
 }
+

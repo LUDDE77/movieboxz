@@ -1,173 +1,157 @@
 import SwiftUI
 
 // MARK: - YouTube Attribution Component
-// TOS-compliant attribution for YouTube content
+// TOS-compliant YouTube attribution display
 
 struct YouTubeAttribution: View {
     let movie: Movie
     let style: AttributionStyle
-    
+
     enum AttributionStyle {
-        case compact  // Single line with channel name
-        case full     // Multi-line with channel thumbnail and link
+        case compact    // For movie cards
+        case full       // For detail views
     }
-    
+
     var body: some View {
         switch style {
         case .compact:
-            compactView
+            compactAttribution
         case .full:
-            fullView
+            fullAttribution
         }
     }
-    
-    // MARK: - Compact View
-    
-    private var compactView: some View {
+
+    // MARK: - Compact Attribution (Cards)
+
+    private var compactAttribution: some View {
         HStack(spacing: 6) {
+            // YouTube logo
             Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 14))
                 .foregroundColor(.red)
-                .font(.caption)
-            
-            Text("on ")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            Text(movie.channelTitle)
-                .font(.caption)
+
+            // Channel name
+            Text("on \(movie.channelTitle)")
+                .font(.caption2)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
-        .accessibilityLabel("Hosted on \(movie.channelTitle) YouTube channel")
     }
-    
-    // MARK: - Full View
-    
-    #if os(tvOS)
-    private let channelImageSize: CGFloat = 80
-    private let titleSize: CGFloat = 29
-    private let bodySize: CGFloat = 25
-    #else
-    private let channelImageSize: CGFloat = 50
-    private let titleSize: CGFloat = 17
-    private let bodySize: CGFloat = 14
-    #endif
-    
-    private var fullView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Section title
-            Text("YouTube Channel")
-                .font(.system(size: titleSize, weight: .bold))
-                .foregroundColor(.white)
-            
-            // Channel info
-            HStack(spacing: 16) {
-                // Channel thumbnail
-                AsyncImage(url: URL(string: movie.channelThumbnail ?? "")) { phase in
+
+    // MARK: - Full Attribution (Detail View)
+
+    private var fullAttribution: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section header
+            Text("YouTube Video")
+                .font(.headline)
+                .foregroundColor(.primary)
+
+            // YouTube video card
+            HStack(spacing: 12) {
+                // YouTube thumbnail
+                AsyncImage(url: movie.youtubeThumbURL) { phase in
                     switch phase {
-                    case .empty:
-                        Circle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(width: channelImageSize, height: channelImageSize)
-                            .shimmer()
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: channelImageSize, height: channelImageSize)
-                            .clipShape(Circle())
-                    case .failure:
-                        // Fallback: YouTube icon
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: channelImageSize, height: channelImageSize)
+                            .aspectRatio(16/9, contentMode: .fill)
+                    case .failure, .empty:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .aspectRatio(16/9, contentMode: .fill)
                             .overlay {
                                 Image(systemName: "play.rectangle.fill")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: channelImageSize * 0.4))
+                                    .foregroundColor(.red)
                             }
                     @unknown default:
                         EmptyView()
                     }
                 }
-                .accessibilityLabel("\(movie.channelTitle) channel thumbnail")
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    // Channel name
-                    Text(movie.channelTitle)
-                        .font(.system(size: titleSize, weight: .semibold))
-                        .foregroundColor(.white)
+                #if os(tvOS)
+                .frame(width: 240, height: 135)
+                #else
+                .frame(width: 120, height: 68)
+                #endif
+                .cornerRadius(8)
+
+                // Video info
+                VStack(alignment: .leading, spacing: 8) {
+                    // YouTube video title (REQUIRED by TOS)
+                    Text(movie.youtubeVideoTitle)
+                        #if os(tvOS)
+                        .font(.body)
+                        #else
+                        .font(.caption)
+                        #endif
+                        .foregroundColor(.primary)
                         .lineLimit(2)
-                    
-                    // Channel link button
-                    Button {
-                        if let channelURL = movie.channelURL {
-                            #if os(iOS)
-                            UIApplication.shared.open(channelURL)
-                            #else
-                            // tvOS: Open in YouTube app
-                            if let youtubeAppURL = URL(string: "youtube://channel/\(movie.channelId)") {
-                                UIApplication.shared.open(youtubeAppURL)
+
+                    // Channel info (clickable)
+                    Button(action: openChannel) {
+                        HStack(spacing: 8) {
+                            // Channel thumbnail
+                            if let thumbURL = movie.channelThumbnail {
+                                AsyncImage(url: URL(string: thumbURL)) { image in
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Circle()
+                                        .fill(Color.gray.opacity(0.3))
+                                }
+                                #if os(tvOS)
+                                .frame(width: 32, height: 32)
+                                #else
+                                .frame(width: 20, height: 20)
+                                #endif
+                                .clipShape(Circle())
                             }
-                            #endif
+
+                            // Channel name
+                            Text(movie.channelTitle)
+                                #if os(tvOS)
+                                .font(.callout)
+                                #else
+                                .font(.caption)
+                                #endif
+                                .foregroundColor(.primary)
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.up.right.square")
-                            Text("Visit Channel")
-                        }
-                        .font(.system(size: bodySize))
-                        .foregroundColor(.blue)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Visit \(movie.channelTitle) on YouTube")
-                }
-                
-                Spacer()
-            }
-            
-            // Video metadata
-            VStack(alignment: .leading, spacing: 8) {
-                Divider()
-                    .background(Color.white.opacity(0.2))
-                
-                HStack {
-                    Text("Original Video:")
-                        .font(.system(size: bodySize))
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                }
-                
-                Text(movie.youtubeVideoTitle)
-                    .font(.system(size: bodySize))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                
-                // Watch on YouTube button
-                Button {
-                    YouTubePlayerService.shared.playMovie(movie) { success in
-                        if !success {
-                            print("Failed to open YouTube app")
+
+                    // YouTube stats
+                    HStack(spacing: 12) {
+                        Label(movie.formattedViewCount, systemImage: "eye.fill")
+
+                        if let likes = movie.likeCount {
+                            Label("\(likes >= 1000 ? String(format: "%.1fK", Double(likes) / 1000) : "\(likes)")", systemImage: "hand.thumbsup.fill")
                         }
                     }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.rectangle.fill")
-                            .foregroundColor(.red)
-                        Text("Watch on YouTube")
-                    }
-                    .font(.system(size: bodySize, weight: .semibold))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.15))
-                    .cornerRadius(8)
+                    #if os(tvOS)
+                    .font(.callout)
+                    #else
+                    .font(.caption2)
+                    #endif
+                    .foregroundColor(.secondary)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
-                .accessibilityHint("Opens video in YouTube app")
+
+                Spacer()
             }
+            .padding()
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(12)
         }
+    }
+
+    // MARK: - Actions
+
+    private func openChannel() {
+        YouTubePlayerService.shared.openChannel(channelID: movie.channelId)
     }
 }
 

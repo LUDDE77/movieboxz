@@ -135,4 +135,54 @@ router.get('/genres/:genreId', async (req, res, next) => {
     }
 })
 
+// =============================================================================
+// GET /api/browse/uncategorized
+// Get movies without genre assignments (uncategorized)
+// Query params: page, limit, sort (popular, recent, rating)
+// =============================================================================
+router.get('/uncategorized', async (req, res, next) => {
+    try {
+        const page = parseInt(req.query.page) || 1
+        const limit = parseInt(req.query.limit) || 20
+        const offset = (page - 1) * limit
+        const sort = req.query.sort || 'popular' // popular, recent, rating
+
+        logger.info(`Fetching uncategorized movies - page ${page}, sort: ${sort}`)
+
+        // Map sort param to database sort options
+        const sortOptions = {
+            popular: { sortBy: 'view_count', sortOrder: 'desc' },
+            recent: { sortBy: 'published_at', sortOrder: 'desc' },
+            rating: { sortBy: 'vote_average', sortOrder: 'desc' }
+        }
+
+        const sortConfig = sortOptions[sort] || sortOptions.popular
+
+        // Get uncategorized movies
+        const result = await dbOperations.getUncategorizedMovies(
+            limit,
+            offset,
+            sortConfig.sortBy,
+            sortConfig.sortOrder
+        )
+
+        res.json({
+            success: true,
+            data: {
+                movies: result.movies,
+                pagination: {
+                    page,
+                    limit,
+                    total: result.total,
+                    pages: Math.ceil(result.total / limit)
+                },
+                sort
+            },
+            message: `Retrieved ${result.movies.length} uncategorized movies`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 export default router

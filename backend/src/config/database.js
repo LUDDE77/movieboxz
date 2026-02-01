@@ -408,6 +408,50 @@ export const dbOperations = {
         }
     },
 
+    async getUncategorizedMovies(limit = 20, offset = 0, sortBy = 'view_count', sortOrder = 'desc') {
+        // Get movies that have NO genre assignments
+        // Use a LEFT JOIN and filter for null genre_id
+        let query = supabase
+            .from('movies')
+            .select(`
+                *,
+                channels(id, title, thumbnail_url),
+                movie_genres!left(genre_id)
+            `, { count: 'exact' })
+            .is('movie_genres.genre_id', null)
+            .eq('is_available', true)
+
+        // Apply sorting
+        query = query.order(sortBy, { ascending: sortOrder === 'asc' })
+
+        // Pagination
+        query = query.range(offset, offset + limit - 1)
+
+        const { data, error, count } = await query
+
+        if (error) {
+            throw error
+        }
+
+        // Transform movies (they will have empty genres array)
+        const movies = (data || []).map(movie => {
+            const { channels, movie_genres, ...movieData } = movie
+            return {
+                ...movieData,
+                channel_title: channels?.title || null,
+                channel_thumbnail: channels?.thumbnail_url || null,
+                genres: [] // Uncategorized movies have no genres
+            }
+        })
+
+        return {
+            movies,
+            total: count,
+            limit,
+            offset
+        }
+    },
+
     // User operations
     async getUserProfile(userId) {
         const { data, error } = await supabase

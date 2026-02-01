@@ -66,7 +66,7 @@ struct VideoPlayerView: View {
 
                 // Movie Info
                 VStack(spacing: 12) {
-                    Text(movie.title)
+                    Text(movie.displayTitle)
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -143,7 +143,7 @@ struct VideoPlayerView: View {
 
                     // Movie Info
                     VStack(spacing: 8) {
-                        Text(movie.title)
+                        Text(movie.displayTitle)
                             .font(.title)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
@@ -270,6 +270,7 @@ struct VideoPlayerView: View {
         description: "A classic silent horror film",
         releaseDate: Date(),
         runtimeMinutes: 94,
+        youtubeVideoTitle: "FREE CLASSIC HORROR MOVIE - Nosferatu (1922) Full Length Silent Film",
         channelId: "UCTimelessClassicMovie",
         channelTitle: "Timeless Classic Movies",
         channelThumbnail: nil,
@@ -277,6 +278,7 @@ struct VideoPlayerView: View {
         likeCount: 12500,
         commentCount: 1800,
         publishedAt: Date(),
+        lastRefreshed: Date(),
         tmdbId: 616,
         imdbId: "tt0013442",
         posterPath: nil,
@@ -284,6 +286,8 @@ struct VideoPlayerView: View {
         voteAverage: 7.9,
         voteCount: 1850,
         popularity: 95.8,
+        imdbRating: nil,
+        rated: nil,
         category: "horror",
         quality: "HD",
         featured: true,
@@ -295,7 +299,7 @@ struct VideoPlayerView: View {
         lastValidated: Date()
     )
 
-    return VideoPlayerView(movie: sampleMovie)
+    VideoPlayerView(movie: sampleMovie)
         .preferredColorScheme(.dark)
 }
 #endif
@@ -309,6 +313,7 @@ struct VideoPlayerView: View {
         description: "A classic mystery comedy",
         releaseDate: Date(),
         runtimeMinutes: 75,
+        youtubeVideoTitle: "FREE CLASSIC MOVIE - One Body Too Many (1944) Full Length Mystery Comedy",
         channelId: "UCu5qcR-xv4qyGVmqkf3v2jw",
         channelTitle: "Classic Hollywood TV",
         channelThumbnail: nil,
@@ -316,6 +321,7 @@ struct VideoPlayerView: View {
         likeCount: 2500,
         commentCount: 180,
         publishedAt: Date(),
+        lastRefreshed: Date(),
         tmdbId: nil,
         imdbId: nil,
         posterPath: nil,
@@ -323,6 +329,8 @@ struct VideoPlayerView: View {
         voteAverage: 7.2,
         voteCount: 850,
         popularity: 85.3,
+        imdbRating: nil,
+        rated: nil,
         category: "mystery",
         quality: "HD",
         featured: true,
@@ -334,7 +342,7 @@ struct VideoPlayerView: View {
         lastValidated: Date()
     )
 
-    return VideoPlayerView(movie: sampleMovie)
+    VideoPlayerView(movie: sampleMovie)
         .preferredColorScheme(.dark)
 }
 
