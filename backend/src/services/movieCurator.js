@@ -3,7 +3,8 @@ import { tmdbService } from './tmdbService.js'
 import { omdbService } from './omdbService.js'
 import { dbOperations } from '../config/database.js'
 import { logger } from '../utils/logger.js'
-import { channelPatternDetector } from './channelPatternDetector.js'
+import channelPatternManager from './channelPatternManager.js'
+import manualEnrichmentQueue from './manualEnrichmentQueue.js'
 import duplicateDetector from './duplicateDetector.js'
 import enhancedEnrichment from './enhancedEnrichment.js'
 
@@ -150,16 +151,42 @@ class MovieCurator {
     }
 
     /**
-     * Extract movie title from YouTube video title
+     * Extract metadata from YouTube video title using channel patterns
+     * Returns extracted metadata including title, actors, genre, year
      */
-    extractMovieTitle(youtubeTitle, channelId) {
-        // Use channel pattern detector if available
-        const pattern = channelPatternDetector?.getPattern?.(channelId)
-        if (pattern) {
-            return channelPatternDetector.extractTitle(youtubeTitle, pattern)
-        }
+    async extractMetadata(youtubeTitle, channelId) {
+        try {
+            // Get channel pattern from database
+            const pattern = await channelPatternManager.getPattern(channelId)
 
-        // Fallback to basic extraction
+            if (pattern) {
+                // Extract metadata using pattern
+                const metadata = channelPatternManager.extractMetadata(youtubeTitle, pattern)
+                if (metadata) {
+                    logger.debug('Pattern extraction successful', {
+                        title: metadata.title,
+                        actors: metadata.actorsArray,
+                        genre: metadata.genre,
+                        year: metadata.year
+                    })
+                    return metadata
+                }
+            }
+
+            // No pattern or pattern didn't match - fallback to basic extraction
+            logger.debug('Using fallback title extraction for:', youtubeTitle)
+            return this.fallbackTitleExtraction(youtubeTitle)
+
+        } catch (error) {
+            logger.error('Error extracting metadata:', error)
+            return this.fallbackTitleExtraction(youtubeTitle)
+        }
+    }
+
+    /**
+     * Fallback title extraction when no pattern matches
+     */
+    fallbackTitleExtraction(youtubeTitle) {
         let title = youtubeTitle
 
         // Remove common suffixes
@@ -180,7 +207,12 @@ class MovieCurator {
             title = title.replace(pattern, '')
         }
 
-        return title.trim()
+        return {
+            title: title.trim(),
+            patternMatched: false,
+            confidence: 0.3,
+            rawTitle: youtubeTitle
+        }
     }
 
     /**
@@ -188,7 +220,16 @@ class MovieCurator {
      */
     async processMovie(video, options = {}) {
         try {
-            const movieTitle = this.extractMovieTitle(video.title, video.channelId)
+            // Extract metadata using channel patterns
+            const extractedMetadata = await this.extractMetadata(video.title, video.channelId)
+            const movieTitle = extractedMetadata.title
+
+            logger.info(`Processing: ${movieTitle}`, {
+                patternMatched: extractedMetadata.patternMatched,
+                actors: extractedMetadata.actorsArray,
+                genre: extractedMetadata.genre,
+                year: extractedMetadata.year
+            })
 
             // Check for duplicates
             const isDuplicate = await duplicateDetector.isDuplicate({
@@ -221,11 +262,21 @@ class MovieCurator {
                 last_validated: new Date().toISOString()
             }
 
-            // Try to enrich with metadata
+            // Try to enrich with metadata, passing extracted hints
             let enrichmentData = null
+            let enrichmentSuccess = false
+
             try {
-                enrichmentData = await enhancedEnrichment.enrichMovie(movieData)
-                if (enrichmentData && enrichmentData.confidence >= 50) {
+                // Pass actor, year, and genre hints from pattern extraction
+                enrichmentData = await enhancedEnrichment.enrichMovie({
+                    ...movieData,
+                    actorHints: extractedMetadata.actorsArray,
+                    yearHint: extractedMetadata.year,
+                    genreHint: extractedMetadata.genre
+                })
+
+                if (enrichmentData && enrichmentData.confidence >= 70) {
+                    enrichmentSuccess = true
                     // Only assign database-valid fields, exclude confidence and other non-DB fields
                     movieData.tmdb_id = enrichmentData.tmdb_id
                     movieData.imdb_id = enrichmentData.imdb_id
@@ -248,10 +299,24 @@ class MovieCurator {
                     movieData.is_tv_show = enrichmentData.media_type === 'tv'
                     movieData.enrichment_source = enrichmentData.source
                     // Note: Do NOT include confidence, actorMatch or other non-DB fields
+
+                    logger.info(` Enrichment successful: ${movieTitle} (confidence: ${enrichmentData.confidence})`)
+                } else {
+                    logger.warn(`Low confidence enrichment for ${movieTitle}: ${enrichmentData?.confidence || 0}%`)
                 }
             } catch (enrichError) {
                 logger.warn(`Failed to enrich ${movieTitle}: ${enrichError.message}`)
                 // Continue without enrichment
+            }
+
+            // If enrichment failed or confidence is low, add to manual queue
+            if (!enrichmentSuccess) {
+                try {
+                    await manualEnrichmentQueue.addToQueue(movieData, extractedMetadata)
+                    logger.info(` Added to manual enrichment queue: ${movieTitle}`)
+                } catch (queueError) {
+                    logger.error(`Failed to add to manual queue: ${queueError.message}`)
+                }
             }
 
             // Save movie to database
