@@ -1,6 +1,6 @@
 import { supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
-import enhancedEnrichment from './enhancedEnrichment.js'
+import { enhancedEnrichment } from './enhancedEnrichment.js'
 
 /**
  * ManualEnrichmentQueue Service
