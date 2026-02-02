@@ -311,13 +311,126 @@ class EnhancedEnrichment {
     }
 
     /**
+     * Search IMDB by title to find IMDB ID
+     * @param {string} title - Movie title
+     * @param {number} year - Optional release year
+     * @returns {string|null} IMDB ID (e.g., "tt27036391") or null
+     */
+    async searchIMDBByTitle(title, year = null) {
+        try {
+            // URL encode the title for search
+            const searchQuery = encodeURIComponent(title)
+            const searchUrl = `https://www.imdb.com/find/?q=${searchQuery}&s=tt&ttype=ft&ref_=fn_ft`
+
+            logger.debug(`Searching IMDB: ${searchUrl}`)
+
+            const response = await axios.get(searchUrl, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                },
+                timeout: 10000
+            })
+
+            const html = response.data
+
+            // Extract IMDB IDs from search results
+            // Look for pattern: /title/tt1234567/
+            const imdbIdMatches = html.match(/\/title\/(tt\d+)\//g)
+
+            if (!imdbIdMatches || imdbIdMatches.length === 0) {
+                logger.warn(`No IMDB results found for: ${title}`)
+                return null
+            }
+
+            // Extract first IMDB ID (most relevant result)
+            const firstMatch = imdbIdMatches[0].match(/tt\d+/)
+            const imdbId = firstMatch ? firstMatch[0] : null
+
+            if (imdbId) {
+                logger.info(`✓ Found IMDB ID: ${imdbId} for "${title}"`)
+            }
+
+            return imdbId
+
+        } catch (error) {
+            logger.error(`Failed to search IMDB for "${title}":`, error.message)
+            return null
+        }
+    }
+
+    /**
+     * Enrich movie directly from IMDB ID
+     * @param {string} imdbId - IMDB ID (e.g., "tt27036391")
+     * @returns {Object|null} Enrichment data
+     */
+    async enrichByIMDBId(imdbId) {
+        try {
+            logger.info(`Enriching by IMDB ID: ${imdbId}`)
+
+            // Scrape IMDB data
+            const imdbData = await this.scrapeIMDBData(imdbId)
+
+            if (!imdbData) {
+                logger.warn(`Failed to scrape IMDB data for: ${imdbId}`)
+                return null
+            }
+
+            // Try to get TMDB data if possible (for posters/backdrops)
+            let tmdbDetails = null
+            try {
+                const tmdbResults = await tmdbService.findByIMDBId(imdbId)
+                if (tmdbResults) {
+                    tmdbDetails = tmdbResults
+                }
+            } catch (error) {
+                logger.debug(`TMDB lookup failed for ${imdbId}, using IMDB-only data`)
+            }
+
+            // Build enrichment data
+            const enrichmentData = {
+                imdb_id: imdbId,
+                tmdb_id: tmdbDetails?.id || null,
+                title: imdbData.title,
+                original_title: imdbData.title,
+                description: imdbData.description,
+                release_date: imdbData.release_date,
+                runtime_minutes: imdbData.runtime_minutes,
+                poster_path: tmdbDetails?.poster_path || null,
+                backdrop_path: tmdbDetails?.backdrop_path || null,
+                vote_average: tmdbDetails?.vote_average || null,
+                vote_count: tmdbDetails?.vote_count || null,
+                popularity: tmdbDetails?.popularity || null,
+                genres: imdbData.genres || [],
+                imdb_rating: imdbData.imdb_rating,
+                imdb_votes: imdbData.imdb_votes,
+                rated: imdbData.rated,
+                director: imdbData.director,
+                actors: imdbData.actors,
+                country: imdbData.country,
+                language: imdbData.language,
+                media_type: imdbData.type === 'Movie' ? 'movie' : 'tv',
+                confidence: 100, // Manual IMDB ID = 100% confidence
+                actorMatch: false,
+                source: 'imdb_direct'
+            }
+
+            logger.info(`✓ Enriched from IMDB: ${enrichmentData.title}`)
+            return enrichmentData
+
+        } catch (error) {
+            logger.error(`Failed to enrich by IMDB ID ${imdbId}:`, error.message)
+            return null
+        }
+    }
+
+    /**
      * Main enrichment method
      * @param {Object} movie - Movie from database
      * @returns {Object|null} Enrichment data with confidence score
      */
     async enrichMovie(movie) {
         try {
-            // Extract actor hints
+            // Extract actor hints from channel pattern
             const actorHints = this.extractActorHints(
                 movie.youtube_video_title,
                 movie.channel_title,
@@ -326,8 +439,9 @@ class EnhancedEnrichment {
 
             logger.info(`Actor hints: title="${actorHints.title}", actors=[${actorHints.actors.join(', ')}], mediaHint=${actorHints.mediaHint}`)
 
-            // Search TMDB with actor context
             const publishYear = new Date(movie.published_at).getFullYear()
+
+            // STEP 1: Try TMDB first
             const tmdbResults = await this.searchTMDBWithActors(
                 actorHints.title,
                 actorHints.actors,
@@ -335,57 +449,96 @@ class EnhancedEnrichment {
                 actorHints.mediaHint
             )
 
-            if (!tmdbResults || tmdbResults.length === 0) {
-                logger.warn(`No TMDB results for: ${actorHints.title}`)
-                return null
+            if (tmdbResults && tmdbResults.length > 0) {
+                // Found in TMDB - use as primary source
+                const topResult = tmdbResults[0]
+                const confidence = await this.calculateConfidence(movie, topResult, actorHints)
+
+                logger.info(`✓ TMDB match: ${topResult.media_type === 'movie' ? topResult.title : topResult.name} (confidence: ${confidence}%)`)
+
+                // Get full TMDB details
+                let tmdbDetails
+                if (topResult.media_type === 'movie') {
+                    tmdbDetails = await tmdbService.getMovieDetails(topResult.id)
+                } else {
+                    tmdbDetails = await tmdbService.getTVSeriesDetails(topResult.id)
+                }
+
+                // Supplement with IMDB data ONLY for missing fields
+                let imdbData = null
+                if (tmdbDetails.imdb_id) {
+                    imdbData = await this.scrapeIMDBData(tmdbDetails.imdb_id)
+                }
+
+                // Merge: TMDB first, IMDB supplements missing fields
+                const enrichmentData = {
+                    tmdb_id: tmdbDetails.id,
+                    imdb_id: tmdbDetails.imdb_id || imdbData?.imdb_id,
+                    title: tmdbDetails.title || tmdbDetails.name,
+                    original_title: tmdbDetails.original_title || tmdbDetails.original_name,
+                    description: tmdbDetails.overview || imdbData?.description, // IMDB supplements if TMDB missing
+                    release_date: tmdbDetails.release_date || tmdbDetails.first_air_date || imdbData?.release_date,
+                    runtime_minutes: tmdbDetails.runtime || (Array.isArray(tmdbDetails.episode_run_time) ? tmdbDetails.episode_run_time[0] : null) || imdbData?.runtime_minutes,
+                    poster_path: tmdbDetails.poster_path, // TMDB only
+                    backdrop_path: tmdbDetails.backdrop_path, // TMDB only
+                    vote_average: tmdbDetails.vote_average,
+                    vote_count: tmdbDetails.vote_count,
+                    popularity: tmdbDetails.popularity,
+                    genres: tmdbDetails.genres || imdbData?.genres, // IMDB supplements if TMDB missing
+                    imdb_rating: imdbData?.imdb_rating, // IMDB only field
+                    imdb_votes: imdbData?.imdb_votes, // IMDB only field
+                    rated: imdbData?.rated, // IMDB only field
+                    director: imdbData?.director, // IMDB only field
+                    actors: imdbData?.actors, // IMDB only field
+                    country: imdbData?.country, // IMDB only field
+                    language: imdbData?.language, // IMDB only field
+                    media_type: topResult.media_type,
+                    confidence: confidence,
+                    actorMatch: actorHints.actors.length > 0,
+                    source: 'tmdb_with_imdb'
+                }
+
+                return enrichmentData
             }
 
-            // Calculate confidence for top result
-            const topResult = tmdbResults[0]
-            const confidence = await this.calculateConfidence(movie, topResult, actorHints)
+            // STEP 2: Not in TMDB, try IMDB directly
+            logger.warn(`No TMDB results for: ${actorHints.title}, trying IMDB search...`)
 
-            logger.info(`Top match: ${topResult.media_type === 'movie' ? topResult.title : topResult.name} (${topResult.media_type}) - Confidence: ${confidence}%`)
+            const imdbId = await this.searchIMDBByTitle(actorHints.title, publishYear)
 
-            // Get full details from TMDB
-            let tmdbDetails
-            if (topResult.media_type === 'movie') {
-                tmdbDetails = await tmdbService.getMovieDetails(topResult.id)
-            } else {
-                tmdbDetails = await tmdbService.getTVSeriesDetails(topResult.id)
+            if (imdbId) {
+                logger.info(`✓ Found in IMDB: ${imdbId}`)
+                return await this.enrichByIMDBId(imdbId)
             }
 
-            // Scrape IMDB if available
-            let imdbData = null
-            if (tmdbDetails.imdb_id) {
-                imdbData = await this.scrapeIMDBData(tmdbDetails.imdb_id)
-            }
+            // STEP 3: Not in IMDB either, use cleaned YouTube data
+            logger.warn(`No IMDB results either, using cleaned YouTube data for: ${actorHints.title}`)
 
-            // Merge data sources
             const enrichmentData = {
-                tmdb_id: tmdbDetails.id,
-                imdb_id: tmdbDetails.imdb_id || imdbData?.imdb_id,
-                title: tmdbDetails.title || tmdbDetails.name,
-                original_title: tmdbDetails.original_title || tmdbDetails.original_name,
-                description: tmdbDetails.overview || imdbData?.description,
-                release_date: tmdbDetails.release_date || tmdbDetails.first_air_date || imdbData?.release_date,
-                runtime_minutes: tmdbDetails.runtime || (Array.isArray(tmdbDetails.episode_run_time) ? tmdbDetails.episode_run_time[0] : null) || imdbData?.runtime_minutes,
-                poster_path: tmdbDetails.poster_path,
-                backdrop_path: tmdbDetails.backdrop_path,
-                vote_average: tmdbDetails.vote_average,
-                vote_count: tmdbDetails.vote_count,
-                popularity: tmdbDetails.popularity,
-                genres: tmdbDetails.genres,
-                imdb_rating: imdbData?.imdb_rating,
-                imdb_votes: imdbData?.imdb_votes,
-                rated: imdbData?.rated,
-                director: imdbData?.director,
-                actors: imdbData?.actors,
-                country: imdbData?.country,
-                language: imdbData?.language,
-                media_type: topResult.media_type,
-                confidence: confidence,
+                tmdb_id: null,
+                imdb_id: null,
+                title: actorHints.title, // Use pattern-extracted clean title
+                original_title: actorHints.title,
+                description: movie.description,
+                release_date: movie.published_at,
+                runtime_minutes: movie.duration_minutes,
+                poster_path: null,
+                backdrop_path: null,
+                vote_average: null,
+                vote_count: null,
+                popularity: null,
+                genres: [], // Could extract from channel patterns in future
+                imdb_rating: null,
+                imdb_votes: null,
+                rated: null,
+                director: null,
+                actors: actorHints.actors.join(', ') || null, // Use pattern-extracted actors
+                country: null,
+                language: null,
+                media_type: actorHints.mediaHint || 'movie',
+                confidence: 30, // Low confidence - no external validation
                 actorMatch: actorHints.actors.length > 0,
-                source: 'enhanced_enrichment'
+                source: 'youtube_patterns'
             }
 
             return enrichmentData
