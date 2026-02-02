@@ -1,7 +1,6 @@
 import { supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import enhancedEnrichment from './enhancedEnrichment.js'
-import dbOperations from './dbOperations.js'
 
 /**
  * ManualEnrichmentQueue Service
@@ -208,7 +207,19 @@ class ManualEnrichmentQueue {
                 is_enriched: true
             }
 
-            const savedMovie = await dbOperations.createOrUpdateMovie(movieData)
+            // 4. Save movie to database using upsert
+            const { data: savedMovie, error: movieError } = await supabase
+                .from('movies')
+                .upsert(movieData, {
+                    onConflict: 'youtube_video_id',
+                    ignoreDuplicates: false
+                })
+                .select()
+                .single()
+
+            if (movieError) {
+                throw new Error(`Failed to save movie: ${movieError.message}`)
+            }
 
             // 5. Update queue entry
             const { error: updateError } = await supabase
