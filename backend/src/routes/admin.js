@@ -7,6 +7,8 @@ import { titleFixer } from '../scripts/fixMovieTitles.js'
 import { enhancedEnrichment } from '../services/enhancedEnrichment.js'
 import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
+import channelPatternManager from '../services/channelPatternManager.js'
+import manualEnrichmentQueue from '../services/manualEnrichmentQueue.js'
 
 const router = express.Router()
 
@@ -1499,6 +1501,303 @@ router.delete('/channels/:channelId', async (req, res, next) => {
                 moviesDeleted: movieCount
             },
             message: `Deleted channel "${channel.channel_title}" and ${movieCount} associated movies`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// CHANNEL PATTERN MANAGEMENT ROUTES
+// =============================================================================
+
+// =============================================================================
+// GET /api/admin/channel-patterns
+// Get all channel patterns
+// =============================================================================
+router.get('/channel-patterns', async (req, res, next) => {
+    try {
+        logger.info('Admin requested all channel patterns')
+
+        const patterns = await channelPatternManager.getAllPatterns()
+
+        res.json({
+            success: true,
+            data: {
+                patterns: patterns.map(p => ({
+                    id: p.id,
+                    channelId: p.channel_id,
+                    channelName: p.channel_name,
+                    patternCount: p.patterns.length,
+                    hasFallback: !!p.fallback_pattern,
+                    isActive: p.is_active,
+                    createdAt: p.created_at,
+                    updatedAt: p.updated_at
+                }))
+            },
+            message: `Retrieved ${patterns.length} channel patterns`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// GET /api/admin/channel-patterns/:channelId
+// Get pattern configuration for a specific channel
+// =============================================================================
+router.get('/channel-patterns/:channelId', async (req, res, next) => {
+    try {
+        const { channelId } = req.params
+
+        logger.info(`Admin requested pattern for channel: ${channelId}`)
+
+        const pattern = await channelPatternManager.getPattern(channelId)
+
+        if (!pattern) {
+            return res.status(404).json({
+                success: false,
+                error: 'Pattern Not Found',
+                message: `No pattern configured for channel: ${channelId}`
+            })
+        }
+
+        res.json({
+            success: true,
+            data: { pattern },
+            message: 'Channel pattern retrieved successfully'
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/channel-patterns
+// Create or update channel pattern configuration
+// =============================================================================
+router.post('/channel-patterns', async (req, res, next) => {
+    try {
+        const { channelId, channelName, patterns, fallbackPattern } = req.body
+
+        if (!channelId || !channelName || !patterns) {
+            return res.status(400).json({
+                success: false,
+                error: 'Bad Request',
+                message: 'channelId, channelName, and patterns are required'
+            })
+        }
+
+        logger.info(`Admin saving pattern for channel: ${channelName}`)
+
+        const result = await channelPatternManager.savePattern(
+            channelId,
+            channelName,
+            patterns,
+            fallbackPattern
+        )
+
+        res.json({
+            success: true,
+            data: { pattern: result },
+            message: `Channel pattern saved for: ${channelName}`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// DELETE /api/admin/channel-patterns/:channelId
+// Delete channel pattern configuration
+// =============================================================================
+router.delete('/channel-patterns/:channelId', async (req, res, next) => {
+    try {
+        const { channelId } = req.params
+
+        logger.info(`Admin deleting pattern for channel: ${channelId}`)
+
+        await channelPatternManager.deletePattern(channelId)
+
+        res.json({
+            success: true,
+            message: `Channel pattern deleted for: ${channelId}`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// MANUAL ENRICHMENT QUEUE ROUTES
+// =============================================================================
+
+// =============================================================================
+// GET /api/admin/manual-enrichment-queue
+// Get pending items in manual enrichment queue
+// Query params:
+//   - channelId: Filter by channel (optional)
+//   - status: Filter by status (default: 'pending')
+//   - limit: Max results (default: 50)
+//   - offset: Pagination offset (default: 0)
+// =============================================================================
+router.get('/manual-enrichment-queue', async (req, res, next) => {
+    try {
+        const options = {
+            channelId: req.query.channelId || null,
+            status: req.query.status || 'pending',
+            limit: parseInt(req.query.limit) || 50,
+            offset: parseInt(req.query.offset) || 0
+        }
+
+        logger.info('Admin requested manual enrichment queue', options)
+
+        const result = await manualEnrichmentQueue.getQueue(options)
+
+        res.json({
+            success: true,
+            data: result,
+            message: `Retrieved ${result.items.length} queue items`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// GET /api/admin/manual-enrichment-queue/stats
+// Get queue statistics
+// Query params:
+//   - channelId: Filter by channel (optional)
+// =============================================================================
+router.get('/manual-enrichment-queue/stats', async (req, res, next) => {
+    try {
+        const channelId = req.query.channelId || null
+
+        logger.info('Admin requested queue statistics', { channelId })
+
+        const stats = await manualEnrichmentQueue.getStats(channelId)
+
+        res.json({
+            success: true,
+            data: { stats },
+            message: 'Queue statistics retrieved successfully'
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// GET /api/admin/manual-enrichment-queue/:queueId
+// Get a specific queue entry
+// =============================================================================
+router.get('/manual-enrichment-queue/:queueId', async (req, res, next) => {
+    try {
+        const { queueId } = req.params
+
+        logger.info(`Admin requested queue entry: ${queueId}`)
+
+        const item = await manualEnrichmentQueue.getQueueItem(queueId)
+
+        if (!item) {
+            return res.status(404).json({
+                success: false,
+                error: 'Queue Entry Not Found',
+                message: `No queue entry found with ID: ${queueId}`
+            })
+        }
+
+        res.json({
+            success: true,
+            data: { item },
+            message: 'Queue entry retrieved successfully'
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/manual-enrichment-queue/:queueId/match
+// Manually match a movie with an IMDB ID
+// Body: { imdbId, notes }
+// =============================================================================
+router.post('/manual-enrichment-queue/:queueId/match', async (req, res, next) => {
+    try {
+        const { queueId } = req.params
+        const { imdbId, notes } = req.body
+
+        if (!imdbId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Bad Request',
+                message: 'imdbId is required'
+            })
+        }
+
+        logger.info(`Admin processing manual match for queue ${queueId}:`, { imdbId })
+
+        const result = await manualEnrichmentQueue.processManualMatch(queueId, imdbId, notes)
+
+        res.json({
+            success: true,
+            data: result,
+            message: `Movie matched successfully: ${result.enrichment.title}`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/manual-enrichment-queue/:queueId/skip
+// Skip a queue entry (won't be enriched)
+// Body: { reason }
+// =============================================================================
+router.post('/manual-enrichment-queue/:queueId/skip', async (req, res, next) => {
+    try {
+        const { queueId } = req.params
+        const { reason } = req.body
+
+        logger.info(`Admin skipping queue entry: ${queueId}`)
+
+        await manualEnrichmentQueue.skipEntry(queueId, reason)
+
+        res.json({
+            success: true,
+            message: 'Queue entry skipped successfully'
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// DELETE /api/admin/manual-enrichment-queue/:queueId
+// Delete a queue entry
+// =============================================================================
+router.delete('/manual-enrichment-queue/:queueId', async (req, res, next) => {
+    try {
+        const { queueId } = req.params
+
+        logger.info(`Admin deleting queue entry: ${queueId}`)
+
+        await manualEnrichmentQueue.deleteEntry(queueId)
+
+        res.json({
+            success: true,
+            message: 'Queue entry deleted successfully'
         })
 
     } catch (error) {

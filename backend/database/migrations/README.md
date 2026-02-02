@@ -2,114 +2,79 @@
 
 This directory contains SQL migration files for the MovieBoxZ database.
 
-## Migration Files
-
-- `001_add_tv_series_support.sql` - ✅ Applied - Adds TV series, seasons, episodes tables
-- `002_add_youtube_compliance_fields.sql` - ⏳ **PENDING** - Adds YouTube TOS compliance fields
-
 ## How to Apply Migrations
 
-### Option 1: Supabase SQL Editor (Recommended)
+### Option 1: Via Supabase Dashboard (Recommended)
 
-1. Go to your Supabase project: https://supabase.com/dashboard/project/qkzbhtzfnlhzyvhpcpyo
-2. Navigate to **SQL Editor** (left sidebar)
-3. Click **New Query**
-4. Copy the contents of the migration file
-5. Paste into the SQL editor
-6. Click **Run** (or press Cmd/Ctrl + Enter)
-7. Verify success message
+1. Open your Supabase project dashboard: https://supabase.com/dashboard/project/yilqwcewkiyawtexmrfb
+2. Navigate to **SQL Editor** in the left sidebar
+3. Click **New query**
+4. Copy the contents of each migration file (in order) and run them
+5. Verify tables were created by checking **Table Editor**
 
-### Option 2: CLI (If you have psql installed)
+### Option 2: Via psql Command Line
 
 ```bash
-# Connect to Supabase database
-psql "postgresql://postgres:[YOUR-PASSWORD]@db.qkzbhtzfnlhzyvhpcpyo.supabase.co:5432/postgres"
+# Set your Supabase database URL
+export DATABASE_URL="postgresql://postgres.[YOUR-PROJECT-REF]@aws-0-[REGION].pooler.supabase.com:5432/postgres"
 
-# Run migration
-\i backend/database/migrations/002_add_youtube_compliance_fields.sql
+# Run migrations in order
+psql $DATABASE_URL < backend/database/migrations/007_create_channel_patterns.sql
+psql $DATABASE_URL < backend/database/migrations/008_create_manual_enrichment_queue.sql
 ```
 
-### Option 3: Automated Script (Work in Progress)
+## Migration List
 
-```bash
-cd backend
-node scripts/apply-migrations.js 002
-```
+### 007_create_channel_patterns.sql
+**Description:** Creates the `channel_patterns` table for storing configurable title extraction patterns for each YouTube channel.
 
-## Applying Migration 002 (YouTube TOS Compliance)
+**Tables Created:**
+- `channel_patterns` - Stores pattern configurations with regex and parameter mappings
 
-**⚠️ CRITICAL**: This migration is required for YouTube Terms of Service compliance.
+**Includes:**
+- Indexes for performance
+- Automatic `updated_at` trigger
+- Example pattern for "The Midnight Screening" channel
 
-### What it does:
-- Adds `youtube_video_title` column (stores original YouTube API title)
-- Adds `channel_thumbnail` column (channel profile image)
-- Adds `last_refreshed` column (cache management timestamp)
-- Creates index on `last_refreshed` for efficient queries
-- Migrates existing data (copies `title` to `youtube_video_title`)
+### 008_create_manual_enrichment_queue.sql
+**Description:** Creates the `manual_enrichment_queue` table for movies that fail automatic enrichment, allowing manual IMDB matching.
 
-### Impact:
-- ✅ Backward compatible (uses DEFAULT values)
-- ✅ No downtime required
-- ✅ Existing queries continue to work
-- ⏱ Execution time: ~1-2 seconds
+**Tables Created:**
+- `manual_enrichment_queue` - Queue for manual enrichment with IMDB/TMDB IDs
 
-### To apply:
+**Features:**
+- Stores extracted metadata from patterns
+- Allows manual IMDB ID assignment
+- Tracks enrichment status (pending, matched, skipped, in_progress)
+- Includes automatic `updated_at` trigger
 
-1. **Open Supabase SQL Editor**:
-   - https://supabase.com/dashboard/project/qkzbhtzfnlhzyvhpcpyo/sql
+## Verify Migrations
 
-2. **Copy migration SQL** from:
-   - `backend/database/migrations/002_add_youtube_compliance_fields.sql`
+After applying migrations, verify they were successful:
 
-3. **Run in SQL Editor**
+### Via Supabase Dashboard
+1. Go to **Table Editor**
+2. Confirm these tables exist:
+   - `channel_patterns`
+   - `manual_enrichment_queue`
+3. Click on each table to see the schema
 
-4. **Verify**:
-   ```sql
-   -- Check new columns exist
-   SELECT column_name, data_type, is_nullable
-   FROM information_schema.columns
-   WHERE table_name = 'movies'
-   AND column_name IN ('youtube_video_title', 'channel_thumbnail', 'last_refreshed');
-
-   -- Should return 3 rows
-   ```
-
-5. **Check data migration**:
-   ```sql
-   -- All movies should have youtube_video_title populated
-   SELECT COUNT(*) as total,
-          COUNT(youtube_video_title) FILTER (WHERE youtube_video_title != '') as populated
-   FROM movies;
-   ```
-
-## Migration Best Practices
-
-1. **Always backup** before running migrations (Supabase has automatic backups)
-2. **Test locally** if possible (use a development project)
-3. **Read the migration** before executing
-4. **Run during low traffic** for large schema changes
-5. **Verify after execution** using provided verification queries
-
-## Rollback
-
-If you need to rollback migration 002:
-
+### Via SQL
 ```sql
--- Remove columns
-ALTER TABLE movies
-    DROP COLUMN IF EXISTS youtube_video_title,
-    DROP COLUMN IF EXISTS channel_thumbnail,
-    DROP COLUMN IF EXISTS last_refreshed;
+-- Check if tables exist
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name IN ('channel_patterns', 'manual_enrichment_queue');
 
--- Drop index
-DROP INDEX IF EXISTS idx_movies_last_refreshed;
+-- View example pattern for The Midnight Screening
+SELECT * FROM channel_patterns WHERE channel_id = 'UC6A_LC-A5NVJ2vw9A0OjCug';
 ```
 
-⚠️ **Warning**: Rollback will delete all data in these columns.
+## Next Steps
 
-## Support
-
-For migration issues:
-- Check Supabase logs in dashboard
-- Review error messages carefully
-- Consult `BACKEND_UPDATE.md` for context
+After applying migrations:
+1. Backend services will automatically use these tables
+2. Channel patterns can be configured via API endpoints
+3. Movies that fail auto-enrichment will be added to the manual queue
+4. Use the admin API to manually match movies with IMDB IDs
