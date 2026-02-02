@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js'
 import channelPatternManager from './channelPatternManager.js'
 import manualEnrichmentQueue from './manualEnrichmentQueue.js'
 import duplicateDetector from './duplicateDetector.js'
-import enhancedEnrichment from './enhancedEnrichment.js'
+import { enhancedEnrichment } from './enhancedEnrichment.js'
 
 class MovieCurator {
     constructor() {
