@@ -1,4 +1,5 @@
 import { tmdbService } from './tmdbService.js'
+import { omdbService } from './omdbService.js'
 import { logger } from '../utils/logger.js'
 import axios from 'axios'
 
@@ -84,15 +85,30 @@ class EnhancedEnrichment {
             const actorQuery = `${title} ${actorHints[0]}`
             logger.debug(`Strategy 1: Searching with actor context: "${actorQuery}"`)
 
-            const actorResults = await tmdbService.searchMulti(actorQuery)
-            results.push(...actorResults)
+            // Search both movies and TV series
+            const movieResults = await tmdbService.searchMovies(actorQuery, publishYear)
+            const tvResults = await tmdbService.searchTVSeries(actorQuery, publishYear)
+
+            // Add media_type to each result
+            movieResults.forEach(r => r.media_type = 'movie')
+            tvResults.forEach(r => r.media_type = 'tv')
+
+            results.push(...movieResults, ...tvResults)
         }
 
         // Strategy 2: Fallback to title-only search
         if (results.length === 0) {
             logger.debug(`Strategy 2: Fallback to title-only: "${title}"`)
-            const titleResults = await tmdbService.searchMulti(title)
-            results.push(...titleResults)
+
+            // Search both movies and TV series
+            const movieResults = await tmdbService.searchMovies(title, publishYear)
+            const tvResults = await tmdbService.searchTVSeries(title, publishYear)
+
+            // Add media_type to each result
+            movieResults.forEach(r => r.media_type = 'movie')
+            tvResults.forEach(r => r.media_type = 'tv')
+
+            results.push(...movieResults, ...tvResults)
         }
 
         // Prioritize based on media hint
@@ -501,14 +517,57 @@ class EnhancedEnrichment {
                 return enrichmentData
             }
 
-            // STEP 2: Not in TMDB, try IMDB directly
-            logger.warn(`No TMDB results for: ${actorHints.title}, trying IMDB search...`)
+            // STEP 2: Not in TMDB, try OMDB with smart search + actor validation
+            logger.warn(`No TMDB results for: ${actorHints.title}, trying OMDB with smart search...`)
 
-            const imdbId = await this.searchIMDBByTitle(actorHints.title, publishYear)
+            const omdbResult = await omdbService.searchWithValidation(
+                actorHints.title,
+                actorHints.actors,
+                publishYear
+            )
 
-            if (imdbId) {
-                logger.info(`✓ Found in IMDB: ${imdbId}`)
-                return await this.enrichByIMDBId(imdbId)
+            if (omdbResult) {
+                logger.info(`✓ Found in OMDB: "${omdbResult.title}" (${omdbResult.imdb_id}) - confidence: ${omdbResult.confidence}%`)
+
+                // Try to get TMDB data for poster/backdrop if IMDB ID exists
+                let tmdbDetails = null
+                if (omdbResult.imdb_id) {
+                    try {
+                        tmdbDetails = await tmdbService.findByIMDBId(omdbResult.imdb_id)
+                    } catch (error) {
+                        logger.debug(`TMDB lookup failed for ${omdbResult.imdb_id}, using OMDB-only data`)
+                    }
+                }
+
+                // Build enrichment data (OMDB primary, TMDB supplements posters)
+                const enrichmentData = {
+                    imdb_id: omdbResult.imdb_id,
+                    tmdb_id: tmdbDetails?.id || null,
+                    title: omdbResult.title,
+                    original_title: omdbResult.title,
+                    description: omdbResult.description,
+                    release_date: omdbResult.release_date,
+                    runtime_minutes: omdbResult.runtime_minutes,
+                    poster_path: tmdbDetails?.poster_path || omdbResult.poster_path, // TMDB poster preferred
+                    backdrop_path: tmdbDetails?.backdrop_path || null,
+                    vote_average: tmdbDetails?.vote_average || null,
+                    vote_count: tmdbDetails?.vote_count || null,
+                    popularity: tmdbDetails?.popularity || null,
+                    genres: omdbResult.genre ? omdbResult.genre.split(', ') : [],
+                    imdb_rating: omdbResult.imdb_rating,
+                    imdb_votes: omdbResult.imdb_votes,
+                    rated: omdbResult.rated,
+                    director: omdbResult.director,
+                    actors: omdbResult.actors,
+                    country: omdbResult.country,
+                    language: omdbResult.language,
+                    media_type: omdbResult.is_tv_show ? 'tv' : 'movie',
+                    confidence: omdbResult.confidence,
+                    actorMatch: omdbResult.actor_match,
+                    source: 'omdb'
+                }
+
+                return enrichmentData
             }
 
             // STEP 3: Not in IMDB either, use cleaned YouTube data
