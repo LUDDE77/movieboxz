@@ -1,7 +1,7 @@
 import { youtubeService } from './youtubeService.js'
 import { tmdbService } from './tmdbService.js'
 import { omdbService } from './omdbService.js'
-import { dbOperations } from '../config/database.js'
+import { supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import channelPatternManager from './channelPatternManager.js'
 import manualEnrichmentQueue from './manualEnrichmentQueue.js'
@@ -466,46 +466,46 @@ class MovieCurator {
     async getStatistics() {
         try {
             // Movie counts
-            const { count: totalMovies } = await dbOperations.supabase
+            const { count: totalMovies } = await supabase
                 .from('movies')
                 .select('*', { count: 'exact', head: true })
 
-            const { count: availableMovies } = await dbOperations.supabase
+            const { count: availableMovies } = await supabase
                 .from('movies')
                 .select('*', { count: 'exact', head: true })
                 .eq('is_available', true)
 
-            const { count: enrichedMovies } = await dbOperations.supabase
+            const { count: enrichedMovies } = await supabase
                 .from('movies')
                 .select('*', { count: 'exact', head: true })
                 .not('tmdb_id', 'is', null)
 
-            const { count: pendingEnrichment } = await dbOperations.supabase
+            const { count: pendingEnrichment } = await supabase
                 .from('movies')
                 .select('*', { count: 'exact', head: true })
                 .is('tmdb_id', null)
                 .eq('is_available', true)
 
             // Channel counts
-            const { count: totalChannels } = await dbOperations.supabase
+            const { count: totalChannels } = await supabase
                 .from('channels')
                 .select('*', { count: 'exact', head: true })
 
             // Genre counts
-            const { count: totalGenres } = await dbOperations.supabase
+            const { count: totalGenres } = await supabase
                 .from('genres')
                 .select('*', { count: 'exact', head: true })
 
             // Recently added movies (last 7 days)
             const sevenDaysAgo = new Date()
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-            const { count: recentlyAdded } = await dbOperations.supabase
+            const { count: recentlyAdded } = await supabase
                 .from('movies')
                 .select('*', { count: 'exact', head: true })
                 .gte('created_at', sevenDaysAgo.toISOString())
 
             // Last curation time
-            const { data: lastChannel } = await dbOperations.supabase
+            const { data: lastChannel } = await supabase
                 .from('channels')
                 .select('last_curated')
                 .not('last_curated', 'is', null)
