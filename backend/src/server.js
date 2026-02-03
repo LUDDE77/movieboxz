@@ -14,6 +14,7 @@ import browseRouter from './routes/browse.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
 import healthRouter from './routes/health.js'
+import stagingRouter from './routes/staging.js'
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js'
@@ -93,6 +94,7 @@ app.use('/api/channels', channelsRouter)
 app.use('/api/browse', browseRouter)
 app.use('/api/user', userRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api/staging', stagingRouter)
 
 // Root endpoint
 app.get('/', (req, res) => {
