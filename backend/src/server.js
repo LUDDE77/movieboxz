@@ -14,7 +14,7 @@ import browseRouter from './routes/browse.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
 import healthRouter from './routes/health.js'
-import stagingRouter from './routes/staging.js'
+import stagingRouter from './routes/staging-simple.js'
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js'

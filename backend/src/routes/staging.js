@@ -1,5 +1,5 @@
 import express from 'express'
-import { supabase } from '../config/supabase.js'
+import { pool } from '../config/database.js'
 import { movieCurator } from '../services/movieCurator.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { enhancedEnrichment } from '../services/enhancedEnrichment.js'
