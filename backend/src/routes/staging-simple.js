@@ -1,5 +1,5 @@
 import express from 'express'
-import { pool } from '../config/database.js'
+import { supabase } from '../config/database.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { logger } from '../utils/logger.js'
 
@@ -8,31 +8,20 @@ const router = express.Router()
 // GET /api/admin/staging/stats - Get staging statistics
 router.get('/stats', async (req, res, next) => {
     try {
-        // Count by approval status
-        const statusResult = await pool.query(`
-            SELECT
-                COUNT(*) FILTER (WHERE approval_status = 'pending') as pending,
-                COUNT(*) FILTER (WHERE approval_status = 'approved') as approved,
-                COUNT(*) FILTER (WHERE approval_status = 'rejected') as rejected,
-                COUNT(*) as total_staged
-            FROM staged_movies
-        `)
+        // Get all staged movies
+        const { data: allMovies, error } = await supabase
+            .from('staged_movies')
+            .select('approval_status, tmdb_id, imdb_id')
 
-        // Count by enrichment status
-        const enrichmentResult = await pool.query(`
-            SELECT
-                COUNT(*) FILTER (WHERE tmdb_id IS NOT NULL OR imdb_id IS NOT NULL) as enriched,
-                COUNT(*) FILTER (WHERE tmdb_id IS NULL AND imdb_id IS NULL) as unenriched
-            FROM staged_movies
-        `)
+        if (error) throw error
 
         const stats = {
-            total_staged: parseInt(statusResult.rows[0].total_staged),
-            pending: parseInt(statusResult.rows[0].pending),
-            approved: parseInt(statusResult.rows[0].approved),
-            rejected: parseInt(statusResult.rows[0].rejected),
-            enriched: parseInt(enrichmentResult.rows[0].enriched),
-            unenriched: parseInt(enrichmentResult.rows[0].unenriched)
+            total_staged: allMovies.length,
+            pending: allMovies.filter(m => m.approval_status === 'pending').length,
+            approved: allMovies.filter(m => m.approval_status === 'approved').length,
+            rejected: allMovies.filter(m => m.approval_status === 'rejected').length,
+            enriched: allMovies.filter(m => m.tmdb_id || m.imdb_id).length,
+            unenriched: allMovies.filter(m => !m.tmdb_id && !m.imdb_id).length
         }
 
         res.json({
@@ -54,48 +43,45 @@ router.get('/movies', async (req, res, next) => {
         const status = req.query.status
         const filter = req.query.filter
 
-        let whereClause = 'WHERE 1=1'
-        const params = []
+        let query = supabase
+            .from('staged_movies')
+            .select(`
+                *,
+                channels(title)
+            `, { count: 'exact' })
 
+        // Apply filters
         if (status) {
-            params.push(status)
-            whereClause += ` AND approval_status = $${params.length}`
+            query = query.eq('approval_status', status)
         }
 
         if (filter === 'enriched') {
-            whereClause += ' AND (tmdb_id IS NOT NULL OR imdb_id IS NOT NULL)'
+            query = query.or('tmdb_id.not.is.null,imdb_id.not.is.null')
         } else if (filter === 'unenriched') {
-            whereClause += ' AND tmdb_id IS NULL AND imdb_id IS NULL'
+            query = query.is('tmdb_id', null).is('imdb_id', null)
         }
 
-        // Get total count
-        const countResult = await pool.query(`
-            SELECT COUNT(*) FROM staged_movies ${whereClause}
-        `, params)
-        const total = parseInt(countResult.rows[0].count)
+        const { data, error, count } = await query
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1)
 
-        // Get movies
-        params.push(limit, offset)
-        const result = await pool.query(`
-            SELECT
-                sm.*,
-                c.title as channel_title
-            FROM staged_movies sm
-            LEFT JOIN channels c ON c.id = sm.channel_id
-            ${whereClause}
-            ORDER BY sm.created_at DESC
-            LIMIT $${params.length - 1} OFFSET $${params.length}
-        `, params)
+        if (error) throw error
+
+        // Add channel_title to each movie
+        const movies = (data || []).map(movie => ({
+            ...movie,
+            channel_title: movie.channels?.title || null
+        }))
 
         res.json({
             success: true,
             data: {
-                movies: result.rows,
+                movies,
                 pagination: {
                     page,
                     limit,
-                    total,
-                    pages: Math.ceil(total / limit)
+                    total: count || 0,
+                    pages: Math.ceil((count || 0) / limit)
                 }
             }
         })
@@ -111,12 +97,15 @@ router.post('/movies/:id/preview-enrichment', async (req, res, next) => {
         const { id } = req.params
         const { priority = 'full', fields = null, preferTmdb = true } = req.body
 
-        const result = await pool.query('SELECT * FROM staged_movies WHERE id = $1', [id])
-        if (result.rows.length === 0) {
+        const { data: movie, error } = await supabase
+            .from('staged_movies')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (error) {
             return res.status(404).json({ success: false, error: 'Movie not found' })
         }
-
-        const movie = result.rows[0]
 
         const enrichmentResult = await selectiveEnrichment.enrichSelective(movie, {
             priority,
@@ -128,10 +117,13 @@ router.post('/movies/:id/preview-enrichment', async (req, res, next) => {
         })
 
         // Save preview to database
-        await pool.query(
-            'UPDATE staged_movies SET enrichment_preview = $1, updated_at = NOW() WHERE id = $2',
-            [JSON.stringify(enrichmentResult.preview), id]
-        )
+        await supabase
+            .from('staged_movies')
+            .update({
+                enrichment_preview: enrichmentResult.preview,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
 
         res.json({
             success: true,
@@ -147,14 +139,17 @@ router.post('/movies/:id/preview-enrichment', async (req, res, next) => {
 router.post('/movies/:id/enrich', async (req, res, next) => {
     try {
         const { id } = req.params
-        const { priority = 'full', fields = null, preferTmdb = true, applyFromPreview = false } = req.body
+        const { priority = 'full', fields = null, preferTmdb = true } = req.body
 
-        const result = await pool.query('SELECT * FROM staged_movies WHERE id = $1', [id])
-        if (result.rows.length === 0) {
+        const { data: movie, error } = await supabase
+            .from('staged_movies')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (error) {
             return res.status(404).json({ success: false, error: 'Movie not found' })
         }
-
-        const movie = result.rows[0]
 
         const enrichmentResult = await selectiveEnrichment.enrichSelective(movie, {
             priority,
@@ -166,41 +161,25 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
         })
 
         if (enrichmentResult.success) {
-            const preview = enrichmentResult.preview
-            const updateFields = []
-            const updateValues = []
-            let valueIndex = 1
+            const updateData = {
+                ...enrichmentResult.preview,
+                enrichment_source: enrichmentResult.source,
+                enrichment_confidence: enrichmentResult.confidence,
+                updated_at: new Date().toISOString()
+            }
 
-            // Build dynamic update query
-            Object.keys(preview).forEach(key => {
-                updateFields.push(`${key} = $${valueIndex}`)
-                updateValues.push(preview[key])
-                valueIndex++
-            })
+            const { data: updated, error: updateError } = await supabase
+                .from('staged_movies')
+                .update(updateData)
+                .eq('id', id)
+                .select()
+                .single()
 
-            updateFields.push(`enrichment_source = $${valueIndex}`)
-            updateValues.push(enrichmentResult.source)
-            valueIndex++
-
-            updateFields.push(`enrichment_confidence = $${valueIndex}`)
-            updateValues.push(enrichmentResult.confidence)
-            valueIndex++
-
-            updateFields.push(`updated_at = NOW()`)
-            updateValues.push(id)
-
-            const updateQuery = `
-                UPDATE staged_movies
-                SET ${updateFields.join(', ')}
-                WHERE id = $${valueIndex}
-                RETURNING *
-            `
-
-            const updateResult = await pool.query(updateQuery, updateValues)
+            if (updateError) throw updateError
 
             res.json({
                 success: true,
-                data: updateResult.rows[0]
+                data: updated
             })
         } else {
             res.status(400).json({
@@ -219,35 +198,25 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
 router.patch('/movies/:id', async (req, res, next) => {
     try {
         const { id } = req.params
-        const updates = req.body
+        const updates = {
+            ...req.body,
+            updated_at: new Date().toISOString()
+        }
 
-        const fields = []
-        const values = []
-        let index = 1
+        const { data, error } = await supabase
+            .from('staged_movies')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single()
 
-        Object.keys(updates).forEach(key => {
-            fields.push(`${key} = $${index}`)
-            values.push(updates[key])
-            index++
-        })
-
-        fields.push(`updated_at = NOW()`)
-        values.push(id)
-
-        const result = await pool.query(`
-            UPDATE staged_movies
-            SET ${fields.join(', ')}
-            WHERE id = $${index}
-            RETURNING *
-        `, values)
-
-        if (result.rows.length === 0) {
+        if (error) {
             return res.status(404).json({ success: false, error: 'Movie not found' })
         }
 
         res.json({
             success: true,
-            data: result.rows[0]
+            data
         })
     } catch (error) {
         logger.error('[Staging] Update movie error:', error)
@@ -261,24 +230,25 @@ router.post('/movies/:id/approve', async (req, res, next) => {
         const { id } = req.params
         const { notes } = req.body
 
-        const result = await pool.query(`
-            UPDATE staged_movies
-            SET
-                approval_status = 'approved',
-                approved_at = NOW(),
-                notes = $1,
-                updated_at = NOW()
-            WHERE id = $2
-            RETURNING *
-        `, [notes || null, id])
+        const { data, error } = await supabase
+            .from('staged_movies')
+            .update({
+                approval_status: 'approved',
+                approved_at: new Date().toISOString(),
+                notes: notes || null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single()
 
-        if (result.rows.length === 0) {
+        if (error) {
             return res.status(404).json({ success: false, error: 'Movie not found' })
         }
 
         res.json({
             success: true,
-            data: result.rows[0]
+            data
         })
     } catch (error) {
         logger.error('[Staging] Approve movie error:', error)
@@ -292,23 +262,24 @@ router.post('/movies/:id/reject', async (req, res, next) => {
         const { id } = req.params
         const { reason } = req.body
 
-        const result = await pool.query(`
-            UPDATE staged_movies
-            SET
-                approval_status = 'rejected',
-                rejected_reason = $1,
-                updated_at = NOW()
-            WHERE id = $2
-            RETURNING *
-        `, [reason, id])
+        const { data, error } = await supabase
+            .from('staged_movies')
+            .update({
+                approval_status: 'rejected',
+                rejected_reason: reason,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single()
 
-        if (result.rows.length === 0) {
+        if (error) {
             return res.status(404).json({ success: false, error: 'Movie not found' })
         }
 
         res.json({
             success: true,
-            data: result.rows[0]
+            data
         })
     } catch (error) {
         logger.error('[Staging] Reject movie error:', error)
@@ -324,67 +295,74 @@ router.post('/publish', async (req, res, next) => {
         let failed = 0
         const movieIds = []
 
-        let stagedMovies
+        // Get approved staged movies
+        let query = supabase
+            .from('staged_movies')
+            .select('*')
+            .eq('approval_status', 'approved')
+
         if (ids && ids.length > 0) {
-            const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')
-            const result = await pool.query(
-                `SELECT * FROM staged_movies WHERE id IN (${placeholders}) AND approval_status = 'approved'`,
-                ids
-            )
-            stagedMovies = result.rows
-        } else {
-            const result = await pool.query(
-                `SELECT * FROM staged_movies WHERE approval_status = 'approved' ORDER BY created_at ASC`
-            )
-            stagedMovies = result.rows
+            query = query.in('id', ids)
         }
 
-        for (const stagedMovie of stagedMovies) {
+        const { data: stagedMovies, error } = await query.order('created_at')
+
+        if (error) throw error
+
+        for (const stagedMovie of stagedMovies || []) {
             try {
                 // Insert into movies table
-                const insertResult = await pool.query(`
-                    INSERT INTO movies (
-                        youtube_video_id, youtube_video_title, title, original_title,
-                        description, release_date, runtime_minutes, channel_id,
-                        view_count, like_count, comment_count, published_at,
-                        tmdb_id, imdb_id, poster_path, backdrop_path,
-                        vote_average, vote_count, popularity,
-                        imdb_rating, imdb_votes, rated, director, actors,
-                        language, country, is_tv_show, category,
-                        enrichment_source, enrichment_confidence,
-                        is_available, created_at, updated_at
-                    ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                        true, NOW(), NOW()
-                    ) RETURNING id
-                `, [
-                    stagedMovie.youtube_video_id, stagedMovie.youtube_video_title,
-                    stagedMovie.title, stagedMovie.original_title,
-                    stagedMovie.description, stagedMovie.release_date,
-                    stagedMovie.runtime_minutes, stagedMovie.channel_id,
-                    stagedMovie.view_count, stagedMovie.like_count,
-                    stagedMovie.comment_count, stagedMovie.published_at,
-                    stagedMovie.tmdb_id, stagedMovie.imdb_id,
-                    stagedMovie.poster_path, stagedMovie.backdrop_path,
-                    stagedMovie.vote_average, stagedMovie.vote_count,
-                    stagedMovie.popularity, stagedMovie.imdb_rating,
-                    stagedMovie.imdb_votes, stagedMovie.rated,
-                    stagedMovie.director, stagedMovie.actors,
-                    stagedMovie.language, stagedMovie.country,
-                    stagedMovie.is_tv_show, stagedMovie.category,
-                    stagedMovie.enrichment_source, stagedMovie.enrichment_confidence
-                ])
+                const { data: insertedMovie, error: insertError } = await supabase
+                    .from('movies')
+                    .insert({
+                        youtube_video_id: stagedMovie.youtube_video_id,
+                        youtube_video_title: stagedMovie.youtube_video_title,
+                        title: stagedMovie.title,
+                        original_title: stagedMovie.original_title,
+                        description: stagedMovie.description,
+                        release_date: stagedMovie.release_date,
+                        runtime_minutes: stagedMovie.runtime_minutes,
+                        channel_id: stagedMovie.channel_id,
+                        view_count: stagedMovie.view_count,
+                        like_count: stagedMovie.like_count,
+                        comment_count: stagedMovie.comment_count,
+                        published_at: stagedMovie.published_at,
+                        tmdb_id: stagedMovie.tmdb_id,
+                        imdb_id: stagedMovie.imdb_id,
+                        poster_path: stagedMovie.poster_path,
+                        backdrop_path: stagedMovie.backdrop_path,
+                        vote_average: stagedMovie.vote_average,
+                        vote_count: stagedMovie.vote_count,
+                        popularity: stagedMovie.popularity,
+                        imdb_rating: stagedMovie.imdb_rating,
+                        imdb_votes: stagedMovie.imdb_votes,
+                        rated: stagedMovie.rated,
+                        director: stagedMovie.director,
+                        actors: stagedMovie.actors,
+                        language: stagedMovie.language,
+                        country: stagedMovie.country,
+                        is_tv_show: stagedMovie.is_tv_show,
+                        category: stagedMovie.category,
+                        enrichment_source: stagedMovie.enrichment_source,
+                        enrichment_confidence: stagedMovie.enrichment_confidence,
+                        is_available: true
+                    })
+                    .select('id')
+                    .single()
 
-                const movieId = insertResult.rows[0].id
+                if (insertError) throw insertError
+
+                const movieId = insertedMovie.id
                 movieIds.push(movieId)
 
                 // Update staged movie with published_movie_id
-                await pool.query(
-                    'UPDATE staged_movies SET published_movie_id = $1, updated_at = NOW() WHERE id = $2',
-                    [movieId, stagedMovie.id]
-                )
+                await supabase
+                    .from('staged_movies')
+                    .update({
+                        published_movie_id: movieId,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', stagedMovie.id)
 
                 published++
             } catch (error) {

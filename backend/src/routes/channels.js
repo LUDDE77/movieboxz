@@ -1,6 +1,6 @@
 import express from 'express'
 import { logger } from '../utils/logger.js'
-import { pool } from '../config/database.js'
+import { supabase } from '../config/database.js'
 
 const router = express.Router()
 
@@ -11,29 +11,24 @@ router.get('/', async (req, res) => {
         const limit = parseInt(req.query.limit) || 50
         const offset = (page - 1) * limit
 
-        // Get total count
-        const countResult = await pool.query('SELECT COUNT(*) FROM channels')
-        const total = parseInt(countResult.rows[0].count)
+        // Get channels with movie counts using Supabase
+        const { data, error, count } = await supabase
+            .from('channels')
+            .select(`
+                id,
+                title,
+                movies(count)
+            `, { count: 'exact' })
+            .range(offset, offset + limit - 1)
+            .order('title')
 
-        // Get channels with movie counts
-        const result = await pool.query(`
-            SELECT
-                c.id,
-                c.title,
-                COUNT(m.id) as movie_count,
-                MAX(m.created_at) as last_curated
-            FROM channels c
-            LEFT JOIN movies m ON m.channel_id = c.id
-            GROUP BY c.id, c.title
-            ORDER BY movie_count DESC
-            LIMIT $1 OFFSET $2
-        `, [limit, offset])
+        if (error) throw error
 
-        const channels = result.rows.map(row => ({
-            id: row.id,
-            title: row.title,
-            movie_count: parseInt(row.movie_count),
-            last_curated: row.last_curated
+        const channels = (data || []).map(channel => ({
+            id: channel.id,
+            title: channel.title,
+            movie_count: channel.movies?.[0]?.count || 0,
+            last_curated: null // Can add this later if needed
         }))
 
         res.json({
@@ -43,8 +38,8 @@ router.get('/', async (req, res) => {
                 pagination: {
                     page,
                     limit,
-                    total,
-                    pages: Math.ceil(total / limit)
+                    total: count || 0,
+                    pages: Math.ceil((count || 0) / limit)
                 }
             }
         })
