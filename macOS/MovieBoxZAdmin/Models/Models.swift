@@ -232,7 +232,7 @@ enum EnrichmentPriority: String, Codable, CaseIterable {
 }
 
 // Staged movie (mirrors production Movie with staging fields)
-struct StagedMovie: Codable, Identifiable {
+struct StagedMovie: Codable, Identifiable, Hashable {
     let id: String
     let youtubeVideoId: String
     let youtubeVideoTitle: String
@@ -343,7 +343,7 @@ struct StagedMovie: Codable, Identifiable {
 }
 
 // Helper type for JSONB fields
-struct AnyCodable: Codable {
+struct AnyCodable: Codable, Hashable {
     let value: Any
 
     init(_ value: Any) {
@@ -386,6 +386,37 @@ struct AnyCodable: Codable {
             try container.encode(dict.mapValues { AnyCodable($0) })
         default:
             try container.encodeNil()
+        }
+    }
+
+    // Hashable conformance
+    func hash(into hasher: inout Hasher) {
+        switch value {
+        case let int as Int:
+            hasher.combine(int)
+        case let double as Double:
+            hasher.combine(double)
+        case let string as String:
+            hasher.combine(string)
+        case let bool as Bool:
+            hasher.combine(bool)
+        default:
+            hasher.combine(0) // Default hash for complex types
+        }
+    }
+
+    static func == (lhs: AnyCodable, rhs: AnyCodable) -> Bool {
+        switch (lhs.value, rhs.value) {
+        case let (lInt as Int, rInt as Int):
+            return lInt == rInt
+        case let (lDouble as Double, rDouble as Double):
+            return lDouble == rDouble
+        case let (lString as String, rString as String):
+            return lString == rString
+        case let (lBool as Bool, rBool as Bool):
+            return lBool == rBool
+        default:
+            return false // Complex types default to not equal
         }
     }
 }
