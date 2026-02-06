@@ -94,7 +94,7 @@ app.use('/api/channels', channelsRouter)
 app.use('/api/browse', browseRouter)
 app.use('/api/user', userRouter)
 app.use('/api/admin', adminRouter)
-app.use('/api/staging', stagingRouter)
+app.use('/api/admin/staging', stagingRouter)
 
 // Root endpoint
 app.get('/', (req, res) => {
