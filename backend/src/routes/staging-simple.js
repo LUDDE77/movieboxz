@@ -1,9 +1,94 @@
 import express from 'express'
 import { supabase } from '../config/database.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
+import { movieCurator } from '../services/movieCurator.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
+
+// POST /api/admin/staging/import - Import movies to staging
+router.post('/import', async (req, res, next) => {
+    try {
+        const { channelId, channelTitle, limit = 10, batchId } = req.body
+
+        if (!channelId || !channelTitle) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: channelId and channelTitle'
+            })
+        }
+
+        logger.info(`[Staging] Importing ${limit} videos from channel: ${channelTitle}`)
+
+        // Fetch videos from YouTube
+        const videos = await movieCurator.fetchChannelVideos(channelId, limit)
+
+        let imported = 0
+        let skipped = 0
+        const importedMovies = []
+
+        for (const video of videos) {
+            try {
+                // Check if already in staging
+                const { data: existing } = await supabase
+                    .from('staged_movies')
+                    .select('id')
+                    .eq('youtube_video_id', video.id)
+                    .single()
+
+                if (existing) {
+                    skipped++
+                    continue
+                }
+
+                // Parse title to extract movie info
+                const parsed = movieCurator.parseVideoTitle(video.title)
+
+                // Create staged movie record
+                const { data: stagedMovie, error } = await supabase
+                    .from('staged_movies')
+                    .insert({
+                        youtube_video_id: video.id,
+                        youtube_video_title: video.title,
+                        title: parsed.title || video.title,
+                        description: video.description,
+                        channel_id: channelId,
+                        view_count: video.viewCount,
+                        like_count: video.likeCount,
+                        comment_count: video.commentCount,
+                        published_at: video.publishedAt,
+                        approval_status: 'pending',
+                        import_batch_id: batchId || null
+                    })
+                    .select()
+                    .single()
+
+                if (error) throw error
+
+                importedMovies.push(stagedMovie)
+                imported++
+            } catch (error) {
+                logger.error(`[Staging] Failed to import video ${video.id}:`, error)
+                skipped++
+            }
+        }
+
+        logger.info(`[Staging] Import complete: ${imported} imported, ${skipped} skipped`)
+
+        res.json({
+            success: true,
+            data: {
+                imported,
+                skipped,
+                batchId: batchId || null,
+                movies: importedMovies
+            }
+        })
+    } catch (error) {
+        logger.error('[Staging] Import error:', error)
+        next(error)
+    }
+})
 
 // GET /api/admin/staging/stats - Get staging statistics
 router.get('/stats', async (req, res, next) => {
