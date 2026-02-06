@@ -2,6 +2,7 @@ import express from 'express'
 import { supabase } from '../config/database.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { movieCurator } from '../services/movieCurator.js'
+import { youtubeService } from '../services/youtubeService.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
@@ -20,8 +21,11 @@ router.post('/import', async (req, res, next) => {
 
         logger.info(`[Staging] Importing ${limit} videos from channel: ${channelTitle}`)
 
-        // Fetch videos from YouTube
-        const videos = await movieCurator.fetchChannelVideos(channelId, limit)
+        // Fetch videos from YouTube using youtubeService
+        const videos = await youtubeService.getChannelVideos(channelId, {
+            maxResults: limit,
+            fetchDetails: true
+        })
 
         let imported = 0
         let skipped = 0
@@ -41,8 +45,11 @@ router.post('/import', async (req, res, next) => {
                     continue
                 }
 
-                // Parse title to extract movie info
-                const parsed = movieCurator.parseVideoTitle(video.title)
+                // Extract metadata using channel pattern
+                const parsed = await movieCurator.extractMetadata(video.title, channelId)
+
+                // Calculate duration in minutes
+                const durationMinutes = movieCurator.parseDuration(video.duration)
 
                 // Create staged movie record
                 const { data: stagedMovie, error } = await supabase
@@ -53,9 +60,10 @@ router.post('/import', async (req, res, next) => {
                         title: parsed.title || video.title,
                         description: video.description,
                         channel_id: channelId,
-                        view_count: video.viewCount,
-                        like_count: video.likeCount,
-                        comment_count: video.commentCount,
+                        duration_minutes: Math.round(durationMinutes),
+                        view_count: parseInt(video.viewCount) || 0,
+                        like_count: parseInt(video.likeCount) || 0,
+                        comment_count: parseInt(video.commentCount) || 0,
                         published_at: video.publishedAt,
                         approval_status: 'pending',
                         import_batch_id: batchId || null
