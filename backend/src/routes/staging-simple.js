@@ -34,13 +34,27 @@ router.post('/import', async (req, res, next) => {
         for (const video of videos) {
             try {
                 // Check if already in staging
-                const { data: existing } = await supabase
+                const { data: inStaging } = await supabase
                     .from('staged_movies')
                     .select('id')
                     .eq('youtube_video_id', video.id)
                     .single()
 
-                if (existing) {
+                if (inStaging) {
+                    logger.info(`Skipping ${video.title} - already in staging`)
+                    skipped++
+                    continue
+                }
+
+                // Check if already published to production
+                const { data: inProduction } = await supabase
+                    .from('movies')
+                    .select('id')
+                    .eq('youtube_video_id', video.id)
+                    .single()
+
+                if (inProduction) {
+                    logger.info(`Skipping ${video.title} - already published to production`)
                     skipped++
                     continue
                 }
