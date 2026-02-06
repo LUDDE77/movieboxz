@@ -1,0 +1,428 @@
+import Foundation
+
+@MainActor
+class AdminAPIService: ObservableObject {
+    private let baseURL: String
+    private let adminAPIKey: String
+
+    init() {
+        self.baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? ""
+        self.adminAPIKey = UserDefaults.standard.string(forKey: "adminAPIKey") ?? ""
+
+        print("🔧 [API] Initialized with base URL: \(baseURL)")
+        print("🔑 [API] Admin API Key configured: \(adminAPIKey.isEmpty ? "NO" : "YES")")
+    }
+
+    // MARK: - Generic Request
+    private func request<T: Codable>(
+        endpoint: String,
+        method: String = "GET",
+        body: Encodable? = nil
+    ) async throws -> APIResponse<T> {
+        guard let url = URL(string: "\(baseURL)/api/admin\(endpoint)") else {
+            print("❌ [API] Invalid URL: \(baseURL)/api/admin\(endpoint)")
+            throw APIError.invalidURL
+        }
+
+        print("📡 [API] \(method) \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let body = body {
+            do {
+                request.httpBody = try JSONEncoder().encode(body)
+                if let bodyString = String(data: request.httpBody!, encoding: .utf8) {
+                    print("📤 [API] Request body: \(bodyString)")
+                }
+            } catch {
+                print("❌ [API] Failed to encode request body: \(error)")
+                throw APIError.decodingError(error.localizedDescription)
+            }
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [API] Invalid response type")
+                throw APIError.invalidResponse
+            }
+
+            print("📥 [API] Response status: \(httpResponse.statusCode)")
+
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📥 [API] Response body: \(responseString.prefix(500))...")
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                    print("❌ [API] Unauthorized - check API key")
+                    throw APIError.unauthorized
+                }
+                print("❌ [API] HTTP error: \(httpResponse.statusCode)")
+                throw APIError.httpError(httpResponse.statusCode)
+            }
+
+            do {
+                let decoder = JSONDecoder()
+                let result = try decoder.decode(APIResponse<T>.self, from: data)
+                print("✅ [API] Successfully decoded response")
+                return result
+            } catch {
+                print("❌ [API] Decoding error: \(error)")
+                if let decodingError = error as? DecodingError {
+                    print("❌ [API] Decoding details: \(decodingError)")
+                }
+                throw APIError.decodingError(error.localizedDescription)
+            }
+        } catch let error as APIError {
+            throw error
+        } catch {
+            print("❌ [API] Network error: \(error)")
+            throw APIError.networkError(error)
+        }
+    }
+
+    // MARK: - Stats
+    func getStats() async throws -> AdminStats {
+        print("📊 [API] Fetching statistics...")
+        let response: APIResponse<AdminStats> = try await request(endpoint: "/stats")
+        print("✅ [API] Stats retrieved successfully")
+        return response.data
+    }
+
+    // MARK: - Movies
+    func getMovies(page: Int = 1, limit: Int = 50, search: String? = nil) async throws -> MoviesData {
+        var endpoint = "?page=\(page)&limit=\(limit)"
+        if let search = search, !search.isEmpty {
+            endpoint += "&search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)"
+        }
+
+        guard let url = URL(string: "\(baseURL)/api/movies\(endpoint)") else {
+            print("❌ [API] Invalid URL for movies endpoint")
+            throw APIError.invalidURL
+        }
+
+        print("📡 [API] GET \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [API] Invalid response type")
+                throw APIError.invalidResponse
+            }
+
+            print("📥 [API] Response status: \(httpResponse.statusCode)")
+
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📥 [API] Response body: \(responseString.prefix(500))...")
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                    print("❌ [API] Unauthorized - check API key")
+                    throw APIError.unauthorized
+                }
+                print("❌ [API] HTTP error: \(httpResponse.statusCode)")
+                throw APIError.httpError(httpResponse.statusCode)
+            }
+
+            do {
+                let decoder = JSONDecoder()
+                let result = try decoder.decode(APIResponse<MoviesData>.self, from: data)
+                print("✅ [API] Successfully decoded \(result.data.movies.count) movies")
+                return result.data
+            } catch {
+                print("❌ [API] Decoding error: \(error)")
+                if let decodingError = error as? DecodingError {
+                    print("❌ [API] Decoding details: \(decodingError)")
+                }
+                throw APIError.decodingError(error.localizedDescription)
+            }
+        } catch let error as APIError {
+            throw error
+        } catch {
+            print("❌ [API] Network error: \(error)")
+            throw APIError.networkError(error)
+        }
+    }
+
+    // MARK: - Channels
+    func getChannels(page: Int = 1, limit: Int = 50) async throws -> ChannelsData {
+        print("📺 [API] Fetching channels...")
+
+        guard let url = URL(string: "\(baseURL)/api/channels?page=\(page)&limit=\(limit)") else {
+            print("❌ [API] Invalid URL for channels endpoint")
+            throw APIError.invalidURL
+        }
+
+        print("📡 [API] GET \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [API] Invalid response type")
+                throw APIError.invalidResponse
+            }
+
+            print("📥 [API] Response status: \(httpResponse.statusCode)")
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                print("❌ [API] HTTP error: \(httpResponse.statusCode)")
+                throw APIError.httpError(httpResponse.statusCode)
+            }
+
+            let decoder = JSONDecoder()
+            let result = try decoder.decode(APIResponse<ChannelsData>.self, from: data)
+            print("✅ [API] Channels retrieved: \(result.data.channels.count)")
+            return result.data
+        } catch let error as APIError {
+            throw error
+        } catch {
+            print("❌ [API] Network error: \(error)")
+            throw APIError.networkError(error)
+        }
+    }
+
+    // MARK: - Genres
+    func getGenres(page: Int = 1, limit: Int = 100) async throws -> GenresData {
+        print("🎭 [API] Fetching genres...")
+
+        guard let url = URL(string: "\(baseURL)/api/genres?page=\(page)&limit=\(limit)") else {
+            print("❌ [API] Invalid URL for genres endpoint")
+            throw APIError.invalidURL
+        }
+
+        print("📡 [API] GET \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [API] Invalid response type")
+                throw APIError.invalidResponse
+            }
+
+            print("📥 [API] Response status: \(httpResponse.statusCode)")
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                print("❌ [API] HTTP error: \(httpResponse.statusCode)")
+                throw APIError.httpError(httpResponse.statusCode)
+            }
+
+            let decoder = JSONDecoder()
+            let result = try decoder.decode(APIResponse<GenresData>.self, from: data)
+            print("✅ [API] Genres retrieved: \(result.data.genres.count)")
+            return result.data
+        } catch let error as APIError {
+            throw error
+        } catch {
+            print("❌ [API] Network error: \(error)")
+            throw APIError.networkError(error)
+        }
+    }
+
+    // MARK: - Staging Workflow
+
+    /// Import movies from a YouTube channel to staging
+    func importToStaging(channelId: String, channelTitle: String, limit: Int = 10, batchId: String? = nil) async throws -> ImportResponse {
+        let endpoint = "/staging/import"
+        let body = ImportRequest(channelId: channelId, channelTitle: channelTitle, limit: limit, batchId: batchId)
+
+        print("📥 [API] Importing to staging: channel=\(channelTitle), limit=\(limit)")
+
+        let response: APIResponse<ImportResponse> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Import completed: \(response.data.imported) imported, \(response.data.skipped) skipped")
+
+        return response.data
+    }
+
+    /// Get staged movies with filtering and pagination
+    func getStagedMovies(status: ApprovalStatus? = nil, filter: String? = nil, page: Int = 1, limit: Int = 50) async throws -> StagedMoviesData {
+        var endpoint = "/staging/movies?page=\(page)&limit=\(limit)"
+
+        if let status = status {
+            endpoint += "&status=\(status.rawValue)"
+        }
+
+        if let filter = filter {
+            endpoint += "&filter=\(filter)"
+        }
+
+        print("📋 [API] Fetching staged movies: status=\(status?.rawValue ?? "all"), filter=\(filter ?? "none")")
+
+        let response: APIResponse<StagedMoviesData> = try await request(endpoint: endpoint, method: "GET")
+        print("✅ [API] Found \(response.data.movies.count) staged movies")
+
+        return response.data
+    }
+
+    /// Get staging area statistics
+    func getStagingStats() async throws -> StagingStats {
+        let endpoint = "/staging/stats"
+
+        print("📊 [API] Fetching staging stats")
+
+        let response: APIResponse<StagingStats> = try await request(endpoint: endpoint, method: "GET")
+        print("✅ [API] Staging stats: \(response.data.pending) pending, \(response.data.enriched) enriched")
+
+        return response.data
+    }
+
+    /// Preview enrichment for a staged movie (doesn't save)
+    func previewEnrichment(movieId: String, priority: EnrichmentPriority = .full, fields: [String]? = nil, preferTmdb: Bool = true) async throws -> EnrichmentPreview {
+        let endpoint = "/staging/movies/\(movieId)/preview-enrichment"
+        let body = EnrichmentRequest(priority: priority, fields: fields, preferTmdb: preferTmdb, applyFromPreview: nil)
+
+        print("🔍 [API] Previewing enrichment for movie \(movieId) with priority \(priority.rawValue)")
+
+        let response: APIResponse<EnrichmentPreview> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Preview completed: confidence=\(response.data.confidence ?? 0), source=\(response.data.source ?? "none")")
+
+        return response.data
+    }
+
+    /// Apply enrichment to a staged movie
+    func applyEnrichment(movieId: String, priority: EnrichmentPriority = .full, fields: [String]? = nil, preferTmdb: Bool = true, applyFromPreview: Bool = false) async throws -> StagedMovie {
+        let endpoint = "/staging/movies/\(movieId)/enrich"
+        let body = EnrichmentRequest(priority: priority, fields: fields, preferTmdb: preferTmdb, applyFromPreview: applyFromPreview)
+
+        print("✨ [API] Applying enrichment for movie \(movieId) with priority \(priority.rawValue)")
+
+        let response: APIResponse<StagedMovie> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Enrichment applied successfully")
+
+        return response.data
+    }
+
+    /// Update staged movie fields (manual editing)
+    func updateStagedMovie(movieId: String, updates: [String: Any]) async throws -> StagedMovie {
+        let endpoint = "/staging/movies/\(movieId)"
+
+        print("✏️ [API] Updating staged movie \(movieId) with \(updates.count) fields")
+
+        // Custom implementation for [String: Any] body
+        guard let url = URL(string: "\(baseURL)/api\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: updates)
+
+        let (data, httpResponse) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = httpResponse as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        let response = try JSONDecoder().decode(APIResponse<StagedMovie>.self, from: data)
+        print("✅ [API] Movie updated successfully")
+
+        return response.data
+    }
+
+    /// Approve a staged movie for publishing
+    func approveStagedMovie(movieId: String, notes: String? = nil) async throws -> StagedMovie {
+        let endpoint = "/staging/movies/\(movieId)/approve"
+
+        var body: [String: String] = [:]
+        if let notes = notes {
+            body["notes"] = notes
+        }
+
+        print("✅ [API] Approving staged movie \(movieId)")
+
+        let response: APIResponse<StagedMovie> = try await request(endpoint: endpoint, method: "POST", body: body.isEmpty ? nil : body)
+        print("✅ [API] Movie approved successfully")
+
+        return response.data
+    }
+
+    /// Reject a staged movie
+    func rejectStagedMovie(movieId: String, reason: String) async throws -> StagedMovie {
+        let endpoint = "/staging/movies/\(movieId)/reject"
+        let body = ["reason": reason]
+
+        print("❌ [API] Rejecting staged movie \(movieId)")
+
+        let response: APIResponse<StagedMovie> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Movie rejected successfully")
+
+        return response.data
+    }
+
+    /// Publish approved staged movies to production
+    func publishStagedMovies(movieIds: [String]? = nil) async throws -> PublishResponse {
+        let endpoint = "/staging/publish"
+        let body = PublishRequest(ids: movieIds)
+
+        if let ids = movieIds {
+            print("🚀 [API] Publishing \(ids.count) specific staged movies")
+        } else {
+            print("🚀 [API] Publishing all approved staged movies")
+        }
+
+        let response: APIResponse<PublishResponse> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Published \(response.data.published) movies, \(response.data.failed) failed")
+
+        return response.data
+    }
+
+    /// Delete a staged movie
+    func deleteStagedMovie(movieId: String) async throws {
+        let endpoint = "/staging/movies/\(movieId)"
+
+        print("🗑️ [API] Deleting staged movie \(movieId)")
+
+        guard let url = URL(string: "\(baseURL)/api\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+
+        let (_, httpResponse) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = httpResponse as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        print("✅ [API] Movie deleted successfully")
+    }
+}
