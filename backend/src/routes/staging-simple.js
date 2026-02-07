@@ -74,7 +74,7 @@ router.post('/import', async (req, res, next) => {
                         title: parsed.title || video.title,
                         description: video.description,
                         channel_id: channelId,
-                        duration_minutes: Math.round(durationMinutes),
+                        runtime_minutes: Math.round(durationMinutes),
                         view_count: parseInt(video.viewCount) || 0,
                         like_count: parseInt(video.likeCount) || 0,
                         comment_count: parseInt(video.commentCount) || 0,
