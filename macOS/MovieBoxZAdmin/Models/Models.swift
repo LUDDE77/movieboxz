@@ -152,6 +152,126 @@ struct Channel: Codable, Identifiable {
     }
 }
 
+// MARK: - Channel Pattern Configuration
+
+struct ChannelPattern: Codable, Identifiable {
+    let id: String
+    let channelId: String
+    let channelName: String
+    let patterns: [PatternRule]
+    let fallbackPattern: FallbackPattern?
+    let isActive: Bool
+    let createdAt: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case channelId = "channel_id"
+        case channelName = "channel_name"
+        case patterns
+        case fallbackPattern = "fallback_pattern"
+        case isActive = "is_active"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct PatternRule: Codable, Identifiable {
+    let regex: String
+    let parameters: [String: PatternParameter]
+
+    var id: String { regex }
+}
+
+enum PatternParameter: Codable {
+    case int(Int)
+    case string(String)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let intValue = try? container.decode(Int.self) {
+            self = .int(intValue)
+        } else if let stringValue = try? container.decode(String.self) {
+            self = .string(stringValue)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "PatternParameter must be Int or String")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .int(let value):
+            try container.encode(value)
+        case .string(let value):
+            try container.encode(value)
+        }
+    }
+}
+
+struct FallbackPattern: Codable {
+    let type: String
+    let divider: String?
+}
+
+struct ChannelWithPattern: Codable, Identifiable {
+    let id: String
+    let title: String
+    let description: String?
+    let thumbnailUrl: String?
+    let subscriberCount: Int?
+    let videoCount: Int?
+    let isCurated: Bool
+    let hasPattern: Bool
+    let pattern: ChannelPattern?
+    let createdAt: String?
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case thumbnailUrl = "thumbnail_url"
+        case subscriberCount = "subscriber_count"
+        case videoCount = "video_count"
+        case isCurated = "is_curated"
+        case hasPattern = "has_pattern"
+        case pattern
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct ChannelsWithPatternsData: Codable {
+    let channels: [ChannelWithPattern]
+    let total: Int
+}
+
+struct PatternTestResult: Codable {
+    let youtubeTitle: String
+    let extracted: ExtractedMetadata
+    let matched: Bool
+}
+
+struct ExtractedMetadata: Codable {
+    let title: String?
+    let actors: String?
+    let actorsArray: [String]?
+    let genre: String?
+    let year: Int?
+    let patternMatched: Bool?
+    let confidence: Double?
+    let rawTitle: String?
+    let error: String?
+}
+
+struct PatternTestData: Codable {
+    let results: [PatternTestResult]
+    let matchRate: String
+    let matched: Int
+    let total: Int
+}
+
 // MARK: - Pagination
 struct Pagination: Codable {
     let page: Int

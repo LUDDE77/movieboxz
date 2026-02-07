@@ -10,6 +10,7 @@ import dotenv from 'dotenv'
 // Import routes
 import moviesRouter from './routes/movies.js'
 import channelsRouter from './routes/channels.js'
+import channelsAdminRouter from './routes/channelsAdmin.js'
 import browseRouter from './routes/browse.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
@@ -94,6 +95,7 @@ app.use('/api/channels', channelsRouter)
 app.use('/api/browse', browseRouter)
 app.use('/api/user', userRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api/admin/channels', channelsAdminRouter)
 app.use('/api/admin/staging', stagingRouter)
 
 // Root endpoint

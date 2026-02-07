@@ -425,4 +425,89 @@ class AdminAPIService: ObservableObject {
 
         print("✅ [API] Movie deleted successfully")
     }
+
+    // MARK: - Channel Management
+
+    func getChannelsWithPatterns() async throws -> ChannelsWithPatternsData {
+        let endpoint = "/admin/channels"
+        let response: APIResponse<ChannelsWithPatternsData> = try await request(endpoint: endpoint)
+        return response.data
+    }
+
+    func addChannel(channelId: String) async throws -> ChannelWithPattern {
+        let endpoint = "/admin/channels"
+        let body = ["channelId": channelId]
+        let response: APIResponse<ChannelWithPattern> = try await request(endpoint: endpoint, method: "POST", body: body)
+        return response.data
+    }
+
+    func getChannelPattern(channelId: String) async throws -> ChannelPattern? {
+        let endpoint = "/admin/channels/\(channelId)/pattern"
+        let response: APIResponse<ChannelPattern?> = try await request(endpoint: endpoint)
+        return response.data
+    }
+
+    func updateChannelPattern(channelId: String, channelName: String, patterns: [[String: Any]], fallbackPattern: [String: String]? = nil) async throws -> ChannelPattern {
+        let endpoint = "/admin/channels/\(channelId)/pattern"
+        var body: [String: Any] = [
+            "channelName": channelName,
+            "patterns": patterns
+        ]
+        if let fallbackPattern = fallbackPattern {
+            body["fallbackPattern"] = fallbackPattern
+        }
+        let response: APIResponse<ChannelPattern> = try await request(endpoint: endpoint, method: "PUT", body: body)
+        return response.data
+    }
+
+    func deleteChannelPattern(channelId: String) async throws {
+        let endpoint = "/admin/channels/\(channelId)/pattern"
+
+        guard let url = URL(string: "\(baseURL)/api\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+
+        let (_, httpResponse) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = httpResponse as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((httpResponse as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
+
+    func testChannelPattern(channelId: String, patterns: [[String: Any]], fallbackPattern: [String: String]? = nil, sampleCount: Int = 5) async throws -> PatternTestData {
+        let endpoint = "/admin/channels/\(channelId)/test-pattern"
+        var body: [String: Any] = [
+            "patterns": patterns,
+            "sampleCount": sampleCount
+        ]
+        if let fallbackPattern = fallbackPattern {
+            body["fallbackPattern"] = fallbackPattern
+        }
+        let response: APIResponse<PatternTestData> = try await request(endpoint: endpoint, method: "POST", body: body)
+        return response.data
+    }
+
+    func deleteChannel(channelId: String) async throws {
+        let endpoint = "/admin/channels/\(channelId)"
+
+        guard let url = URL(string: "\(baseURL)/api\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+
+        let (_, httpResponse) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = httpResponse as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError((httpResponse as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+    }
 }
