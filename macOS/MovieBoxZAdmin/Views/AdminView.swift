@@ -16,7 +16,7 @@ struct AdminView: View {
                     .tag(1)
                 Label("Movies", systemImage: "film.fill")
                     .tag(2)
-                Label("Channels", systemImage: "tv.fill")
+                Label("Channel Setup", systemImage: "tv.fill")
                     .tag(3)
                 Label("Genres", systemImage: "theatermasks.fill")
                     .tag(4)
@@ -33,7 +33,7 @@ struct AdminView: View {
                 case 2:
                     MoviesView()
                 case 3:
-                    ChannelsView()
+                    ChannelManagementView()
                 case 4:
                     GenresView()
                 default:

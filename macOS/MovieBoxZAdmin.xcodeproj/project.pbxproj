@@ -13,6 +13,7 @@
 		1A000007000000000000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000008000000000000001 /* Models.swift */; };
 		1A000009000000000000001 /* AdminAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000A000000000000001 /* AdminAPIService.swift */; };
 		1A00000B000000000000002 /* StagingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000C000000000000002 /* StagingView.swift */; };
+		1A00000D000000000000003 /* ChannelManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000E000000000000003 /* ChannelManagementView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,7 @@
 		1A00000B000000000000001 /* MovieBoxZAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MovieBoxZAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A00000C000000000000001 /* MovieBoxZAdmin.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MovieBoxZAdmin.entitlements; sourceTree = "<group>"; };
 		1A00000C000000000000002 /* StagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingView.swift; sourceTree = "<group>"; };
+		1A00000E000000000000003 /* ChannelManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelManagementView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +72,7 @@
 			children = (
 				1A000004000000000000001 /* AdminView.swift */,
 				1A00000C000000000000002 /* StagingView.swift */,
+				1A00000E000000000000003 /* ChannelManagementView.swift */,
 				1A000006000000000000001 /* MoviesView.swift */,
 			);
 			path = Views;
@@ -162,6 +165,7 @@
 				1A000001000000000000001 /* MovieBoxZAdminApp.swift in Sources */,
 				1A000003000000000000001 /* AdminView.swift in Sources */,
 				1A00000B000000000000002 /* StagingView.swift in Sources */,
+				1A00000D000000000000003 /* ChannelManagementView.swift in Sources */,
 				1A000005000000000000001 /* MoviesView.swift in Sources */,
 				1A000007000000000000001 /* Models.swift in Sources */,
 				1A000009000000000000001 /* AdminAPIService.swift in Sources */,
