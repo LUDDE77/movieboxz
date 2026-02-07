@@ -154,7 +154,7 @@ struct Channel: Codable, Identifiable {
 
 // MARK: - Channel Pattern Configuration
 
-struct ChannelPattern: Codable, Identifiable {
+struct ChannelPattern: Codable, Identifiable, Hashable {
     let id: String
     let channelId: String
     let channelName: String
@@ -176,14 +176,14 @@ struct ChannelPattern: Codable, Identifiable {
     }
 }
 
-struct PatternRule: Codable, Identifiable {
+struct PatternRule: Codable, Identifiable, Hashable {
     let regex: String
     let parameters: [String: PatternParameter]
 
     var id: String { regex }
 }
 
-enum PatternParameter: Codable {
+enum PatternParameter: Codable, Hashable {
     case int(Int)
     case string(String)
 
@@ -209,12 +209,12 @@ enum PatternParameter: Codable {
     }
 }
 
-struct FallbackPattern: Codable {
+struct FallbackPattern: Codable, Hashable {
     let type: String
     let divider: String?
 }
 
-struct ChannelWithPattern: Codable, Identifiable {
+struct ChannelWithPattern: Codable, Identifiable, Hashable {
     let id: String
     let title: String
     let description: String?
