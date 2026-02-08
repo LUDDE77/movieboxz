@@ -556,4 +556,208 @@ class AdminAPIService: ObservableObject {
             throw APIError.httpError((httpResponse as? HTTPURLResponse)?.statusCode ?? 0)
         }
     }
+
+    // MARK: - Channel Management Advanced
+
+    /// Get or create channel settings
+    func getChannelSettings(channelId: String) async throws -> ChannelSettings {
+        let endpoint = "/channel-management/\(channelId)/settings"
+
+        print("⚙️ [API] Fetching channel settings for \(channelId)")
+
+        let response: APIResponse<ChannelSettings> = try await request(endpoint: endpoint)
+        print("✅ [API] Channel settings retrieved")
+
+        return response.data
+    }
+
+    /// Update channel settings
+    func updateChannelSettings(channelId: String, settings: ChannelSettings) async throws -> ChannelSettings {
+        let endpoint = "/channel-management/\(channelId)/settings"
+
+        print("💾 [API] Updating channel settings for \(channelId)")
+
+        // Build body with only the fields that can be updated
+        struct UpdateBody: Codable {
+            let autoImportEnabled: Bool
+            let autoImportSchedule: String
+            let importLimit: Int?
+            let importSortOrder: String
+            let defaultEnrichmentPriority: String
+            let autoEnrichOnImport: Bool
+            let autoApproveThreshold: Double?
+            let requireManualReview: Bool
+            let channelTag: String?
+            let isFeatured: Bool
+            let qualityTier: String
+
+            enum CodingKeys: String, CodingKey {
+                case autoImportEnabled = "auto_import_enabled"
+                case autoImportSchedule = "auto_import_schedule"
+                case importLimit = "import_limit"
+                case importSortOrder = "import_sort_order"
+                case defaultEnrichmentPriority = "default_enrichment_priority"
+                case autoEnrichOnImport = "auto_enrich_on_import"
+                case autoApproveThreshold = "auto_approve_threshold"
+                case requireManualReview = "require_manual_review"
+                case channelTag = "channel_tag"
+                case isFeatured = "is_featured"
+                case qualityTier = "quality_tier"
+            }
+        }
+
+        let body = UpdateBody(
+            autoImportEnabled: settings.autoImportEnabled,
+            autoImportSchedule: settings.autoImportSchedule,
+            importLimit: settings.importLimit,
+            importSortOrder: settings.importSortOrder,
+            defaultEnrichmentPriority: settings.defaultEnrichmentPriority,
+            autoEnrichOnImport: settings.autoEnrichOnImport,
+            autoApproveThreshold: settings.autoApproveThreshold,
+            requireManualReview: settings.requireManualReview,
+            channelTag: settings.channelTag,
+            isFeatured: settings.isFeatured,
+            qualityTier: settings.qualityTier
+        )
+
+        let response: APIResponse<ChannelSettings> = try await request(endpoint: endpoint, method: "PUT", body: body)
+        print("✅ [API] Channel settings updated successfully")
+
+        return response.data
+    }
+
+    /// Import all or limited videos from a channel to staging
+    func importAllVideos(channelId: String, request: BulkImportRequest) async throws -> BulkImportResponse {
+        let endpoint = "/channel-management/\(channelId)/import-all"
+
+        print("📥 [API] Starting bulk import for channel \(channelId)")
+        if let limit = request.limit {
+            print("📥 [API] Import limit: \(limit) videos, sort: \(request.sortOrder)")
+        } else {
+            print("📥 [API] Importing all videos, sort: \(request.sortOrder)")
+        }
+
+        struct RequestBody: Codable {
+            let limit: Int?
+            let sortOrder: String
+            let applySettings: Bool
+            let autoEnrich: Bool?
+        }
+
+        let body = RequestBody(
+            limit: request.limit,
+            sortOrder: request.sortOrder,
+            applySettings: request.applySettings,
+            autoEnrich: request.autoEnrich
+        )
+
+        let response: APIResponse<BulkImportResponse> = try await self.request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Bulk import started: batchId=\(response.data.batchId), status=\(response.data.status)")
+
+        return response.data
+    }
+
+    /// Get real-time import progress
+    func getImportProgress(batchId: String) async throws -> ImportProgress {
+        let endpoint = "/channel-management/imports/\(batchId)/status"
+
+        let response: APIResponse<ImportProgress> = try await request(endpoint: endpoint)
+
+        if let percentage = response.data.percentage {
+            print("📊 [API] Import progress: \(percentage)% (\(response.data.imported + response.data.skipped + response.data.failed)/\(response.data.found))")
+        }
+
+        return response.data
+    }
+
+    /// Delete all movies from a channel
+    func deleteChannelMovies(channelId: String, deleteFrom: String = "staging,production") async throws -> BatchDeleteResponse {
+        let endpoint = "/channel-management/\(channelId)/movies?deleteFrom=\(deleteFrom)"
+
+        print("🗑️ [API] Deleting channel movies from: \(deleteFrom)")
+
+        guard let url = URL(string: "\(baseURL)/api/admin\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, httpResponse) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = httpResponse as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        let response = try JSONDecoder().decode(APIResponse<BatchDeleteResponse>.self, from: data)
+        print("✅ [API] Deleted: \(response.data.deletedFromStaging) from staging, \(response.data.deletedFromProduction) from production")
+
+        return response.data
+    }
+
+    /// Re-import channel (delete existing and import fresh)
+    func reimportChannel(channelId: String, deleteExisting: Bool = true, limit: Int? = nil, applySettings: Bool = true) async throws -> BulkImportResponse {
+        let endpoint = "/channel-management/\(channelId)/reimport"
+
+        print("🔄 [API] Re-importing channel \(channelId)")
+        if deleteExisting {
+            print("🗑️ [API] Will delete existing movies first")
+        }
+
+        struct RequestBody: Codable {
+            let deleteExisting: Bool
+            let applySettings: Bool
+            let limit: Int?
+        }
+
+        let body = RequestBody(
+            deleteExisting: deleteExisting,
+            applySettings: applySettings,
+            limit: limit
+        )
+
+        let response: APIResponse<BulkImportResponse> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Re-import started: batchId=\(response.data.batchId)")
+
+        return response.data
+    }
+
+    /// Get channel movies from staging and/or production
+    func getChannelMovies(channelId: String, source: String = "staging,production", page: Int = 1, limit: Int = 50) async throws -> ChannelMoviesData {
+        let endpoint = "/channel-management/\(channelId)/movies?source=\(source)&page=\(page)&limit=\(limit)"
+
+        print("📋 [API] Fetching channel movies: source=\(source), page=\(page)")
+
+        let response: APIResponse<ChannelMoviesData> = try await request(endpoint: endpoint)
+
+        if let staging = response.data.staging {
+            print("✅ [API] Found \(staging.movies.count) staged movies (total: \(staging.total))")
+        }
+        if let production = response.data.production {
+            print("✅ [API] Found \(production.movies.count) production movies (total: \(production.total))")
+        }
+
+        return response.data
+    }
+
+    /// Get import history for a channel
+    func getImportHistory(channelId: String, limit: Int = 20) async throws -> ImportHistoryData {
+        let endpoint = "/channel-management/\(channelId)/import-history?limit=\(limit)"
+
+        print("📜 [API] Fetching import history for channel \(channelId)")
+
+        let response: APIResponse<ImportHistoryData> = try await request(endpoint: endpoint)
+        print("✅ [API] Found \(response.data.imports.count) import records")
+
+        return response.data
+    }
 }

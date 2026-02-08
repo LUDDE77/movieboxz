@@ -657,3 +657,238 @@ struct PublishResponse: Codable {
         case movieIds = "movieIds"
     }
 }
+
+// MARK: - Channel Management Models
+
+// Channel Settings
+struct ChannelSettings: Codable, Identifiable, Hashable {
+    var id: String { channelId }
+    let channelId: String
+    var autoImportEnabled: Bool
+    var autoImportSchedule: String
+    var importLimit: Int?
+    var importSortOrder: String
+    var defaultEnrichmentPriority: String
+    var autoEnrichOnImport: Bool
+    var autoApproveThreshold: Double?
+    var requireManualReview: Bool
+    var channelTag: String?
+    var isFeatured: Bool
+    var qualityTier: String
+    let lastImportAt: String?
+    let totalImported: Int
+    let totalPublished: Int
+    let createdAt: String
+    let updatedAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case channelId = "channel_id"
+        case autoImportEnabled = "auto_import_enabled"
+        case autoImportSchedule = "auto_import_schedule"
+        case importLimit = "import_limit"
+        case importSortOrder = "import_sort_order"
+        case defaultEnrichmentPriority = "default_enrichment_priority"
+        case autoEnrichOnImport = "auto_enrich_on_import"
+        case autoApproveThreshold = "auto_approve_threshold"
+        case requireManualReview = "require_manual_review"
+        case channelTag = "channel_tag"
+        case isFeatured = "is_featured"
+        case qualityTier = "quality_tier"
+        case lastImportAt = "last_import_at"
+        case totalImported = "total_imported"
+        case totalPublished = "total_published"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct ChannelSettingsData: Codable {
+    let settings: ChannelSettings
+}
+
+// Import History
+struct ImportHistory: Codable, Identifiable, Hashable {
+    let id: String
+    let channelId: String
+    let importType: String
+    let importLimit: Int?
+    let sortOrder: String?
+    let videosFound: Int
+    let videosImported: Int
+    let videosSkipped: Int
+    let videosFailed: Int
+    let status: String
+    let errorMessage: String?
+    let startedAt: String
+    let completedAt: String?
+    let durationSeconds: Int?
+    let currentVideoTitle: String?
+    let currentVideoIndex: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case channelId = "channel_id"
+        case importType = "import_type"
+        case importLimit = "import_limit"
+        case sortOrder = "sort_order"
+        case videosFound = "videos_found"
+        case videosImported = "videos_imported"
+        case videosSkipped = "videos_skipped"
+        case videosFailed = "videos_failed"
+        case status
+        case errorMessage = "error_message"
+        case startedAt = "started_at"
+        case completedAt = "completed_at"
+        case durationSeconds = "duration_seconds"
+        case currentVideoTitle = "current_video_title"
+        case currentVideoIndex = "current_video_index"
+    }
+    
+    var statusEmoji: String {
+        switch status {
+        case "completed": return "✅"
+        case "failed": return "❌"
+        case "running": return "⏳"
+        case "cancelled": return "🚫"
+        default: return "⏸️"
+        }
+    }
+    
+    var formattedDuration: String {
+        guard let seconds = durationSeconds else { return "—" }
+        let minutes = seconds / 60
+        let remainingSeconds = seconds % 60
+        return "\(minutes)m \(remainingSeconds)s"
+    }
+}
+
+struct ImportHistoryData: Codable {
+    let imports: [ImportHistory]
+    let total: Int
+}
+
+// Import Progress
+struct ImportProgress: Codable {
+    let status: String
+    let found: Int
+    let imported: Int
+    let skipped: Int
+    let failed: Int
+    let current: String?
+    let currentIndex: Int?
+    let channelTitle: String?
+    let percentage: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case status
+        case found
+        case imported
+        case skipped
+        case failed
+        case current
+        case currentIndex
+        case channelTitle
+        case percentage
+    }
+}
+
+// Bulk Import Request/Response
+struct BulkImportRequest: Codable {
+    let limit: Int?
+    let sortOrder: String
+    let applySettings: Bool
+    let autoEnrich: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case limit
+        case sortOrder
+        case applySettings
+        case autoEnrich
+    }
+}
+
+struct BulkImportResponse: Codable {
+    let batchId: String
+    let status: String
+    let message: String
+    
+    enum CodingKeys: String, CodingKey {
+        case batchId
+        case status
+        case message
+    }
+}
+
+// Channel Movies
+struct ChannelMoviesData: Codable {
+    let staging: MovieList?
+    let production: MovieList?
+    let pagination: Pagination?
+    
+    struct MovieList: Codable {
+        let movies: [StagedMovie]
+        let total: Int
+    }
+}
+
+// Batch Delete Response
+struct BatchDeleteResponse: Codable {
+    let deletedFromStaging: Int
+    let deletedFromProduction: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case deletedFromStaging
+        case deletedFromProduction
+    }
+}
+
+// Sort Order Options
+enum ImportSortOrder: String, CaseIterable {
+    case latest = "latest"
+    case oldest = "oldest"
+    case alphabeticalAZ = "alphabetical_az"
+    case alphabeticalZA = "alphabetical_za"
+    case views = "views"
+    
+    var displayName: String {
+        switch self {
+        case .latest: return "Latest uploaded (newest first)"
+        case .oldest: return "Oldest uploaded (oldest first)"
+        case .alphabeticalAZ: return "Alphabetical (A-Z)"
+        case .alphabeticalZA: return "Alphabetical (Z-A)"
+        case .views: return "Most viewed"
+        }
+    }
+}
+
+// Enrichment Priority Options
+enum EnrichmentPriority: String, CaseIterable {
+    case poster = "poster"
+    case basic = "basic"
+    case standard = "standard"
+    case full = "full"
+    
+    var displayName: String {
+        switch self {
+        case .poster: return "Poster Only"
+        case .basic: return "Basic"
+        case .standard: return "Standard"
+        case .full: return "Full"
+        }
+    }
+}
+
+// Quality Tier Options
+enum QualityTier: String, CaseIterable {
+    case premium = "premium"
+    case standard = "standard"
+    case basic = "basic"
+    
+    var displayName: String {
+        switch self {
+        case .premium: return "Premium"
+        case .standard: return "Standard"
+        case .basic: return "Basic"
+        }
+    }
+}

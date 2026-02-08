@@ -66,20 +66,50 @@ struct ChannelManagementView: View {
         } detail: {
             // MARK: - Detail View
             if let channel = selectedChannel {
-                ChannelDetailView(
-                    channel: channel,
-                    editingPattern: $editingPattern,
-                    patternRules: $patternRules,
-                    fallbackType: $fallbackType,
-                    fallbackDivider: $fallbackDivider,
-                    testResults: $testResults,
-                    onSavePattern: savePattern,
-                    onTestPattern: testPattern,
-                    onDeletePattern: deletePattern,
-                    onDeleteChannel: deleteChannel,
-                    isSavingPattern: isSavingPattern,
-                    isTestingPattern: isTestingPattern
-                )
+                TabView {
+                    // Pattern Tab
+                    ChannelPatternView(
+                        channel: channel,
+                        editingPattern: $editingPattern,
+                        patternRules: $patternRules,
+                        fallbackType: $fallbackType,
+                        fallbackDivider: $fallbackDivider,
+                        testResults: $testResults,
+                        onSavePattern: savePattern,
+                        onTestPattern: testPattern,
+                        onDeletePattern: deletePattern,
+                        onDeleteChannel: deleteChannel,
+                        isSavingPattern: isSavingPattern,
+                        isTestingPattern: isTestingPattern
+                    )
+                    .tabItem {
+                        Label("Pattern", systemImage: "doc.text.magnifyingglass")
+                    }
+
+                    // Settings Tab
+                    ChannelSettingsView(channel: channel)
+                        .tabItem {
+                            Label("Settings", systemImage: "gear")
+                        }
+
+                    // Import Tab
+                    BulkImportView(channel: channel)
+                        .tabItem {
+                            Label("Import", systemImage: "arrow.down.circle")
+                        }
+
+                    // Movies Tab
+                    ChannelMoviesView(channel: channel)
+                        .tabItem {
+                            Label("Movies", systemImage: "film")
+                        }
+
+                    // History Tab
+                    ImportHistoryView(channel: channel)
+                        .tabItem {
+                            Label("History", systemImage: "clock.arrow.circlepath")
+                        }
+                }
             } else {
                 VStack {
                     Image(systemName: "tv")
@@ -301,9 +331,9 @@ struct ChannelRow: View {
     }
 }
 
-// MARK: - Channel Detail View
+// MARK: - Channel Pattern View
 
-struct ChannelDetailView: View {
+struct ChannelPatternView: View {
     let channel: ChannelWithPattern
     @Binding var editingPattern: Bool
     @Binding var patternRules: [EditablePatternRule]
