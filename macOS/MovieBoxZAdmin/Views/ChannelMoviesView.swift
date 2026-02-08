@@ -59,7 +59,9 @@ struct ChannelMoviesView: View {
                         .cornerRadius(8)
                     }
 
-                    Button(action: loadMovies) {
+                    Button {
+                        Task { await loadMovies() }
+                    } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
                     .disabled(isLoading)
@@ -402,8 +404,8 @@ struct ChannelMovieRow: View {
             .buttonStyle(.plain)
 
             // Poster
-            if let posterUrl = movie.posterUrl, let url = URL(string: posterUrl) {
-                AsyncImage(url: url) { image in
+            if let posterPath = movie.posterPath {
+                AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -428,42 +430,42 @@ struct ChannelMovieRow: View {
                     .font(.headline)
                     .lineLimit(2)
 
-                if let year = movie.year {
+                if let releaseDate = movie.releaseDate {
+                    let year = String(releaseDate.prefix(4))
                     Text("Year: \(year)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
 
-                if let genre = movie.genre {
-                    Text("Genre: \(genre)")
+                if let category = movie.category {
+                    Text("Category: \(category)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
 
-                if let actors = movie.actorsArray, !actors.isEmpty {
-                    Text("Actors: \(actors.prefix(2).joined(separator: ", "))")
+                if let actors = movie.actors {
+                    let actorList = actors.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }
+                    Text("Actors: \(actorList.joined(separator: ", "))")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
 
                 // Status badge
-                if let status = movie.approvalStatus {
-                    Text(status.uppercased())
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(statusColor(status))
-                        .foregroundColor(.white)
-                        .cornerRadius(4)
-                }
+                Text(movie.approvalStatus.rawValue.uppercased())
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(statusColor(movie.approvalStatus.rawValue))
+                    .foregroundColor(.white)
+                    .cornerRadius(4)
             }
 
             Spacer()
 
             // Enrichment indicator
-            if movie.isEnriched {
+            if movie.enrichmentSource != nil {
                 Image(systemName: "sparkles")
                     .foregroundColor(.blue)
             }
