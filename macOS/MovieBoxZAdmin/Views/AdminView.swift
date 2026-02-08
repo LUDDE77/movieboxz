@@ -181,7 +181,7 @@ struct ChannelsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
-                            if channel.hasPattern {
+                            if channel.hasPattern == true {
                                 Text("• Has pattern")
                                     .font(.caption)
                                     .foregroundColor(.green)

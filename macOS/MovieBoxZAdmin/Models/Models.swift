@@ -222,7 +222,7 @@ struct ChannelWithPattern: Codable, Identifiable, Hashable {
     let subscriberCount: Int?
     let videoCount: Int?
     let isCurated: Bool
-    let hasPattern: Bool
+    let hasPattern: Bool?
     let pattern: ChannelPattern?
     let createdAt: String?
     let updatedAt: String?

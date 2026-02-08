@@ -307,7 +307,7 @@ struct ChannelRow: View {
                     .font(.headline)
 
                 HStack(spacing: 8) {
-                    if channel.hasPattern {
+                    if channel.hasPattern == true {
                         Label("Pattern configured", systemImage: "checkmark.circle.fill")
                             .font(.caption)
                             .foregroundColor(.green)
@@ -413,7 +413,7 @@ struct ChannelPatternView: View {
 
                         Spacer()
 
-                        if channel.hasPattern {
+                        if channel.hasPattern == true {
                             if editingPattern {
                                 Button("Cancel") {
                                     editingPattern = false
@@ -446,7 +446,7 @@ struct ChannelPatternView: View {
                         }
                     }
 
-                    if !channel.hasPattern && !editingPattern {
+                    if channel.hasPattern != true && !editingPattern {
                         VStack(spacing: 12) {
                             Image(systemName: "doc.text.magnifyingglass")
                                 .font(.system(size: 50))
