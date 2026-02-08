@@ -315,7 +315,7 @@ class AdminAPIService: ObservableObject {
 
     /// Update staged movie fields (manual editing)
     func updateStagedMovie(movieId: String, updates: [String: Any]) async throws -> StagedMovie {
-        let endpoint = "/staging/movies/\(movieId)"
+        let endpoint = "/admin/staging/movies/\(movieId)"
 
         print("✏️ [API] Updating staged movie \(movieId) with \(updates.count) fields")
 
