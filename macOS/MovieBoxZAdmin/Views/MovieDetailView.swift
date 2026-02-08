@@ -288,10 +288,31 @@ struct MovieDetailView: View {
             successMessage = nil
 
             do {
-                // TODO: Implement update API endpoint
-                // For now, just show success
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-                successMessage = "Changes saved successfully"
+                // Build updates dictionary
+                var updates: [String: Any] = [:]
+
+                if editedTitle != movie.title {
+                    updates["title"] = editedTitle
+                }
+                if editedActors != (movie.actors ?? "") {
+                    updates["actors"] = editedActors.isEmpty ? nil : editedActors
+                }
+                if editedCategory != (movie.category ?? "") {
+                    updates["category"] = editedCategory.isEmpty ? nil : editedCategory
+                }
+                if editedReleaseDate != (movie.releaseDate ?? "") {
+                    updates["release_date"] = editedReleaseDate.isEmpty ? nil : editedReleaseDate
+                }
+                if editedDescription != (movie.description ?? "") {
+                    updates["description"] = editedDescription.isEmpty ? nil : editedDescription
+                }
+
+                if updates.isEmpty {
+                    successMessage = "No changes to save"
+                } else {
+                    _ = try await apiService.updateStagedMovie(movieId: movie.id, updates: updates)
+                    successMessage = "Changes saved successfully (\(updates.count) fields updated)"
+                }
 
                 // Clear success message after 3 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
