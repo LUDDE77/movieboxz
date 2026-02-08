@@ -395,88 +395,29 @@ struct ChannelMovieRow: View {
     @State private var showDetail = false
 
     var body: some View {
+        rowContent
+            .padding()
+            .background(isSelected ? Color.blue.opacity(0.1) : Color.white)
+            .cornerRadius(8)
+            .overlay(borderOverlay)
+            .sheet(isPresented: $showDetail) {
+                MovieDetailView(movie: movie)
+            }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 12) {
             checkboxView
             postersView
-
-            // Movie Info
-            VStack(alignment: .leading, spacing: 6) {
-                // Extracted Title
-                Text(movie.title)
-                    .font(.headline)
-                    .lineLimit(1)
-
-                // YouTube Original Title
-                HStack(spacing: 4) {
-                    Image(systemName: "play.rectangle.fill")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                    Text(movie.youtubeVideoTitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-
-                Divider()
-
-                if let releaseDate = movie.releaseDate {
-                    let year = String(releaseDate.prefix(4))
-                    Text("Year: \(year)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                if let category = movie.category {
-                    Text("Category: \(category)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                if let actors = movie.actors {
-                    let actorList = actors.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }
-                    Text("Actors: \(actorList.joined(separator: ", "))")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-
-                // Status badge
-                Text(movie.approvalStatus.rawValue.uppercased())
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(statusColor(movie.approvalStatus.rawValue))
-                    .foregroundColor(.white)
-                    .cornerRadius(4)
-            }
-
+            movieInfoView
             Spacer()
-
-            // Enrichment indicator + View Details
-            VStack(spacing: 8) {
-                if movie.enrichmentSource != nil {
-                    Image(systemName: "sparkles")
-                        .foregroundColor(.blue)
-                }
-
-                Button(action: { showDetail = true }) {
-                    Label("Details", systemImage: "info.circle")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-            }
+            actionsView
         }
-        .padding()
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.white)
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.blue : Color.gray.opacity(0.2), lineWidth: 1)
-        )
-        .sheet(isPresented: $showDetail) {
-            MovieDetailView(movie: movie)
-        }
+    }
+
+    private var borderOverlay: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .stroke(isSelected ? Color.blue : Color.gray.opacity(0.2), lineWidth: 1)
     }
 
     // MARK: - Subviews
@@ -536,6 +477,83 @@ struct ChannelMovieRow: View {
             }
             .frame(width: 60, height: 90)
             .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    private var movieInfoView: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            titleSection
+            Divider()
+            metadataSection
+            statusBadge
+        }
+    }
+
+    private var titleSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(movie.title)
+                .font(.headline)
+                .lineLimit(1)
+
+            HStack(spacing: 4) {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.red)
+                Text(movie.youtubeVideoTitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var metadataSection: some View {
+        if let releaseDate = movie.releaseDate {
+            let year = String(releaseDate.prefix(4))
+            Text("Year: \(year)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+
+        if let category = movie.category {
+            Text("Category: \(category)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+
+        if let actors = movie.actors {
+            let actorList = actors.split(separator: ",").prefix(2).map { $0.trimmingCharacters(in: .whitespaces) }
+            Text("Actors: \(actorList.joined(separator: ", "))")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var statusBadge: some View {
+        Text(movie.approvalStatus.rawValue.uppercased())
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .background(statusColor(movie.approvalStatus.rawValue))
+            .foregroundColor(.white)
+            .cornerRadius(4)
+    }
+
+    private var actionsView: some View {
+        VStack(spacing: 8) {
+            if movie.enrichmentSource != nil {
+                Image(systemName: "sparkles")
+                    .foregroundColor(.blue)
+            }
+
+            Button(action: { showDetail = true }) {
+                Label("Details", systemImage: "info.circle")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
         }
     }
 
