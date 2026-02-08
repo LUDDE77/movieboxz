@@ -126,6 +126,213 @@ struct ChannelMovieDetailView: View {
                     .padding()
                 }
 
+                // TMDB/IMDB Enrichment Data
+                if movie.hasEnrichment {
+                    GroupBox(label: Label("TMDB/IMDB Enrichment Data", systemImage: "film")) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            HStack(alignment: .top, spacing: 16) {
+                                // TMDB Poster
+                                if let posterPath = movie.posterPath {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("TMDB Poster")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.secondary)
+                                        AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")) { image in
+                                            image
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fit)
+                                        } placeholder: {
+                                            Rectangle()
+                                                .fill(Color.gray.opacity(0.2))
+                                                .overlay(ProgressView())
+                                        }
+                                        .frame(width: 150, height: 225)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                }
+
+                                // Enrichment Details
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Source and Confidence
+                                    HStack(spacing: 16) {
+                                        if let source = movie.enrichmentSource {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Source")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text(source.uppercased())
+                                                    .font(.headline)
+                                                    .foregroundColor(.blue)
+                                            }
+                                        }
+
+                                        if let confidence = movie.enrichmentConfidence {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Confidence")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                Text(String(format: "%.0f%%", confidence * 100))
+                                                    .font(.headline)
+                                                    .foregroundColor(confidence > 0.8 ? .green : .orange)
+                                            }
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    // IDs and Links
+                                    if let tmdbId = movie.tmdbId {
+                                        HStack {
+                                            Text("TMDB ID:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text("\(tmdbId)")
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                            Link(destination: URL(string: "https://www.themoviedb.org/movie/\(tmdbId)")!) {
+                                                Image(systemName: "link")
+                                                    .font(.caption)
+                                            }
+                                        }
+                                    }
+
+                                    if let imdbId = movie.imdbId {
+                                        HStack {
+                                            Text("IMDB ID:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(imdbId)
+                                                .font(.caption)
+                                                .fontWeight(.semibold)
+                                            Link(destination: URL(string: "https://www.imdb.com/title/\(imdbId)")!) {
+                                                Image(systemName: "link")
+                                                    .font(.caption)
+                                            }
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    // Ratings
+                                    HStack(spacing: 20) {
+                                        if let tmdbRating = movie.voteAverage, let voteCount = movie.voteCount {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("TMDB Rating")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "star.fill")
+                                                        .foregroundColor(.yellow)
+                                                        .font(.caption)
+                                                    Text(String(format: "%.1f/10", tmdbRating))
+                                                        .font(.body)
+                                                        .fontWeight(.semibold)
+                                                    Text("(\(voteCount) votes)")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+
+                                        if let imdbRating = movie.imdbRating, let imdbVotes = movie.imdbVotes {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("IMDB Rating")
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "star.fill")
+                                                        .foregroundColor(.yellow)
+                                                        .font(.caption)
+                                                    Text(String(format: "%.1f/10", imdbRating))
+                                                        .font(.body)
+                                                        .fontWeight(.semibold)
+                                                    Text("(\(imdbVotes) votes)")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Additional Details
+                                    if let rated = movie.rated {
+                                        HStack {
+                                            Text("Rated:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(rated)
+                                                .font(.caption)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.orange.opacity(0.2))
+                                                .cornerRadius(4)
+                                        }
+                                    }
+
+                                    if let director = movie.director {
+                                        HStack {
+                                            Text("Director:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(director)
+                                                .font(.caption)
+                                        }
+                                    }
+
+                                    if let runtime = movie.runtimeMinutes {
+                                        HStack {
+                                            Text("Runtime:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text("\(runtime) minutes")
+                                                .font(.caption)
+                                        }
+                                    }
+
+                                    if let language = movie.language {
+                                        HStack {
+                                            Text("Language:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(language)
+                                                .font(.caption)
+                                        }
+                                    }
+
+                                    if let country = movie.country {
+                                        HStack {
+                                            Text("Country:")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(country)
+                                                .font(.caption)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Plot/Description from enrichment
+                            if let description = movie.description, !description.isEmpty {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Plot")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.secondary)
+                                    Text(description)
+                                        .font(.body)
+                                        .textSelection(.enabled)
+                                        .padding(8)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(6)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+
                 // Manual Edit Section
                 GroupBox(label: Label("Edit Movie Information", systemImage: "pencil.circle")) {
                     VStack(alignment: .leading, spacing: 16) {
@@ -176,53 +383,6 @@ struct ChannelMovieDetailView: View {
                         }
                     }
                     .padding()
-                }
-
-                // Enrichment Status
-                if movie.hasEnrichment {
-                    GroupBox(label: Label("Enrichment Status", systemImage: "sparkles")) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Source:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text(movie.enrichmentStatus)
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                            }
-
-                            if let tmdbId = movie.tmdbId {
-                                HStack {
-                                    Text("TMDB ID:")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text("\(tmdbId)")
-                                        .font(.caption)
-                                }
-                            }
-
-                            if let imdbId = movie.imdbId {
-                                HStack {
-                                    Text("IMDB ID:")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text(imdbId)
-                                        .font(.caption)
-                                }
-                            }
-
-                            if let confidence = movie.enrichmentConfidence {
-                                HStack {
-                                    Text("Confidence:")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text(String(format: "%.0f%%", confidence * 100))
-                                        .font(.caption)
-                                }
-                            }
-                        }
-                        .padding()
-                    }
                 }
 
                 // Success/Error Messages
