@@ -147,7 +147,7 @@ struct StatCard: View {
 
 struct ChannelsView: View {
     @StateObject private var apiService = AdminAPIService()
-    @State private var channels: [Channel] = []
+    @State private var channels: [ChannelWithPattern] = []
     @State private var isLoading = false
     @State private var error: String?
 
@@ -172,12 +172,19 @@ struct ChannelsView: View {
                         Text(channel.title)
                             .font(.headline)
                         HStack {
-                            Text("\(channel.movieCount) movies")
-                                .font(.caption)
-                            if let lastCurated = channel.lastCurated {
-                                Text("• Last curated: \(formatDate(lastCurated))")
+                            if let videoCount = channel.videoCount {
+                                Text("\(videoCount) videos")
+                                    .font(.caption)
+                            }
+                            if let subscriberCount = channel.subscriberCount {
+                                Text("• \(formatNumber(subscriberCount)) subscribers")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
+                            }
+                            if channel.hasPattern {
+                                Text("• Has pattern")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
                             }
                         }
                     }
@@ -196,13 +203,19 @@ struct ChannelsView: View {
         error = nil
 
         do {
-            let data = try await apiService.getChannels()
+            let data = try await apiService.getChannelsWithPatterns()
             channels = data.channels
         } catch {
             self.error = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    private func formatNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
 
     private func formatDate(_ dateString: String) -> String {
