@@ -18,6 +18,7 @@
 		1D9038CE2F38ABA9005CB07C /* ChannelMoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038CD2F38ABA9005CB07C /* ChannelMoviesView.swift */; };
 		1D9038D02F38ABB4005CB07C /* ChannelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038CF2F38ABB4005CB07C /* ChannelSettingsView.swift */; };
 		1D9038D22F38ABBD005CB07C /* ImportHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038D12F38ABBD005CB07C /* ImportHistoryView.swift */; };
+		1D9038D42F38D24D005CB07C /* ChannelMovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038D32F38D24D005CB07C /* ChannelMovieDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +35,7 @@
 		1D9038CD2F38ABA9005CB07C /* ChannelMoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelMoviesView.swift; sourceTree = "<group>"; };
 		1D9038CF2F38ABB4005CB07C /* ChannelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSettingsView.swift; sourceTree = "<group>"; };
 		1D9038D12F38ABBD005CB07C /* ImportHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHistoryView.swift; sourceTree = "<group>"; };
+		1D9038D32F38D24D005CB07C /* ChannelMovieDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelMovieDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -79,6 +81,7 @@
 			isa = PBXGroup;
 			children = (
 				1D9038D12F38ABBD005CB07C /* ImportHistoryView.swift */,
+				1D9038D32F38D24D005CB07C /* ChannelMovieDetailView.swift */,
 				1D9038CF2F38ABB4005CB07C /* ChannelSettingsView.swift */,
 				1D9038CD2F38ABA9005CB07C /* ChannelMoviesView.swift */,
 				1D9038CB2F38ABA0005CB07C /* BulkImportView.swift */,
@@ -134,7 +137,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1640;
 				TargetAttributes = {
 					1A000014000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
@@ -180,6 +183,7 @@
 				1D9038D22F38ABBD005CB07C /* ImportHistoryView.swift in Sources */,
 				1D9038CC2F38ABA0005CB07C /* BulkImportView.swift in Sources */,
 				1A00000D000000000000003 /* ChannelManagementView.swift in Sources */,
+				1D9038D42F38D24D005CB07C /* MovieDetailView.swift in Sources */,
 				1D9038CE2F38ABA9005CB07C /* ChannelMoviesView.swift in Sources */,
 				1A000005000000000000001 /* MoviesView.swift in Sources */,
 				1D9038D02F38ABB4005CB07C /* ChannelSettingsView.swift in Sources */,
@@ -226,6 +230,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -290,6 +295,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -319,6 +325,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -345,6 +352,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
