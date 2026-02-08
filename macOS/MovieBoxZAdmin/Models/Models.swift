@@ -677,12 +677,15 @@ struct ChannelSettings: Codable, Identifiable, Hashable {
     var channelTag: String?
     var isFeatured: Bool
     var qualityTier: String
+    var minDurationMinutes: Int?
+    var maxDurationMinutes: Int?
+    var filterShorts: Bool
     let lastImportAt: String?
     let totalImported: Int
     let totalPublished: Int
     let createdAt: String
     let updatedAt: String
-    
+
     enum CodingKeys: String, CodingKey {
         case channelId = "channel_id"
         case autoImportEnabled = "auto_import_enabled"
@@ -696,6 +699,9 @@ struct ChannelSettings: Codable, Identifiable, Hashable {
         case channelTag = "channel_tag"
         case isFeatured = "is_featured"
         case qualityTier = "quality_tier"
+        case minDurationMinutes = "min_duration_minutes"
+        case maxDurationMinutes = "max_duration_minutes"
+        case filterShorts = "filter_shorts"
         case lastImportAt = "last_import_at"
         case totalImported = "total_imported"
         case totalPublished = "total_published"

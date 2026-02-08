@@ -70,10 +70,16 @@ struct BulkImportView: View {
                 GroupBox(label: Label("Import Options", systemImage: "gear")) {
                     VStack(alignment: .leading, spacing: 12) {
                         Toggle("Apply channel settings automatically", isOn: $applySettings)
-                            .help("Apply default channel tags and configurations to imported movies")
+                            .help("Apply default channel tags, duration filters, and configurations to imported movies")
 
                         Toggle("Auto-enrich after import", isOn: $autoEnrich)
                             .help("Automatically enrich movies with metadata after importing")
+
+                        if applySettings {
+                            Text("Duration filters from channel settings will be applied during import.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .padding()
                 }

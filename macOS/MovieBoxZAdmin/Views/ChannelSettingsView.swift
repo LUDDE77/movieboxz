@@ -22,6 +22,9 @@ struct ChannelSettingsView: View {
     @State private var channelTag: String = ""
     @State private var isFeatured = false
     @State private var qualityTier = "standard"
+    @State private var minDurationMinutes: String = ""
+    @State private var maxDurationMinutes: String = ""
+    @State private var filterShorts = true
 
     var body: some View {
         ScrollView {
@@ -79,6 +82,41 @@ struct ChannelSettingsView: View {
                                 }
                                 .frame(width: 250)
                             }
+                        }
+                        .padding()
+                    }
+
+                    // Duration Filters
+                    GroupBox(label: Label("Duration Filters", systemImage: "timer")) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Toggle("Filter YouTube Shorts (< 1 min)", isOn: $filterShorts)
+                                .help("Automatically exclude YouTube Shorts during import")
+
+                            HStack {
+                                Text("Minimum duration:")
+                                    .frame(width: 180, alignment: .leading)
+                                TextField("60", text: $minDurationMinutes)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 100)
+                                Text("minutes")
+                                    .foregroundColor(.secondary)
+                            }
+                            .help("Minimum video duration in minutes (e.g., 60 for feature films). Leave empty for no minimum.")
+
+                            HStack {
+                                Text("Maximum duration:")
+                                    .frame(width: 180, alignment: .leading)
+                                TextField("180", text: $maxDurationMinutes)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 100)
+                                Text("minutes")
+                                    .foregroundColor(.secondary)
+                            }
+                            .help("Maximum video duration in minutes (e.g., 180 to exclude very long videos). Leave empty for no maximum.")
+
+                            Text("Videos outside these duration limits will be excluded during import.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .padding()
                     }
@@ -259,6 +297,9 @@ struct ChannelSettingsView: View {
             channelTag = loadedSettings.channelTag ?? ""
             isFeatured = loadedSettings.isFeatured
             qualityTier = loadedSettings.qualityTier
+            minDurationMinutes = loadedSettings.minDurationMinutes.map(String.init) ?? ""
+            maxDurationMinutes = loadedSettings.maxDurationMinutes.map(String.init) ?? ""
+            filterShorts = loadedSettings.filterShorts
         } catch {
             self.error = "Failed to load settings: \(error.localizedDescription)"
         }
@@ -287,6 +328,9 @@ struct ChannelSettingsView: View {
                 updatedSettings.channelTag = channelTag.isEmpty ? nil : channelTag
                 updatedSettings.isFeatured = isFeatured
                 updatedSettings.qualityTier = qualityTier
+                updatedSettings.minDurationMinutes = minDurationMinutes.isEmpty ? nil : Int(minDurationMinutes)
+                updatedSettings.maxDurationMinutes = maxDurationMinutes.isEmpty ? nil : Int(maxDurationMinutes)
+                updatedSettings.filterShorts = filterShorts
 
                 let savedSettings = try await apiService.updateChannelSettings(
                     channelId: channel.id,
