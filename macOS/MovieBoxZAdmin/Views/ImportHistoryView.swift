@@ -405,16 +405,14 @@ struct DetailRow: View {
             id: "UC123",
             title: "Test Channel",
             description: "A test channel",
-            customUrl: nil,
             thumbnailUrl: nil,
-            publishedAt: "",
             subscriberCount: 1000,
             videoCount: 100,
-            viewCount: 50000,
-            createdAt: "",
-            lastSyncAt: nil,
+            isCurated: false,
+            hasPattern: false,
             pattern: nil,
-            hasPattern: false
+            createdAt: "",
+            updatedAt: nil
         )
     )
 }

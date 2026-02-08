@@ -361,7 +361,7 @@ struct MovieSection: View {
             }
 
             ForEach(movies) { movie in
-                MovieRow(
+                ChannelMovieRow(
                     movie: movie,
                     isSelected: selectedIds.contains(movie.id),
                     onToggleSelection: {
@@ -384,9 +384,9 @@ struct MovieSection: View {
     }
 }
 
-// MARK: - Movie Row
+// MARK: - Channel Movie Row
 
-struct MovieRow: View {
+struct ChannelMovieRow: View {
     let movie: StagedMovie
     let isSelected: Bool
     let onToggleSelection: () -> Void
@@ -493,16 +493,14 @@ struct MovieRow: View {
             id: "UC123",
             title: "Test Channel",
             description: "A test channel",
-            customUrl: nil,
             thumbnailUrl: nil,
-            publishedAt: "",
             subscriberCount: 1000,
             videoCount: 100,
-            viewCount: 50000,
-            createdAt: "",
-            lastSyncAt: nil,
+            isCurated: false,
+            hasPattern: false,
             pattern: nil,
-            hasPattern: false
+            createdAt: "",
+            updatedAt: nil
         )
     )
 }
