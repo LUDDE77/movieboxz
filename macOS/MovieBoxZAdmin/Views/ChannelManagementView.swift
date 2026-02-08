@@ -421,7 +421,7 @@ struct ChannelPatternView: View {
                                 }
 
                                 Button("Save Pattern") {
-                                    Task { await savePattern() }
+                                    Task { await onSavePattern() }
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(isSavingPattern)
@@ -432,7 +432,7 @@ struct ChannelPatternView: View {
                                 }
 
                                 Button(role: .destructive, action: {
-                                    Task { await deletePattern() }
+                                    Task { await onDeletePattern() }
                                 }) {
                                     Label("Delete Pattern", systemImage: "trash")
                                 }
@@ -474,7 +474,7 @@ struct ChannelPatternView: View {
                         HStack {
                             Spacer()
                             Button(action: {
-                                Task { await testPattern() }
+                                Task { await onTestPattern() }
                             }) {
                                 Label("Test Pattern on Sample Videos", systemImage: "play.circle")
                             }
