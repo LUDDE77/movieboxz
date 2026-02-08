@@ -336,6 +336,7 @@ enum ApprovalStatus: String, Codable {
 
 // Enrichment priority modes
 enum EnrichmentPriority: String, Codable, CaseIterable {
+    case poster = "poster"
     case posterOnly = "poster-only"
     case basic = "basic"
     case standard = "standard"
@@ -343,7 +344,8 @@ enum EnrichmentPriority: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .posterOnly: return "Poster Only"
+        case .poster: return "Poster Only"
+        case .posterOnly: return "Poster Only (Legacy)"
         case .basic: return "Basic (Poster + Genres)"
         case .standard: return "Standard (+ Plot & Date)"
         case .full: return "Full Enrichment"
@@ -857,23 +859,6 @@ enum ImportSortOrder: String, CaseIterable {
         case .alphabeticalAZ: return "Alphabetical (A-Z)"
         case .alphabeticalZA: return "Alphabetical (Z-A)"
         case .views: return "Most viewed"
-        }
-    }
-}
-
-// Enrichment Priority Options
-enum EnrichmentPriority: String, CaseIterable {
-    case poster = "poster"
-    case basic = "basic"
-    case standard = "standard"
-    case full = "full"
-    
-    var displayName: String {
-        switch self {
-        case .poster: return "Poster Only"
-        case .basic: return "Basic"
-        case .standard: return "Standard"
-        case .full: return "Full"
         }
     }
 }
