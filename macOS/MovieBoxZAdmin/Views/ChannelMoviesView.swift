@@ -396,53 +396,8 @@ struct ChannelMovieRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Checkbox
-            Button(action: onToggleSelection) {
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                    .font(.title2)
-                    .foregroundColor(isSelected ? .blue : .secondary)
-            }
-            .buttonStyle(.plain)
-
-            // Posters (YouTube thumbnail + TMDB poster)
-            HStack(spacing: 8) {
-                // YouTube Thumbnail
-                if let thumbnailURL = movie.youtubeThumbnailURL {
-                    AsyncImage(url: thumbnailURL) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.gray.opacity(0.2)
-                            .overlay(ProgressView().scaleEffect(0.5))
-                    }
-                    .frame(width: 80, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(
-                        Image(systemName: "play.rectangle.fill")
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                            .padding(4)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(4)
-                            .padding(4),
-                        alignment: .bottomTrailing
-                    )
-                }
-
-                // TMDB Poster (if available)
-                if let posterPath = movie.posterPath {
-                    AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.gray.opacity(0.2)
-                    }
-                    .frame(width: 60, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
+            checkboxView
+            postersView
 
             // Movie Info
             VStack(alignment: .leading, spacing: 6) {
@@ -521,6 +476,66 @@ struct ChannelMovieRow: View {
         )
         .sheet(isPresented: $showDetail) {
             MovieDetailView(movie: movie)
+        }
+    }
+
+    // MARK: - Subviews
+
+    private var checkboxView: some View {
+        Button(action: onToggleSelection) {
+            Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                .font(.title2)
+                .foregroundColor(isSelected ? .blue : .secondary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var postersView: some View {
+        HStack(spacing: 8) {
+            youtubeThumbnailView
+            tmdbPosterView
+        }
+    }
+
+    @ViewBuilder
+    private var youtubeThumbnailView: some View {
+        if let thumbnailURL = movie.youtubeThumbnailURL {
+            AsyncImage(url: thumbnailURL) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color.gray.opacity(0.2)
+                    .overlay(ProgressView().scaleEffect(0.5))
+            }
+            .frame(width: 80, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(playIconOverlay, alignment: .bottomTrailing)
+        }
+    }
+
+    private var playIconOverlay: some View {
+        Image(systemName: "play.rectangle.fill")
+            .font(.caption2)
+            .foregroundColor(.white)
+            .padding(4)
+            .background(Color.black.opacity(0.6))
+            .cornerRadius(4)
+            .padding(4)
+    }
+
+    @ViewBuilder
+    private var tmdbPosterView: some View {
+        if let posterPath = movie.posterPath {
+            AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")) { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Color.gray.opacity(0.2)
+            }
+            .frame(width: 60, height: 90)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
 
