@@ -171,6 +171,14 @@ struct ChannelManagementView: View {
     func savePattern() async {
         guard let channel = selectedChannel else { return }
 
+        // Validate that all patterns have a regex
+        for (index, rule) in patternRules.enumerated() {
+            if rule.regex.trimmingCharacters(in: .whitespaces).isEmpty {
+                self.error = "Pattern #\(index + 1) is missing a regular expression. Please fill in the 'Regular expression' field."
+                return
+            }
+        }
+
         isSavingPattern = true
 
         do {
@@ -624,9 +632,15 @@ struct PatternRuleEditor: View {
                 }
             }
 
-            TextField("Regular expression", text: $rule.regex)
+            TextField("Regular expression (required)", text: $rule.regex)
                 .textFieldStyle(.roundedBorder)
                 .fontDesign(.monospaced)
+
+            if rule.regex.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text("⚠️ Regular expression is required")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
 
             Text("Parameters (capture group numbers or static values)")
                 .font(.subheadline)
