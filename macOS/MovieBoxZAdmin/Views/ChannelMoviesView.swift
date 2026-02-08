@@ -401,7 +401,7 @@ struct ChannelMovieRow: View {
             .cornerRadius(8)
             .overlay(borderOverlay)
             .sheet(isPresented: $showDetail) {
-                MovieDetailView(movie: movie)
+                ChannelMovieDetailView(movie: movie)
             }
     }
 

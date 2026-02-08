@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct MovieDetailView: View {
+struct ChannelMovieDetailView: View {
     let movie: StagedMovie
     @StateObject private var apiService = AdminAPIService()
     @Environment(\.dismiss) private var dismiss
@@ -378,7 +378,7 @@ struct ExtractionComparisonRow: View {
 }
 
 #Preview {
-    MovieDetailView(
+    ChannelMovieDetailView(
         movie: StagedMovie(
             id: "1",
             youtubeVideoId: "dQw4w9WgXcQ",
