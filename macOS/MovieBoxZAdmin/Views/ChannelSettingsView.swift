@@ -309,13 +309,22 @@ struct ChannelSettingsView: View {
 
     func saveSettings() {
         Task {
+            print("💾 [Settings] Starting save for channel: \(channel.id) - \(channel.title)")
+
             isSaving = true
             error = nil
             successMessage = nil
 
             do {
                 // Build updated settings
-                guard var updatedSettings = settings else { return }
+                guard var updatedSettings = settings else {
+                    print("❌ [Settings] No existing settings found")
+                    return
+                }
+
+                print("💾 [Settings] Current minDurationMinutes: \(String(describing: updatedSettings.minDurationMinutes))")
+                print("💾 [Settings] Current maxDurationMinutes: \(String(describing: updatedSettings.maxDurationMinutes))")
+                print("💾 [Settings] Current filterShorts: \(updatedSettings.filterShorts)")
 
                 updatedSettings.autoImportEnabled = autoImportEnabled
                 updatedSettings.autoImportSchedule = autoImportSchedule
@@ -332,20 +341,36 @@ struct ChannelSettingsView: View {
                 updatedSettings.maxDurationMinutes = maxDurationMinutes.isEmpty ? nil : Int(maxDurationMinutes)
                 updatedSettings.filterShorts = filterShorts
 
+                print("💾 [Settings] Updated minDurationMinutes: \(String(describing: updatedSettings.minDurationMinutes))")
+                print("💾 [Settings] Updated maxDurationMinutes: \(String(describing: updatedSettings.maxDurationMinutes))")
+                print("💾 [Settings] Updated filterShorts: \(updatedSettings.filterShorts)")
+
                 let savedSettings = try await apiService.updateChannelSettings(
                     channelId: channel.id,
                     settings: updatedSettings
                 )
 
+                print("✅ [Settings] Settings saved successfully")
+                print("✅ [Settings] Saved minDurationMinutes: \(String(describing: savedSettings.minDurationMinutes))")
+                print("✅ [Settings] Saved maxDurationMinutes: \(String(describing: savedSettings.maxDurationMinutes))")
+                print("✅ [Settings] Saved filterShorts: \(savedSettings.filterShorts)")
+
                 settings = savedSettings
                 successMessage = "Settings saved successfully"
+
+                // Update form fields from saved settings
+                minDurationMinutes = savedSettings.minDurationMinutes.map(String.init) ?? ""
+                maxDurationMinutes = savedSettings.maxDurationMinutes.map(String.init) ?? ""
+                filterShorts = savedSettings.filterShorts
 
                 // Clear success message after 3 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     successMessage = nil
                 }
             } catch {
-                self.error = "Failed to save settings: \(error.localizedDescription)"
+                let errorMsg = "Failed to save settings: \(error.localizedDescription)"
+                print("❌ [Settings] Save failed: \(errorMsg)")
+                self.error = errorMsg
             }
 
             isSaving = false

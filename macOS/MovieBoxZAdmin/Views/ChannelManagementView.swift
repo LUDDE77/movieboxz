@@ -59,6 +59,16 @@ struct ChannelManagementView: View {
                         ChannelRow(channel: channel)
                             .tag(channel)
                     }
+                    .onChange(of: selectedChannel) { oldValue, newValue in
+                        // Clear pattern editor state when switching channels
+                        print("🔄 [Channel] Switched from \(oldValue?.title ?? "none") to \(newValue?.title ?? "none")")
+                        editingPattern = false
+                        patternRules = []
+                        fallbackType = "first_segment"
+                        fallbackDivider = "|"
+                        testResults = nil
+                        error = nil
+                    }
                 }
             }
             .frame(minWidth: 300)
@@ -169,17 +179,27 @@ struct ChannelManagementView: View {
     }
 
     func savePattern() async {
-        guard let channel = selectedChannel else { return }
+        guard let channel = selectedChannel else {
+            print("❌ [Pattern] No channel selected")
+            return
+        }
+
+        print("💾 [Pattern] Starting save for channel: \(channel.id) - \(channel.title)")
+        print("💾 [Pattern] Pattern rules count: \(patternRules.count)")
 
         // Validate that all patterns have a regex
         for (index, rule) in patternRules.enumerated() {
+            print("💾 [Pattern] Rule #\(index + 1) regex: '\(rule.regex)'")
             if rule.regex.trimmingCharacters(in: .whitespaces).isEmpty {
-                self.error = "Pattern #\(index + 1) is missing a regular expression. Please fill in the 'Regular expression' field."
+                let errorMsg = "Pattern #\(index + 1) is missing a regular expression. Please fill in the 'Regular expression' field."
+                print("❌ [Pattern] Validation failed: \(errorMsg)")
+                self.error = errorMsg
                 return
             }
         }
 
         isSavingPattern = true
+        error = nil
 
         do {
             // Convert EditablePatternRule to API format
@@ -203,18 +223,32 @@ struct ChannelManagementView: View {
                 "divider": fallbackDivider
             ]
 
-            _ = try await apiService.updateChannelPattern(
+            print("💾 [Pattern] Sending patterns to API:")
+            print("💾 [Pattern] Patterns: \(patterns)")
+            print("💾 [Pattern] Fallback: \(fallback)")
+
+            let savedPattern = try await apiService.updateChannelPattern(
                 channelId: channel.id,
                 channelName: channel.title,
                 patterns: patterns,
                 fallbackPattern: fallback
             )
 
+            print("✅ [Pattern] Pattern saved successfully")
+            print("✅ [Pattern] Saved pattern ID: \(savedPattern.id)")
+            print("✅ [Pattern] Saved patterns count: \(savedPattern.patterns.count)")
+
             // Reload channels to get updated pattern
             await loadChannels()
             editingPattern = false
+
+            // Show success message
+            self.error = nil
+            print("✅ [Pattern] Save complete, reloaded channels")
         } catch {
-            self.error = "Failed to save pattern: \(error.localizedDescription)"
+            let errorMsg = "Failed to save pattern: \(error.localizedDescription)"
+            print("❌ [Pattern] Save failed: \(errorMsg)")
+            self.error = errorMsg
         }
 
         isSavingPattern = false
@@ -478,17 +512,42 @@ struct ChannelPatternView: View {
                             fallbackDivider: $fallbackDivider
                         )
 
-                        // Test Pattern Button
-                        HStack {
-                            Spacer()
-                            Button(action: {
-                                Task { await onTestPattern() }
-                            }) {
-                                Label("Test Pattern on Sample Videos", systemImage: "play.circle")
+                        // Action Buttons
+                        VStack(spacing: 12) {
+                            // Test Pattern Button
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    Task { await onTestPattern() }
+                                }) {
+                                    Label("Test Pattern on Sample Videos", systemImage: "play.circle")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(isTestingPattern || patternRules.isEmpty)
+                                Spacer()
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(isTestingPattern || patternRules.isEmpty)
-                            Spacer()
+
+                            // Save Pattern Button
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    Task { await onSavePattern() }
+                                }) {
+                                    if isSavingPattern {
+                                        HStack {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                            Text("Saving...")
+                                        }
+                                    } else {
+                                        Label("Save Pattern", systemImage: "checkmark.circle.fill")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.large)
+                                .disabled(isSavingPattern || patternRules.isEmpty)
+                                Spacer()
+                            }
                         }
                         .padding(.top)
                     }

@@ -590,6 +590,9 @@ class AdminAPIService: ObservableObject {
             let channelTag: String?
             let isFeatured: Bool
             let qualityTier: String
+            let minDurationMinutes: Int?
+            let maxDurationMinutes: Int?
+            let filterShorts: Bool
 
             enum CodingKeys: String, CodingKey {
                 case autoImportEnabled = "auto_import_enabled"
@@ -603,8 +606,13 @@ class AdminAPIService: ObservableObject {
                 case channelTag = "channel_tag"
                 case isFeatured = "is_featured"
                 case qualityTier = "quality_tier"
+                case minDurationMinutes = "min_duration_minutes"
+                case maxDurationMinutes = "max_duration_minutes"
+                case filterShorts = "filter_shorts"
             }
         }
+
+        print("💾 [API] Duration filters - min: \(settings.minDurationMinutes?.description ?? "nil"), max: \(settings.maxDurationMinutes?.description ?? "nil"), filterShorts: \(settings.filterShorts)")
 
         let body = UpdateBody(
             autoImportEnabled: settings.autoImportEnabled,
@@ -617,7 +625,10 @@ class AdminAPIService: ObservableObject {
             requireManualReview: settings.requireManualReview,
             channelTag: settings.channelTag,
             isFeatured: settings.isFeatured,
-            qualityTier: settings.qualityTier
+            qualityTier: settings.qualityTier,
+            minDurationMinutes: settings.minDurationMinutes,
+            maxDurationMinutes: settings.maxDurationMinutes,
+            filterShorts: settings.filterShorts
         )
 
         let response: APIResponse<ChannelSettings> = try await request(endpoint: endpoint, method: "PUT", body: body)
