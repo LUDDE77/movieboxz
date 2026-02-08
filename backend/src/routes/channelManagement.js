@@ -73,7 +73,8 @@ router.put('/:channelId/settings', async (req, res, next) => {
             'auto_import_enabled', 'auto_import_schedule', 'import_limit', 'import_sort_order',
             'default_enrichment_priority', 'auto_enrich_on_import',
             'auto_approve_threshold', 'require_manual_review',
-            'channel_tag', 'is_featured', 'quality_tier'
+            'channel_tag', 'is_featured', 'quality_tier',
+            'min_duration_minutes', 'max_duration_minutes', 'filter_shorts'
         ]
 
         const cleanUpdates = {}
@@ -508,10 +509,46 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
             videos.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0))
         }
 
+        // Apply duration filters if set
+        let filteredVideos = videos
+        if (channelSettings) {
+            const { min_duration_minutes, max_duration_minutes, filter_shorts } = channelSettings
+
+            filteredVideos = videos.filter(video => {
+                // Parse duration to minutes
+                const durationMinutes = movieCurator.parseDuration(video.duration)
+
+                // Filter shorts (< 1 minute)
+                if (filter_shorts && durationMinutes < 1) {
+                    logger.debug(`[Import Filter] Filtering short: ${video.title} (${durationMinutes} min)`)
+                    return false
+                }
+
+                // Filter by minimum duration
+                if (min_duration_minutes && durationMinutes < min_duration_minutes) {
+                    logger.debug(`[Import Filter] Below minimum: ${video.title} (${durationMinutes} < ${min_duration_minutes} min)`)
+                    return false
+                }
+
+                // Filter by maximum duration
+                if (max_duration_minutes && durationMinutes > max_duration_minutes) {
+                    logger.debug(`[Import Filter] Above maximum: ${video.title} (${durationMinutes} > ${max_duration_minutes} min)`)
+                    return false
+                }
+
+                return true
+            })
+
+            const filtered = videos.length - filteredVideos.length
+            if (filtered > 0) {
+                logger.info(`[Import Filter] Filtered ${filtered} videos by duration (${filteredVideos.length} remaining)`)
+            }
+        }
+
         // Update videos found
         await supabase
             .from('import_history')
-            .update({ videos_found: videos.length })
+            .update({ videos_found: filteredVideos.length })
             .eq('id', importId)
 
         let imported = 0
@@ -519,8 +556,8 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
         let failed = 0
 
         // Import each video
-        for (let i = 0; i < videos.length; i++) {
-            const video = videos[i]
+        for (let i = 0; i < filteredVideos.length; i++) {
+            const video = filteredVideos[i]
 
             try {
                 // Update current progress
