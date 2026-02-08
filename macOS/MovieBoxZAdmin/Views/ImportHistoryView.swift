@@ -20,7 +20,9 @@ struct ImportHistoryView: View {
 
                 Spacer()
 
-                Button(action: loadHistory) {
+                Button {
+                    Task { await loadHistory() }
+                } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(isLoading)
@@ -170,11 +172,11 @@ struct ImportHistoryRow: View {
 
                     Spacer()
 
-                    if let duration = importRecord.formattedDuration {
+                    if importRecord.durationSeconds != nil {
                         HStack(spacing: 4) {
                             Image(systemName: "clock")
                                 .font(.caption)
-                            Text(duration)
+                            Text(importRecord.formattedDuration)
                                 .font(.caption)
                         }
                         .foregroundColor(.secondary)
@@ -345,8 +347,8 @@ struct ImportDetailsSheet: View {
                     DetailRow(label: "Completed At", value: formatDate(completed))
                 }
 
-                if let duration = importRecord.formattedDuration {
-                    DetailRow(label: "Duration", value: duration)
+                if importRecord.durationSeconds != nil {
+                    DetailRow(label: "Duration", value: importRecord.formattedDuration)
                 }
 
                 if let error = importRecord.errorMessage {

@@ -14,6 +14,10 @@
 		1A000009000000000000001 /* AdminAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000A000000000000001 /* AdminAPIService.swift */; };
 		1A00000B000000000000002 /* StagingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000C000000000000002 /* StagingView.swift */; };
 		1A00000D000000000000003 /* ChannelManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000E000000000000003 /* ChannelManagementView.swift */; };
+		1D9038CC2F38ABA0005CB07C /* BulkImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038CB2F38ABA0005CB07C /* BulkImportView.swift */; };
+		1D9038CE2F38ABA9005CB07C /* ChannelMoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038CD2F38ABA9005CB07C /* ChannelMoviesView.swift */; };
+		1D9038D02F38ABB4005CB07C /* ChannelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038CF2F38ABB4005CB07C /* ChannelSettingsView.swift */; };
+		1D9038D22F38ABBD005CB07C /* ImportHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038D12F38ABBD005CB07C /* ImportHistoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +30,10 @@
 		1A00000C000000000000001 /* MovieBoxZAdmin.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MovieBoxZAdmin.entitlements; sourceTree = "<group>"; };
 		1A00000C000000000000002 /* StagingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StagingView.swift; sourceTree = "<group>"; };
 		1A00000E000000000000003 /* ChannelManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelManagementView.swift; sourceTree = "<group>"; };
+		1D9038CB2F38ABA0005CB07C /* BulkImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportView.swift; sourceTree = "<group>"; };
+		1D9038CD2F38ABA9005CB07C /* ChannelMoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelMoviesView.swift; sourceTree = "<group>"; };
+		1D9038CF2F38ABB4005CB07C /* ChannelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSettingsView.swift; sourceTree = "<group>"; };
+		1D9038D12F38ABBD005CB07C /* ImportHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportHistoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +78,10 @@
 		1A000011000000000000001 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				1D9038D12F38ABBD005CB07C /* ImportHistoryView.swift */,
+				1D9038CF2F38ABB4005CB07C /* ChannelSettingsView.swift */,
+				1D9038CD2F38ABA9005CB07C /* ChannelMoviesView.swift */,
+				1D9038CB2F38ABA0005CB07C /* BulkImportView.swift */,
 				1A000004000000000000001 /* AdminView.swift */,
 				1A00000C000000000000002 /* StagingView.swift */,
 				1A00000E000000000000003 /* ChannelManagementView.swift */,
@@ -165,8 +177,12 @@
 				1A000001000000000000001 /* MovieBoxZAdminApp.swift in Sources */,
 				1A000003000000000000001 /* AdminView.swift in Sources */,
 				1A00000B000000000000002 /* StagingView.swift in Sources */,
+				1D9038D22F38ABBD005CB07C /* ImportHistoryView.swift in Sources */,
+				1D9038CC2F38ABA0005CB07C /* BulkImportView.swift in Sources */,
 				1A00000D000000000000003 /* ChannelManagementView.swift in Sources */,
+				1D9038CE2F38ABA9005CB07C /* ChannelMoviesView.swift in Sources */,
 				1A000005000000000000001 /* MoviesView.swift in Sources */,
+				1D9038D02F38ABB4005CB07C /* ChannelSettingsView.swift in Sources */,
 				1A000007000000000000001 /* Models.swift in Sources */,
 				1A000009000000000000001 /* AdminAPIService.swift in Sources */,
 			);
