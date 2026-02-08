@@ -462,6 +462,10 @@ struct StagedMovie: Codable, Identifiable, Hashable {
     var youtubeURL: URL? {
         URL(string: "https://www.youtube.com/watch?v=\(youtubeVideoId)")
     }
+
+    var youtubeThumbnailURL: URL? {
+        URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
+    }
 }
 
 // Helper type for JSONB fields

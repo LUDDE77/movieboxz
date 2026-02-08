@@ -392,6 +392,7 @@ struct ChannelMovieRow: View {
     let movie: StagedMovie
     let isSelected: Bool
     let onToggleSelection: () -> Void
+    @State private var showDetail = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -403,32 +404,65 @@ struct ChannelMovieRow: View {
             }
             .buttonStyle(.plain)
 
-            // Poster
-            if let posterPath = movie.posterPath {
-                AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Color.gray.opacity(0.2)
-                }
-                .frame(width: 60, height: 90)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 60, height: 90)
+            // Posters (YouTube thumbnail + TMDB poster)
+            HStack(spacing: 8) {
+                // YouTube Thumbnail
+                if let thumbnailURL = movie.youtubeThumbnailURL {
+                    AsyncImage(url: thumbnailURL) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.gray.opacity(0.2)
+                            .overlay(ProgressView().scaleEffect(0.5))
+                    }
+                    .frame(width: 80, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.white)
+                            .padding(4)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(4)
+                            .padding(4),
+                        alignment: .bottomTrailing
                     )
+                }
+
+                // TMDB Poster (if available)
+                if let posterPath = movie.posterPath {
+                    AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.gray.opacity(0.2)
+                    }
+                    .frame(width: 60, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
             }
 
             // Movie Info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
+                // Extracted Title
                 Text(movie.title)
                     .font(.headline)
-                    .lineLimit(2)
+                    .lineLimit(1)
+
+                // YouTube Original Title
+                HStack(spacing: 4) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                    Text(movie.youtubeVideoTitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Divider()
 
                 if let releaseDate = movie.releaseDate {
                     let year = String(releaseDate.prefix(4))
@@ -464,10 +498,18 @@ struct ChannelMovieRow: View {
 
             Spacer()
 
-            // Enrichment indicator
-            if movie.enrichmentSource != nil {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.blue)
+            // Enrichment indicator + View Details
+            VStack(spacing: 8) {
+                if movie.enrichmentSource != nil {
+                    Image(systemName: "sparkles")
+                        .foregroundColor(.blue)
+                }
+
+                Button(action: { showDetail = true }) {
+                    Label("Details", systemImage: "info.circle")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
             }
         }
         .padding()
@@ -477,6 +519,9 @@ struct ChannelMovieRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(isSelected ? Color.blue : Color.gray.opacity(0.2), lineWidth: 1)
         )
+        .sheet(isPresented: $showDetail) {
+            MovieDetailView(movie: movie)
+        }
     }
 
     func statusColor(_ status: String) -> Color {
