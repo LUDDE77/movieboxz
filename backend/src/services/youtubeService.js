@@ -461,11 +461,52 @@ class YouTubeService {
         }
     }
 
-    async getChannelInfo(channelId) {
+    /**
+     * Resolve channel identifier to channel ID
+     * Supports: channel IDs (UC...), @handles, custom URLs
+     */
+    async resolveChannelIdentifier(identifier) {
+        // Remove any leading @ symbol
+        const cleanIdentifier = identifier.startsWith('@') ? identifier.substring(1) : identifier
+
+        // If it looks like a channel ID (starts with UC), return as-is
+        if (cleanIdentifier.startsWith('UC')) {
+            return cleanIdentifier
+        }
+
+        // Otherwise, treat as handle and look up
+        logger.info(`Resolving @${cleanIdentifier} to channel ID`)
+
+        try {
+            const response = await this.youtube.channels.list({
+                part: ['id'],
+                forHandle: cleanIdentifier,
+                maxResults: 1
+            })
+
+            this.updateQuotaUsage(1)
+
+            if (!response.data.items || response.data.items.length === 0) {
+                throw new Error(`Channel not found with handle: @${cleanIdentifier}`)
+            }
+
+            const channelId = response.data.items[0].id
+            logger.info(`Resolved @${cleanIdentifier} → ${channelId}`)
+            return channelId
+        } catch (error) {
+            logger.error(`Failed to resolve @${cleanIdentifier}:`, error.message)
+            throw new Error(`Channel not found: ${identifier}`)
+        }
+    }
+
+    async getChannelInfo(channelIdOrHandle) {
         const startTime = Date.now()
 
         try {
-            logger.info(`Fetching YouTube channel info: ${channelId}`)
+            logger.info(`Fetching YouTube channel info: ${channelIdOrHandle}`)
+
+            // Resolve handle to channel ID if needed
+            const channelId = await this.resolveChannelIdentifier(channelIdOrHandle)
 
             const response = await this.youtube.channels.list({
                 part: ['snippet', 'statistics', 'status'],
@@ -484,7 +525,7 @@ class YouTubeService {
             )
 
             if (!response.data.items || response.data.items.length === 0) {
-                throw new Error(`Channel not found: ${channelId}`)
+                throw new Error(`Channel not found: ${channelIdOrHandle}`)
             }
 
             const channel = response.data.items[0]
