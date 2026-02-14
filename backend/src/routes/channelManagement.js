@@ -701,13 +701,28 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     imported++
 
                     // Auto-enrich if enabled
-                    logger.info(`[Import] 🔍 Auto-enrich check: enabled=${autoEnrich}, hasMovie=${!!insertedMovie}`)
+                    logger.info(`🔍 [Import] ========== AUTO-ENRICH CHECK ==========`)
+                    logger.info(`🔍 [Import] Auto-enrich enabled: ${autoEnrich}`)
+                    logger.info(`🔍 [Import] Movie inserted: ${!!insertedMovie}`)
 
                     if (autoEnrich && insertedMovie) {
                         try {
-                            logger.info(`[Import] 🔍 Auto-enriching: ${movieData.title}`)
-                            logger.info(`[Import] 🔍 Using for search: title="${movieData.title}", actor="${movieData.extracted_actor}", year=${movieData.extracted_year}`)
+                            logger.info(`🔍 [Import] ========== STARTING AUTO-ENRICHMENT ==========`)
+                            logger.info(`🔍 [Import] Movie: "${movieData.title}"`)
+                            logger.info(`🔍 [Import] Extracted data:`, {
+                                title: movieData.title,
+                                actor: movieData.extracted_actor,
+                                genre: movieData.extracted_genre,
+                                year: movieData.extracted_year
+                            })
+                            logger.info(`🔍 [Import] Full context:`, {
+                                youtube_video_title: video.title,
+                                channel_id: channelId,
+                                channel_title: channelTitle,
+                                published_at: video.publishedAt
+                            })
 
+                            logger.info(`🔍 [Import] Calling selectiveEnrichment.enrichSelective...`)
                             const enrichResult = await selectiveEnrichment.enrichSelective(
                                 {
                                     title: movieData.title,
@@ -726,13 +741,14 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                                 }
                             )
 
-                            logger.info(`[Import] 🔍 Enrichment result:`, {
+                            logger.info(`🔍 [Import] Enrichment completed with result:`, {
                                 success: enrichResult.success,
                                 source: enrichResult.source,
                                 confidence: enrichResult.confidence,
                                 hasPreview: !!enrichResult.preview,
                                 fieldsEnriched: enrichResult.fieldsEnriched?.length || 0,
-                                message: enrichResult.message
+                                message: enrichResult.message,
+                                metadata: enrichResult.metadata
                             })
 
                             if (enrichResult.success && enrichResult.preview) {
@@ -770,31 +786,56 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                                     enrichmentUpdate[key] === undefined && delete enrichmentUpdate[key]
                                 )
 
-                                logger.info(`[Import] 💾 Updating with enrichment data:`, {
-                                    fields: Object.keys(enrichmentUpdate),
+                                logger.info(`🔍 [Import] 💾 Preparing to save enrichment data...`)
+                                logger.info(`🔍 [Import] 💾 Fields to update:`, Object.keys(enrichmentUpdate))
+                                logger.info(`🔍 [Import] 💾 Key values:`, {
+                                    enrichment_source: enrichmentUpdate.enrichment_source,
                                     tmdb_id: enrichmentUpdate.tmdb_id,
                                     imdb_id: enrichmentUpdate.imdb_id,
-                                    has_poster: !!enrichmentUpdate.poster_path
+                                    enrichment_confidence: enrichmentUpdate.enrichment_confidence,
+                                    has_poster: !!enrichmentUpdate.poster_path,
+                                    has_backdrop: !!enrichmentUpdate.backdrop_path,
+                                    has_description: !!enrichmentUpdate.description,
+                                    has_director: !!enrichmentUpdate.director,
+                                    has_actors: !!enrichmentUpdate.actors
                                 })
 
+                                logger.info(`🔍 [Import] 💾 Updating staged_movies table for movie ID: ${insertedMovie.id}`)
                                 const { error: enrichError } = await supabase
                                     .from('staged_movies')
                                     .update(enrichmentUpdate)
                                     .eq('id', insertedMovie.id)
 
                                 if (enrichError) {
-                                    logger.error(`[Import] ❌ Enrichment update failed for ${movieData.title}:`, enrichError)
+                                    logger.error(`❌ [Import] Database update FAILED for ${movieData.title}:`, {
+                                        error: enrichError.message,
+                                        code: enrichError.code,
+                                        details: enrichError.details
+                                    })
                                 } else {
-                                    logger.info(`[Import] ✅ Auto-enriched: ${movieData.title} (${enrichResult.fieldsEnriched?.length || 0} fields from ${enrichResult.source})`)
+                                    logger.info(`✅ [Import] Database update SUCCESS!`)
+                                    logger.info(`✅ [Import] Auto-enriched: ${movieData.title}`)
+                                    logger.info(`✅ [Import] Enriched ${enrichResult.fieldsEnriched?.length || 0} fields from ${enrichResult.source}`)
+                                    logger.info(`🔍 [Import] ========== AUTO-ENRICHMENT COMPLETE ==========`)
                                 }
                             } else {
-                                logger.warn(`[Import] ⚠️ Auto-enrichment failed for ${movieData.title}: ${enrichResult.message}`)
+                                logger.warn(`⚠️ [Import] Auto-enrichment did not return valid data`)
+                                logger.warn(`⚠️ [Import] Reason: ${enrichResult.message}`)
+                                logger.warn(`⚠️ [Import] Success: ${enrichResult.success}, HasPreview: ${!!enrichResult.preview}`)
+                                logger.info(`🔍 [Import] ========== AUTO-ENRICHMENT SKIPPED ==========`)
                             }
                         } catch (enrichError) {
-                            logger.error(`[Import] 💥 Auto-enrichment error for ${movieData.title}:`, enrichError)
+                            logger.error(`💥 [Import] Auto-enrichment EXCEPTION for ${movieData.title}:`, {
+                                error: enrichError.message,
+                                stack: enrichError.stack
+                            })
+                            logger.info(`🔍 [Import] ========== AUTO-ENRICHMENT FAILED ==========`)
                         }
                     } else if (!autoEnrich) {
-                        logger.info(`[Import] ⏭️ Auto-enrichment disabled, skipping`)
+                        logger.info(`⏭️ [Import] Auto-enrichment disabled, skipping`)
+                        logger.info(`🔍 [Import] ========== AUTO-ENRICHMENT DISABLED ==========`)
+                    } else {
+                        logger.warn(`⚠️ [Import] Auto-enrich check failed: enabled=${autoEnrich}, hasMovie=${!!insertedMovie}`)
                     }
                 }
 

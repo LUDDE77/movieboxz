@@ -437,18 +437,35 @@ class EnhancedEnrichment {
      */
     async enrichMovie(movie) {
         try {
+            logger.info(`🎬 [EnhancedEnrichment] ========== STARTING ENRICHMENT ==========`)
+            logger.info(`🎬 [EnhancedEnrichment] Input movie:`, {
+                youtube_video_title: movie.youtube_video_title,
+                channel_title: movie.channel_title,
+                channel_id: movie.channel_id,
+                published_at: movie.published_at
+            })
+
             // Extract actor hints from channel pattern (now async)
+            logger.info(`🎬 [EnhancedEnrichment] Step 1: Extracting actor hints from pattern...`)
             const actorHints = await this.extractActorHints(
                 movie.youtube_video_title,
                 movie.channel_title,
                 movie.channel_id
             )
 
-            logger.info(`Actor hints: title="${actorHints.title}", actors=[${actorHints.actors.join(', ')}], genre="${actorHints.genre}", year=${actorHints.year}, mediaHint=${actorHints.mediaHint}`)
+            logger.info(`🎬 [EnhancedEnrichment] Pattern extraction result:`, {
+                title: actorHints.title,
+                actors: actorHints.actors,
+                genre: actorHints.genre,
+                year: actorHints.year,
+                mediaHint: actorHints.mediaHint
+            })
 
             const publishYear = new Date(movie.published_at).getFullYear()
+            logger.info(`🎬 [EnhancedEnrichment] Publish year: ${publishYear}`)
 
             // STEP 1: Try TMDB first
+            logger.info(`🎬 [EnhancedEnrichment] Step 2: Searching TMDB...`)
             const tmdbResults = await this.searchTMDBWithActors(
                 actorHints.title,
                 actorHints.actors,
@@ -456,12 +473,22 @@ class EnhancedEnrichment {
                 actorHints.mediaHint
             )
 
+            logger.info(`🎬 [EnhancedEnrichment] TMDB search results:`, {
+                resultCount: tmdbResults?.length || 0,
+                topResult: tmdbResults?.[0] ? {
+                    id: tmdbResults[0].id,
+                    title: tmdbResults[0].title || tmdbResults[0].name,
+                    media_type: tmdbResults[0].media_type
+                } : null
+            })
+
             if (tmdbResults && tmdbResults.length > 0) {
                 // Found in TMDB - use as primary source
                 const topResult = tmdbResults[0]
+                logger.info(`🎬 [EnhancedEnrichment] Calculating confidence for TMDB match...`)
                 const confidence = await this.calculateConfidence(movie, topResult, actorHints)
 
-                logger.info(`✓ TMDB match: ${topResult.media_type === 'movie' ? topResult.title : topResult.name} (confidence: ${confidence}%)`)
+                logger.info(`✅ [EnhancedEnrichment] TMDB match: ${topResult.media_type === 'movie' ? topResult.title : topResult.name} (confidence: ${confidence}%)`)
 
                 // Get full TMDB details
                 let tmdbDetails
@@ -509,7 +536,8 @@ class EnhancedEnrichment {
             }
 
             // STEP 2: Not in TMDB, try OMDB with smart search + actor validation
-            logger.warn(`No TMDB results for: ${actorHints.title}, trying OMDB with smart search...`)
+            logger.warn(`⚠️ [EnhancedEnrichment] No TMDB results for: ${actorHints.title}`)
+            logger.info(`🎬 [EnhancedEnrichment] Step 3: Trying OMDB with smart search + actor validation...`)
 
             const omdbResult = await omdbService.searchWithValidation(
                 actorHints.title,
@@ -517,8 +545,16 @@ class EnhancedEnrichment {
                 publishYear
             )
 
+            logger.info(`🎬 [EnhancedEnrichment] OMDB search result:`, {
+                hasResult: !!omdbResult,
+                title: omdbResult?.title,
+                imdb_id: omdbResult?.imdb_id,
+                confidence: omdbResult?.confidence,
+                actor_match: omdbResult?.actor_match
+            })
+
             if (omdbResult) {
-                logger.info(`✓ Found in OMDB: "${omdbResult.title}" (${omdbResult.imdb_id}) - confidence: ${omdbResult.confidence}%`)
+                logger.info(`✅ [EnhancedEnrichment] Found in OMDB: "${omdbResult.title}" (${omdbResult.imdb_id}) - confidence: ${omdbResult.confidence}%`)
 
                 // Try to get TMDB data for poster/backdrop if IMDB ID exists
                 let tmdbDetails = null
@@ -562,7 +598,8 @@ class EnhancedEnrichment {
             }
 
             // STEP 3: Not in IMDB either, use cleaned YouTube data
-            logger.warn(`No IMDB results either, using cleaned YouTube data for: ${actorHints.title}`)
+            logger.warn(`⚠️ [EnhancedEnrichment] No IMDB results either`)
+            logger.info(`🎬 [EnhancedEnrichment] Step 4: Using cleaned YouTube data (pattern-extracted) as fallback...`)
 
             const enrichmentData = {
                 tmdb_id: null,
@@ -591,10 +628,22 @@ class EnhancedEnrichment {
                 source: 'youtube_patterns'
             }
 
+            logger.info(`🎬 [EnhancedEnrichment] Returning YouTube patterns fallback:`, {
+                title: enrichmentData.title,
+                actors: enrichmentData.actors,
+                confidence: enrichmentData.confidence,
+                source: enrichmentData.source
+            })
+            logger.info(`🎬 [EnhancedEnrichment] ========== ENRICHMENT COMPLETE ==========`)
+
             return enrichmentData
 
         } catch (error) {
-            logger.error(`Enhanced enrichment failed:`, error.message)
+            logger.error(`❌ [EnhancedEnrichment] Enhanced enrichment failed:`, {
+                error: error.message,
+                stack: error.stack
+            })
+            logger.info(`🎬 [EnhancedEnrichment] ========== ENRICHMENT FAILED ==========`)
             return null
         }
     }

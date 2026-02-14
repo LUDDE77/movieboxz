@@ -110,9 +110,26 @@ class SelectiveEnrichment {
     async _fetchEnrichmentData(movie, preferTmdb = true) {
         const { title, actors = [], year, youtube_video_title, channel_id, channel_title, published_at } = movie
 
+        logger.info(`🔍 [SelectiveEnrichment] _fetchEnrichmentData called with:`, {
+            title,
+            actors,
+            year,
+            youtube_video_title,
+            channel_id,
+            channel_title,
+            published_at,
+            hasFullContext: !!(youtube_video_title && channel_id && published_at)
+        })
+
         // If we have full movie context, use enhancedEnrichment for smart matching
         if (youtube_video_title && channel_id && published_at) {
-            logger.debug('Using enhanced enrichment with full context...')
+            logger.info(`🎯 [SelectiveEnrichment] Using enhanced enrichment with full context...`)
+            logger.info(`🎯 [SelectiveEnrichment] Calling enhancedEnrichment.enrichMovie with:`, {
+                youtube_video_title,
+                channel_id,
+                channel_title: channel_title || 'Unknown',
+                published_at
+            })
 
             const enrichmentData = await enhancedEnrichment.enrichMovie({
                 youtube_video_title,
@@ -121,10 +138,27 @@ class SelectiveEnrichment {
                 published_at: published_at || new Date().toISOString()
             })
 
+            logger.info(`🎯 [SelectiveEnrichment] Enhanced enrichment returned:`, {
+                hasData: !!enrichmentData,
+                title: enrichmentData?.title,
+                confidence: enrichmentData?.confidence,
+                source: enrichmentData?.source,
+                tmdb_id: enrichmentData?.tmdb_id,
+                imdb_id: enrichmentData?.imdb_id
+            })
+
             if (enrichmentData) {
-                logger.info(`✅ Enhanced enrichment: "${enrichmentData.title}" (confidence: ${enrichmentData.confidence}, source: ${enrichmentData.source})`)
+                logger.info(`✅ [SelectiveEnrichment] Enhanced enrichment SUCCESS: "${enrichmentData.title}" (confidence: ${enrichmentData.confidence}, source: ${enrichmentData.source})`)
                 return enrichmentData
+            } else {
+                logger.warn(`❌ [SelectiveEnrichment] Enhanced enrichment returned NULL`)
             }
+        } else {
+            logger.warn(`⚠️ [SelectiveEnrichment] Missing full context - cannot use enhanced enrichment`, {
+                hasYoutubeTitle: !!youtube_video_title,
+                hasChannelId: !!channel_id,
+                hasPublishedAt: !!published_at
+            })
         }
 
         // Fallback to basic search if no full context or enhanced failed
