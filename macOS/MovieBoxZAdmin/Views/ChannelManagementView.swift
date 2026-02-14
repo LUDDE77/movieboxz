@@ -61,7 +61,11 @@ struct ChannelManagementView: View {
                     }
                     .onChange(of: selectedChannel) { oldValue, newValue in
                         // Clear pattern editor state when switching channels
-                        print("🔄 [Channel] Switched from \(oldValue?.title ?? "none") to \(newValue?.title ?? "none")")
+                        print("🔄 [Channel] ==================== CHANNEL SWITCH ====================")
+                        print("🔄 [Channel] Switched from: \(oldValue?.title ?? "none") (\(oldValue?.id ?? ""))")
+                        print("🔄 [Channel] Switched to: \(newValue?.title ?? "none") (\(newValue?.id ?? ""))")
+                        print("🔄 [Channel] New channel hasPattern: \(newValue?.hasPattern ?? false)")
+                        print("🔄 [Channel] New channel pattern is nil: \(newValue?.pattern == nil)")
 
                         // Clear state
                         patternRules = []
@@ -71,33 +75,45 @@ struct ChannelManagementView: View {
                         error = nil
 
                         // If new channel has a pattern, load it and show editor
-                        if let newChannel = newValue, newChannel.hasPattern == true, let pattern = newChannel.pattern {
-                            print("🔄 [Channel] New channel has pattern, loading it")
-                            print("🔄 [Channel] Pattern has \(pattern.patterns.count) rules")
-                            editingPattern = true
+                        if let newChannel = newValue {
+                            if newChannel.hasPattern == true {
+                                if let pattern = newChannel.pattern {
+                                    print("✅ [Channel] Loading pattern with \(pattern.patterns.count) rules")
+                                    editingPattern = true
 
-                            // Load pattern into form fields
-                            patternRules = pattern.patterns.map { rule in
-                                var params: [String: String] = [:]
-                                for (key, param) in rule.parameters {
-                                    switch param {
-                                    case .int(let val):
-                                        params[key] = String(val)
-                                    case .string(let val):
-                                        params[key] = val
+                                    // Load pattern into form fields
+                                    patternRules = pattern.patterns.map { rule in
+                                        var params: [String: String] = [:]
+                                        for (key, param) in rule.parameters {
+                                            switch param {
+                                            case .int(let val):
+                                                params[key] = String(val)
+                                            case .string(let val):
+                                                params[key] = val
+                                            }
+                                        }
+                                        print("✅ [Channel] Loaded rule with regex: \(rule.regex)")
+                                        return EditablePatternRule(regex: rule.regex, parameters: params)
                                     }
-                                }
-                                return EditablePatternRule(regex: rule.regex, parameters: params)
-                            }
 
-                            if let fallback = pattern.fallbackPattern {
-                                fallbackType = fallback.type
-                                fallbackDivider = fallback.divider ?? "|"
+                                    if let fallback = pattern.fallbackPattern {
+                                        fallbackType = fallback.type
+                                        fallbackDivider = fallback.divider ?? "|"
+                                    }
+                                    print("✅ [Channel] Pattern loaded successfully, editingPattern=true")
+                                } else {
+                                    print("⚠️ [Channel] WARNING: hasPattern=true but pattern is nil!")
+                                    editingPattern = false
+                                }
+                            } else {
+                                print("🔄 [Channel] New channel has no pattern (hasPattern=false)")
+                                editingPattern = false
                             }
                         } else {
-                            print("🔄 [Channel] New channel has no pattern")
+                            print("🔄 [Channel] newValue is nil")
                             editingPattern = false
                         }
+                        print("🔄 [Channel] =====================================================")
                     }
                 }
             }
@@ -178,17 +194,32 @@ struct ChannelManagementView: View {
     // MARK: - Actions
 
     func loadChannels() async {
+        print("📥 [LoadChannels] Starting to load channels from API...")
         isLoading = true
         error = nil
 
         do {
             let data = try await apiService.getChannelsWithPatterns()
             channels = data.channels
+            print("📥 [LoadChannels] Loaded \(channels.count) channels")
+
+            // Log pattern status for each channel
+            for channel in channels {
+                print("📥 [LoadChannels] Channel: \(channel.title) (ID: \(channel.id))")
+                print("📥 [LoadChannels]   - hasPattern: \(channel.hasPattern)")
+                print("📥 [LoadChannels]   - pattern is nil: \(channel.pattern == nil)")
+                if let pattern = channel.pattern {
+                    print("📥 [LoadChannels]   - pattern has \(pattern.patterns.count) rules")
+                }
+            }
         } catch {
-            self.error = "Failed to load channels: \(error.localizedDescription)"
+            let errorMsg = "Failed to load channels: \(error.localizedDescription)"
+            print("❌ [LoadChannels] \(errorMsg)")
+            self.error = errorMsg
         }
 
         isLoading = false
+        print("📥 [LoadChannels] Finished loading channels")
     }
 
     func addChannel() async {
