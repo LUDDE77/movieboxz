@@ -595,29 +595,68 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                 // Extract metadata using channel pattern
                 const parsed = await movieCurator.extractMetadata(video.title, channelId)
 
+                // Log pattern extraction results
+                logger.info(`[Import] Pattern extraction for "${video.title}":`, {
+                    matched: parsed.patternMatched || false,
+                    extractedTitle: parsed.title,
+                    actor: parsed.actors || parsed.actor || null,
+                    genre: parsed.genre || null,
+                    year: parsed.year || null,
+                    confidence: parsed.confidence || 0
+                })
+
                 // Calculate duration
                 const durationMinutes = movieCurator.parseDuration(video.duration)
+
+                // Prepare movie data with extracted metadata
+                const movieData = {
+                    youtube_video_id: video.id,
+                    youtube_video_title: video.title,
+                    title: parsed.title || video.title,
+                    description: video.description,
+                    channel_id: channelId,
+                    runtime_minutes: Math.round(durationMinutes),
+                    view_count: parseInt(video.viewCount) || 0,
+                    like_count: parseInt(video.likeCount) || 0,
+                    comment_count: parseInt(video.commentCount) || 0,
+                    published_at: video.publishedAt,
+                    approval_status: 'pending',
+                    import_batch_id: importId,
+                    import_sort_order: sortOrder,
+                    import_index: i,
+                    channel_tag: channelSettings?.channel_tag,
+                    // Save extracted metadata from pattern
+                    pattern_matched: parsed.patternMatched || false,
+                    pattern_confidence: parsed.confidence || 0
+                }
+
+                // Add extracted actor if present
+                if (parsed.actors || parsed.actor) {
+                    movieData.extracted_actor = parsed.actors || parsed.actor
+                }
+
+                // Add extracted genre if present
+                if (parsed.genre) {
+                    movieData.extracted_genre = parsed.genre
+                }
+
+                // Add extracted year if present
+                if (parsed.year) {
+                    movieData.extracted_year = parseInt(parsed.year)
+                }
+
+                logger.info(`[Import] Saving movie with extracted data:`, {
+                    title: movieData.title,
+                    actor: movieData.extracted_actor,
+                    genre: movieData.extracted_genre,
+                    year: movieData.extracted_year,
+                    patternMatched: movieData.pattern_matched
+                })
 
                 // Create staged movie
                 const { error: insertError } = await supabase
                     .from('staged_movies')
-                    .insert({
-                        youtube_video_id: video.id,
-                        youtube_video_title: video.title,
-                        title: parsed.title || video.title,
-                        description: video.description,
-                        channel_id: channelId,
-                        runtime_minutes: Math.round(durationMinutes),
-                        view_count: parseInt(video.viewCount) || 0,
-                        like_count: parseInt(video.likeCount) || 0,
-                        comment_count: parseInt(video.commentCount) || 0,
-                        published_at: video.publishedAt,
-                        approval_status: 'pending',
-                        import_batch_id: importId,
-                        import_sort_order: sortOrder,
-                        import_index: i,
-                        channel_tag: channelSettings?.channel_tag
-                    })
+                    .insert(movieData)
 
                 if (insertError) {
                     logger.error(`[Import] Failed to insert ${video.id}:`, insertError)
