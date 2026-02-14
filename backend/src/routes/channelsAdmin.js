@@ -9,30 +9,50 @@ const router = express.Router()
 // GET /api/admin/channels - List all channels with patterns
 router.get('/', async (req, res, next) => {
     try {
-        const { data: channels, error } = await supabase
+        // Fetch all channels
+        const { data: channels, error: channelsError } = await supabase
             .from('channels')
-            .select(`
-                *,
-                channel_patterns(*)
-            `)
+            .select('*')
             .order('title')
 
-        if (error) throw error
+        if (channelsError) throw channelsError
 
-        // Format response
-        const formattedChannels = (channels || []).map(channel => ({
-            id: channel.id,
-            title: channel.title,
-            description: channel.description,
-            thumbnail_url: channel.thumbnail_url,
-            subscriber_count: channel.subscriber_count,
-            video_count: channel.video_count,
-            is_curated: channel.is_curated,
-            has_pattern: channel.channel_patterns && channel.channel_patterns.length > 0,
-            pattern: channel.channel_patterns?.[0] || null,
-            created_at: channel.created_at,
-            updated_at: channel.updated_at
-        }))
+        // Fetch all active patterns
+        const { data: patterns, error: patternsError } = await supabase
+            .from('channel_patterns')
+            .select('*')
+            .eq('is_active', true)
+
+        if (patternsError) throw patternsError
+
+        // Create a map of channel_id -> pattern
+        const patternMap = new Map()
+        if (patterns) {
+            patterns.forEach(pattern => {
+                patternMap.set(pattern.channel_id, pattern)
+            })
+        }
+
+        logger.info(`[Channels Admin] Fetched ${channels?.length || 0} channels and ${patterns?.length || 0} patterns`)
+
+        // Format response - merge channels with their patterns
+        const formattedChannels = (channels || []).map(channel => {
+            const pattern = patternMap.get(channel.id) || null
+
+            return {
+                id: channel.id,
+                title: channel.title,
+                description: channel.description,
+                thumbnail_url: channel.thumbnail_url,
+                subscriber_count: channel.subscriber_count,
+                video_count: channel.video_count,
+                is_curated: channel.is_curated,
+                has_pattern: pattern !== null,
+                pattern: pattern,
+                created_at: channel.created_at,
+                updated_at: channel.updated_at
+            }
+        })
 
         res.json({
             success: true,
