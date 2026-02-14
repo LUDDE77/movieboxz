@@ -62,12 +62,42 @@ struct ChannelManagementView: View {
                     .onChange(of: selectedChannel) { oldValue, newValue in
                         // Clear pattern editor state when switching channels
                         print("🔄 [Channel] Switched from \(oldValue?.title ?? "none") to \(newValue?.title ?? "none")")
-                        editingPattern = false
+
+                        // Clear state
                         patternRules = []
                         fallbackType = "first_segment"
                         fallbackDivider = "|"
                         testResults = nil
                         error = nil
+
+                        // If new channel has a pattern, load it and show editor
+                        if let newChannel = newValue, newChannel.hasPattern == true, let pattern = newChannel.pattern {
+                            print("🔄 [Channel] New channel has pattern, loading it")
+                            print("🔄 [Channel] Pattern has \(pattern.patterns.count) rules")
+                            editingPattern = true
+
+                            // Load pattern into form fields
+                            patternRules = pattern.patterns.map { rule in
+                                var params: [String: String] = [:]
+                                for (key, param) in rule.parameters {
+                                    switch param {
+                                    case .int(let val):
+                                        params[key] = String(val)
+                                    case .string(let val):
+                                        params[key] = val
+                                    }
+                                }
+                                return EditablePatternRule(regex: rule.regex, parameters: params)
+                            }
+
+                            if let fallback = pattern.fallbackPattern {
+                                fallbackType = fallback.type
+                                fallbackDivider = fallback.divider ?? "|"
+                            }
+                        } else {
+                            print("🔄 [Channel] New channel has no pattern")
+                            editingPattern = false
+                        }
                     }
                 }
             }
@@ -247,13 +277,25 @@ struct ChannelManagementView: View {
                 selectedChannel = updatedChannel
                 print("✅ [Pattern] Re-selected updated channel: \(updatedChannel.title)")
                 print("✅ [Pattern] Updated channel hasPattern: \(updatedChannel.hasPattern)")
+
+                // Reload the pattern into the form fields so user can see what they saved
+                if let pattern = updatedChannel.pattern {
+                    print("✅ [Pattern] Reloading saved pattern into form fields")
+                    print("✅ [Pattern] Pattern has \(pattern.patterns.count) rules")
+                    loadExistingPattern()
+                } else {
+                    print("⚠️ [Pattern] WARNING: Updated channel has no pattern!")
+                }
+            } else {
+                print("⚠️ [Pattern] WARNING: Could not find channel \(currentChannelId) after reload")
             }
 
-            editingPattern = false
+            // Keep editingPattern = true so user can see the saved pattern
+            // editingPattern = false  // REMOVED - keep pattern visible after save
 
             // Show success message
             self.error = nil
-            print("✅ [Pattern] Save complete, reloaded channels")
+            print("✅ [Pattern] Save complete, pattern still visible in editor")
         } catch {
             let errorMsg = "Failed to save pattern: \(error.localizedDescription)"
             print("❌ [Pattern] Save failed: \(errorMsg)")
@@ -466,8 +508,7 @@ struct ChannelPatternView: View {
 
                         if channel.hasPattern == true {
                             if editingPattern {
-                                Button("Cancel") {
-                                    editingPattern = false
+                                Button("Reload Pattern") {
                                     loadExistingPattern()
                                 }
 
@@ -476,8 +517,21 @@ struct ChannelPatternView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(isSavingPattern)
+
+                                Button(role: .destructive, action: {
+                                    Task { await onDeletePattern() }
+                                }) {
+                                    Label("Delete Pattern", systemImage: "trash")
+                                }
                             } else {
-                                Button("Edit Pattern") {
+                                // Auto-load pattern when channel has one
+                                Button("Show Pattern") {
+                                    editingPattern = true
+                                    loadExistingPattern()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .onAppear {
+                                    // Auto-show pattern when channel has one
                                     editingPattern = true
                                     loadExistingPattern()
                                 }
