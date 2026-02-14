@@ -239,7 +239,16 @@ struct ChannelManagementView: View {
             print("✅ [Pattern] Saved patterns count: \(savedPattern.patterns.count)")
 
             // Reload channels to get updated pattern
+            let currentChannelId = channel.id
             await loadChannels()
+
+            // Re-select the updated channel from the reloaded list
+            if let updatedChannel = channels.first(where: { $0.id == currentChannelId }) {
+                selectedChannel = updatedChannel
+                print("✅ [Pattern] Re-selected updated channel: \(updatedChannel.title)")
+                print("✅ [Pattern] Updated channel hasPattern: \(updatedChannel.hasPattern)")
+            }
+
             editingPattern = false
 
             // Show success message
