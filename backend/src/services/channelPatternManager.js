@@ -86,6 +86,14 @@ class ChannelPatternManager {
             const match = youtubeTitle.match(patternDef.regex)
 
             if (match) {
+                logger.info(`🎯 [Pattern] Matched! YouTube title: "${youtubeTitle}"`)
+                logger.info(`🎯 [Pattern] Regex groups:`, {
+                    group1: match[1],
+                    group2: match[2],
+                    group3: match[3],
+                    group4: match[4]
+                })
+
                 const metadata = {}
 
                 // Extract each parameter using capture groups
@@ -99,10 +107,19 @@ class ChannelPatternManager {
                     }
                 }
 
+                logger.info(`🎯 [Pattern] Metadata extracted:`, {
+                    title: metadata.title,
+                    genre: metadata.genre,
+                    actors: metadata.actors,
+                    year: metadata.year
+                })
+
                 // Clean up actors field - if it ends with "Movie(s)", it's a genre not an actor
                 if (metadata.actors && /\b[Mm]ovies?\b/.test(metadata.actors)) {
-                    logger.debug(`Actor field "${metadata.actors}" looks like a genre, clearing it`)
+                    logger.info(`🧹 [Pattern] Actor field "${metadata.actors}" contains "Movies", clearing it (it's a genre, not an actor)`)
                     metadata.actors = null
+                } else if (metadata.actors) {
+                    logger.info(`✅ [Pattern] Actor field looks valid: "${metadata.actors}"`)
                 }
 
                 // Parse actors array if present
