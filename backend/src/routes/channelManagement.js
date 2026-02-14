@@ -660,15 +660,62 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                 })
 
                 // Create staged movie
-                const { error: insertError } = await supabase
+                const { data: insertedMovie, error: insertError } = await supabase
                     .from('staged_movies')
                     .insert(movieData)
+                    .select()
+                    .single()
 
                 if (insertError) {
                     logger.error(`[Import] Failed to insert ${video.id}:`, insertError)
                     failed++
                 } else {
                     imported++
+
+                    // Auto-enrich if enabled
+                    if (autoEnrich && insertedMovie) {
+                        try {
+                            logger.info(`[Import] 🔍 Auto-enriching: ${movieData.title}`)
+
+                            const enrichResult = await selectiveEnrichment.enrichSelective(
+                                {
+                                    title: movieData.title,
+                                    actors: movieData.extracted_actor,
+                                    year: movieData.extracted_year
+                                },
+                                {
+                                    priority: 'full',
+                                    previewOnly: false,
+                                    preferTmdb: true
+                                }
+                            )
+
+                            if (enrichResult.success && enrichResult.preview) {
+                                // Update the staged movie with enrichment data
+                                const { error: enrichError } = await supabase
+                                    .from('staged_movies')
+                                    .update({
+                                        ...enrichResult.preview,
+                                        enrichment_source: enrichResult.source,
+                                        tmdb_id: enrichResult.metadata?.tmdb_id,
+                                        imdb_id: enrichResult.metadata?.imdb_id,
+                                        enrichment_confidence: enrichResult.confidence,
+                                        last_enriched: new Date().toISOString()
+                                    })
+                                    .eq('id', insertedMovie.id)
+
+                                if (enrichError) {
+                                    logger.error(`[Import] ❌ Enrichment update failed for ${movieData.title}:`, enrichError)
+                                } else {
+                                    logger.info(`[Import] ✅ Auto-enriched: ${movieData.title} (${enrichResult.fieldsEnriched.length} fields from ${enrichResult.source})`)
+                                }
+                            } else {
+                                logger.warn(`[Import] ⚠️ Auto-enrichment failed for ${movieData.title}: ${enrichResult.message}`)
+                            }
+                        } catch (enrichError) {
+                            logger.error(`[Import] Auto-enrichment error for ${movieData.title}:`, enrichError)
+                        }
+                    }
                 }
 
                 // Update progress
