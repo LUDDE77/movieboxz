@@ -282,7 +282,25 @@ struct ChannelManagementView: View {
                 if let pattern = updatedChannel.pattern {
                     print("✅ [Pattern] Reloading saved pattern into form fields")
                     print("✅ [Pattern] Pattern has \(pattern.patterns.count) rules")
-                    loadExistingPattern()
+
+                    // Reload pattern data into form fields
+                    patternRules = pattern.patterns.map { rule in
+                        var params: [String: String] = [:]
+                        for (key, param) in rule.parameters {
+                            switch param {
+                            case .int(let val):
+                                params[key] = String(val)
+                            case .string(let val):
+                                params[key] = val
+                            }
+                        }
+                        return EditablePatternRule(regex: rule.regex, parameters: params)
+                    }
+
+                    if let fallback = pattern.fallbackPattern {
+                        fallbackType = fallback.type
+                        fallbackDivider = fallback.divider ?? "|"
+                    }
                 } else {
                     print("⚠️ [Pattern] WARNING: Updated channel has no pattern!")
                 }

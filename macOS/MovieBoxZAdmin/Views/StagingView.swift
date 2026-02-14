@@ -226,7 +226,7 @@ struct StagingView: View {
         .task {
             await loadInitialData()
         }
-        .onChange(of: selectedFilter) { _ in
+        .onChange(of: selectedFilter) {
             Task { await loadMovies() }
         }
     }
