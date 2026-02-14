@@ -85,42 +85,119 @@ struct ChannelMovieDetailView: View {
                 // Pattern Extraction Results
                 GroupBox(label: Label("Pattern Extraction", systemImage: "wand.and.stars")) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("These values were extracted from the YouTube title using the channel's pattern:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        // Pattern match status
+                        HStack {
+                            Text("Pattern Matched:")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            if movie.patternMatched == true {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("Yes")
+                                    .foregroundColor(.green)
+                                if let confidence = movie.patternConfidence {
+                                    Text("(\(Int(confidence * 100))% confidence)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            } else {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.orange)
+                                Text("No (fallback used)")
+                                    .foregroundColor(.orange)
+                            }
+                        }
 
                         Divider()
 
-                        // Show what pattern extraction found vs current values
-                        ExtractionComparisonRow(
-                            label: "Title",
-                            extracted: movie.title,
-                            current: movie.title
-                        )
+                        Text("Values extracted from YouTube title:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
 
-                        if let actors = movie.actors {
-                            ExtractionComparisonRow(
-                                label: "Actors",
-                                extracted: actors,
-                                current: actors
-                            )
+                        // Extracted Title
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Title")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+                            Text(movie.title)
+                                .font(.body)
+                                .textSelection(.enabled)
                         }
 
-                        if let category = movie.category {
-                            ExtractionComparisonRow(
-                                label: "Category/Genre",
-                                extracted: category,
-                                current: category
-                            )
+                        // Extracted Actor
+                        if let actor = movie.extractedActor {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Actor (from pattern)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Text(actor)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                    .foregroundColor(.blue)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Actor (from pattern)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Text("Not extracted")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                            }
                         }
 
-                        if let releaseDate = movie.releaseDate {
-                            let year = String(releaseDate.prefix(4))
-                            ExtractionComparisonRow(
-                                label: "Year",
-                                extracted: year,
-                                current: year
-                            )
+                        // Extracted Genre
+                        if let genre = movie.extractedGenre {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Genre (from pattern)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Text(genre)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                    .foregroundColor(.blue)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Genre (from pattern)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Text("Not extracted")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                            }
+                        }
+
+                        // Extracted Year
+                        if let year = movie.extractedYear {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Year (from pattern)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Text(String(year))
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                    .foregroundColor(.blue)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Year (from pattern)")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                Text("Not extracted")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                            }
                         }
                     }
                     .padding()

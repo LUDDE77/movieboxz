@@ -401,6 +401,16 @@ struct StagedMovie: Codable, Identifiable, Hashable {
     let createdAt: String
     let updatedAt: String?
 
+    // Pattern extraction fields
+    let patternMatched: Bool?
+    let patternConfidence: Double?
+    let extractedActor: String?
+    let extractedGenre: String?
+    let extractedYear: Int?
+    let importSortOrder: String?
+    let importIndex: Int?
+    let channelTag: String?
+
     enum CodingKeys: String, CodingKey {
         case id
         case youtubeVideoId = "youtube_video_id"
@@ -445,6 +455,14 @@ struct StagedMovie: Codable, Identifiable, Hashable {
         case publishedMovieId = "published_movie_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case patternMatched = "pattern_matched"
+        case patternConfidence = "pattern_confidence"
+        case extractedActor = "extracted_actor"
+        case extractedGenre = "extracted_genre"
+        case extractedYear = "extracted_year"
+        case importSortOrder = "import_sort_order"
+        case importIndex = "import_index"
+        case channelTag = "channel_tag"
     }
 
     // Computed properties
