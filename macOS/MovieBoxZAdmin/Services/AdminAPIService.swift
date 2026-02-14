@@ -324,6 +324,19 @@ class AdminAPIService: ObservableObject {
         return response.data
     }
 
+    /// Batch enrich multiple staged movies
+    func batchEnrich(movieIds: [String], priority: EnrichmentPriority = .full) async throws -> BatchEnrichmentResult {
+        let endpoint = "/staging/batch-enrich"
+        let body = BatchEnrichmentRequest(movieIds: movieIds, priority: priority.rawValue)
+
+        print("📦 [API] Batch enriching \(movieIds.count) movies with priority \(priority.rawValue)")
+
+        let response: APIResponse<BatchEnrichmentResult> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Batch enrichment completed: \(response.data.enriched)/\(response.data.total) enriched, \(response.data.failed) failed, \(response.data.skipped) skipped")
+
+        return response.data
+    }
+
     /// Update staged movie fields (manual editing)
     func updateStagedMovie(movieId: String, updates: [String: Any]) async throws -> StagedMovie {
         let endpoint = "/admin/staging/movies/\(movieId)"

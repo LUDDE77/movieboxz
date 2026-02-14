@@ -103,7 +103,7 @@ struct ChannelMoviesView: View {
 
                     Spacer()
 
-                    Button(action: { /* batch enrich */ }) {
+                    Button(action: { Task { await batchEnrich() } }) {
                         Label("Enrich Selected", systemImage: "sparkles")
                     }
                     .buttonStyle(.bordered)
@@ -133,6 +133,12 @@ struct ChannelMoviesView: View {
 
             // Channel-wide Actions
             HStack {
+                Button(action: { Task { await enrichAllUnenriched() } }) {
+                    Label("Enrich All Unenriched", systemImage: "sparkles.rectangle.stack")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isPerformingBatchAction)
+
                 Button(action: { showReimportConfirm = true }) {
                     Label("Re-import Channel", systemImage: "arrow.clockwise.circle")
                 }
@@ -330,6 +336,83 @@ struct ChannelMoviesView: View {
 
             isPerformingBatchAction = false
         }
+    }
+
+    func batchEnrich() async {
+        isPerformingBatchAction = true
+        error = nil
+        successMessage = nil
+
+        do {
+            let result = try await apiService.batchEnrich(
+                movieIds: Array(selectedMovieIds),
+                priority: .full
+            )
+
+            successMessage = "Enriched \(result.enriched) of \(result.total) movies (\(result.failed) failed, \(result.skipped) skipped)"
+
+            // Reload movies to show enrichment data
+            await loadMovies()
+
+            // Clear selection
+            selectedMovieIds.removeAll()
+
+            // Clear success message after 8 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                successMessage = nil
+            }
+        } catch {
+            self.error = "Failed to enrich movies: \(error.localizedDescription)"
+        }
+
+        isPerformingBatchAction = false
+    }
+
+    func enrichAllUnenriched() async {
+        isPerformingBatchAction = true
+        error = nil
+        successMessage = nil
+
+        do {
+            // Get all unenriched staging movies for this channel
+            guard let staging = moviesData?.staging else {
+                self.error = "No staging movies found"
+                isPerformingBatchAction = false
+                return
+            }
+
+            let unenrichedIds = staging.movies
+                .filter { $0.tmdbId == nil && $0.imdbId == nil }
+                .map { $0.id }
+
+            if unenrichedIds.isEmpty {
+                successMessage = "All movies are already enriched!"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    successMessage = nil
+                }
+                isPerformingBatchAction = false
+                return
+            }
+
+            let result = try await apiService.batchEnrich(
+                movieIds: unenrichedIds,
+                priority: .full
+            )
+
+            successMessage = "Enriched \(result.enriched) of \(unenrichedIds.count) unenriched movies (\(result.failed) failed, \(result.skipped) skipped)"
+
+            // Reload movies to show enrichment data
+            await loadMovies()
+
+            // Clear success message after 8 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                successMessage = nil
+            }
+        } catch {
+            self.error = "Failed to enrich movies: \(error.localizedDescription)"
+        }
+
+        isPerformingBatchAction = false
     }
 }
 

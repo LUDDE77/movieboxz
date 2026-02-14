@@ -664,6 +664,59 @@ struct EnrichmentRequest: Codable {
     }
 }
 
+// Batch enrichment request
+struct BatchEnrichmentRequest: Codable {
+    let movieIds: [String]
+    let priority: String
+
+    enum CodingKeys: String, CodingKey {
+        case movieIds
+        case priority
+    }
+}
+
+// Batch enrichment result
+struct BatchEnrichmentResult: Codable {
+    let total: Int
+    let enriched: Int
+    let failed: Int
+    let skipped: Int
+    let details: [BatchEnrichmentDetail]
+
+    enum CodingKeys: String, CodingKey {
+        case total
+        case enriched
+        case failed
+        case skipped
+        case details
+    }
+}
+
+// Batch enrichment detail
+struct BatchEnrichmentDetail: Codable {
+    let movieId: String
+    let title: String?
+    let success: Bool
+    let source: String?
+    let confidence: Int?
+    let fieldsEnriched: Int?
+    let skipped: Bool?
+    let reason: String?
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case movieId
+        case title
+        case success
+        case source
+        case confidence
+        case fieldsEnriched
+        case skipped
+        case reason
+        case error
+    }
+}
+
 // Publish request
 struct PublishRequest: Codable {
     let ids: [String]?
