@@ -712,7 +712,12 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                                 {
                                     title: movieData.title,
                                     actors: movieData.extracted_actor,
-                                    year: movieData.extracted_year
+                                    year: movieData.extracted_year,
+                                    // Pass full context for enhanced enrichment
+                                    youtube_video_title: video.title,
+                                    channel_id: channelId,
+                                    channel_title: channelTitle,
+                                    published_at: video.publishedAt
                                 },
                                 {
                                     priority: 'full',

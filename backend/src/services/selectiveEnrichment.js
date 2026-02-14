@@ -1,5 +1,6 @@
 import { tmdbService } from './tmdbService.js'
 import { omdbService } from './omdbService.js'
+import { enhancedEnrichment } from './enhancedEnrichment.js'
 import { logger } from '../utils/logger.js'
 
 /**
@@ -102,11 +103,32 @@ class SelectiveEnrichment {
     }
 
     /**
-     * Fetch enrichment data from TMDB or OMDB
+     * Fetch enrichment data using enhanced enrichment service
+     * This now uses pattern extraction and actor validation
      * @private
      */
     async _fetchEnrichmentData(movie, preferTmdb = true) {
-        const { title, actors = [], year } = movie
+        const { title, actors = [], year, youtube_video_title, channel_id, channel_title, published_at } = movie
+
+        // If we have full movie context, use enhancedEnrichment for smart matching
+        if (youtube_video_title && channel_id && published_at) {
+            logger.debug('Using enhanced enrichment with full context...')
+
+            const enrichmentData = await enhancedEnrichment.enrichMovie({
+                youtube_video_title,
+                channel_id,
+                channel_title: channel_title || 'Unknown',
+                published_at: published_at || new Date().toISOString()
+            })
+
+            if (enrichmentData) {
+                logger.info(`✅ Enhanced enrichment: "${enrichmentData.title}" (confidence: ${enrichmentData.confidence}, source: ${enrichmentData.source})`)
+                return enrichmentData
+            }
+        }
+
+        // Fallback to basic search if no full context or enhanced failed
+        logger.debug('Falling back to basic TMDB/OMDB search...')
 
         // Try TMDB first (if preferred)
         if (preferTmdb) {
