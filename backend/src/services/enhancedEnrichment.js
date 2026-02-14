@@ -2,25 +2,10 @@ import { tmdbService } from './tmdbService.js'
 import { omdbService } from './omdbService.js'
 import { logger } from '../utils/logger.js'
 import axios from 'axios'
+import channelPatternManager from './channelPatternManager.js'
 
 class EnhancedEnrichment {
     constructor() {
-        // Channel-specific title patterns
-        this.channelPatterns = {
-            'The Midnight Screening': {
-                // Pattern: TITLE FULL MOVIE | ACTORS | GENRE Movies | The Midnight Screening
-                pattern: /^(.+?)\s*FULL MOVIE\s*\|\s*(.+?)\s*\|\s*(?:[\w\s]+Movies?)\s*\|\s*The Midnight Screening$/i,
-                titleGroup: 1,
-                actorGroup: 2
-            },
-            'UC6A_LC-A5NVJ2vw9A0OjCug': {
-                // Pattern: TITLE FULL MOVIE | ACTORS | GENRE Movies | The Midnight Screening
-                pattern: /^(.+?)\s*FULL MOVIE\s*\|\s*(.+?)\s*\|\s*(?:[\w\s]+Movies?)\s*\|\s*The Midnight Screening$/i,
-                titleGroup: 1,
-                actorGroup: 2
-            }
-        }
-
         this.confidenceThresholds = {
             autoAccept: 70,
             manualReview: 50,
@@ -29,36 +14,40 @@ class EnhancedEnrichment {
     }
 
     /**
-     * Extract actor hints from YouTube title
+     * Extract actor hints from YouTube title using ChannelPatternManager
      * @param {string} youtubeTitle - Full YouTube video title
      * @param {string} channelTitle - Channel name
      * @param {string} channelId - Channel ID
-     * @returns {Object} { title, actors: [...], mediaHint }
+     * @returns {Promise<Object>} { title, actors: [...], mediaHint, genre, year }
      */
-    extractActorHints(youtubeTitle, channelTitle, channelId) {
+    async extractActorHints(youtubeTitle, channelTitle, channelId) {
         const result = {
             title: youtubeTitle,
             actors: [],
-            mediaHint: null
+            mediaHint: null,
+            genre: null,
+            year: null
         }
 
-        // Try channel-specific patterns
-        const pattern = this.channelPatterns[channelTitle] || this.channelPatterns[channelId]
+        // Try to get pattern from database
+        const pattern = await channelPatternManager.getPattern(channelId)
 
         if (pattern) {
-            const match = youtubeTitle.match(pattern.pattern)
-            if (match) {
-                result.title = match[pattern.titleGroup].trim()
-                const actorText = match[pattern.actorGroup].trim()
+            // Use ChannelPatternManager to extract metadata
+            const metadata = channelPatternManager.extractMetadata(youtubeTitle, pattern)
 
-                // Split actor names by common separators
-                result.actors = actorText
-                    .split(/[,&]|\s+and\s+/i)
-                    .map(name => name.trim())
-                    .filter(name => name.length > 0)
+            if (metadata) {
+                result.title = metadata.title || youtubeTitle
+                result.actors = metadata.actorsArray || []
+                result.genre = metadata.genre || null
+                result.year = metadata.year || null
 
-                logger.debug(`Extracted title: "${result.title}" with actors: [${result.actors.join(', ')}]`)
+                logger.info(`✓ Pattern extracted: title="${result.title}", actors=[${result.actors.join(', ')}], genre="${result.genre}", year=${result.year}`)
+            } else {
+                logger.debug(`No pattern match for: ${youtubeTitle}`)
             }
+        } else {
+            logger.debug(`No pattern configured for channel: ${channelId}`)
         }
 
         // Detect media type hints
@@ -448,14 +437,14 @@ class EnhancedEnrichment {
      */
     async enrichMovie(movie) {
         try {
-            // Extract actor hints from channel pattern
-            const actorHints = this.extractActorHints(
+            // Extract actor hints from channel pattern (now async)
+            const actorHints = await this.extractActorHints(
                 movie.youtube_video_title,
                 movie.channel_title,
                 movie.channel_id
             )
 
-            logger.info(`Actor hints: title="${actorHints.title}", actors=[${actorHints.actors.join(', ')}], mediaHint=${actorHints.mediaHint}`)
+            logger.info(`Actor hints: title="${actorHints.title}", actors=[${actorHints.actors.join(', ')}], genre="${actorHints.genre}", year=${actorHints.year}, mediaHint=${actorHints.mediaHint}`)
 
             const publishYear = new Date(movie.published_at).getFullYear()
 
