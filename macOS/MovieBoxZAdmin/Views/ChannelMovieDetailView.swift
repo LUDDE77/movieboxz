@@ -232,25 +232,29 @@ struct ChannelMovieDetailView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     // Source and Confidence
                                     HStack(spacing: 16) {
-                                        if let source = movie.enrichmentSource {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("Source")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                Text(source.uppercased())
-                                                    .font(.headline)
-                                                    .foregroundColor(.blue)
-                                            }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Source")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text(movie.enrichmentSource?.uppercased() ?? "Not enriched")
+                                                .font(.headline)
+                                                .foregroundColor(movie.enrichmentSource != nil ? .blue : .secondary)
+                                                .italic(movie.enrichmentSource == nil)
                                         }
 
-                                        if let confidence = movie.enrichmentConfidence {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("Confidence")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Confidence")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            if let confidence = movie.enrichmentConfidence {
                                                 Text(String(format: "%.0f%%", confidence * 100))
                                                     .font(.headline)
                                                     .foregroundColor(confidence > 0.8 ? .green : .orange)
+                                            } else {
+                                                Text("N/A")
+                                                    .font(.headline)
+                                                    .foregroundColor(.secondary)
+                                                    .italic()
                                             }
                                         }
                                     }
@@ -258,11 +262,11 @@ struct ChannelMovieDetailView: View {
                                     Divider()
 
                                     // IDs and Links
-                                    if let tmdbId = movie.tmdbId {
-                                        HStack {
-                                            Text("TMDB ID:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                    HStack {
+                                        Text("TMDB ID:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        if let tmdbId = movie.tmdbId {
                                             Text("\(tmdbId)")
                                                 .font(.caption)
                                                 .fontWeight(.semibold)
@@ -270,14 +274,19 @@ struct ChannelMovieDetailView: View {
                                                 Image(systemName: "link")
                                                     .font(.caption)
                                             }
+                                        } else {
+                                            Text("Not available")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .italic()
                                         }
                                     }
 
-                                    if let imdbId = movie.imdbId {
-                                        HStack {
-                                            Text("IMDB ID:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                    HStack {
+                                        Text("IMDB ID:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        if let imdbId = movie.imdbId {
                                             Text(imdbId)
                                                 .font(.caption)
                                                 .fontWeight(.semibold)
@@ -285,6 +294,11 @@ struct ChannelMovieDetailView: View {
                                                 Image(systemName: "link")
                                                     .font(.caption)
                                             }
+                                        } else {
+                                            Text("Not available")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .italic()
                                         }
                                     }
 
@@ -292,11 +306,11 @@ struct ChannelMovieDetailView: View {
 
                                     // Ratings
                                     HStack(spacing: 20) {
-                                        if let tmdbRating = movie.voteAverage, let voteCount = movie.voteCount {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("TMDB Rating")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("TMDB Rating")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            if let tmdbRating = movie.voteAverage, let voteCount = movie.voteCount {
                                                 HStack(spacing: 4) {
                                                     Image(systemName: "star.fill")
                                                         .foregroundColor(.yellow)
@@ -308,14 +322,19 @@ struct ChannelMovieDetailView: View {
                                                         .font(.caption2)
                                                         .foregroundColor(.secondary)
                                                 }
+                                            } else {
+                                                Text("Not available")
+                                                    .font(.body)
+                                                    .foregroundColor(.secondary)
+                                                    .italic()
                                             }
                                         }
 
-                                        if let imdbRating = movie.imdbRating, let imdbVotes = movie.imdbVotes {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("IMDB Rating")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("IMDB Rating")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            if let imdbRating = movie.imdbRating, let imdbVotes = movie.imdbVotes {
                                                 HStack(spacing: 4) {
                                                     Image(systemName: "star.fill")
                                                         .foregroundColor(.yellow)
@@ -327,80 +346,106 @@ struct ChannelMovieDetailView: View {
                                                         .font(.caption2)
                                                         .foregroundColor(.secondary)
                                                 }
+                                            } else {
+                                                Text("Not available")
+                                                    .font(.body)
+                                                    .foregroundColor(.secondary)
+                                                    .italic()
                                             }
                                         }
                                     }
 
+                                    Divider()
+
                                     // Additional Details
-                                    if let rated = movie.rated {
-                                        HStack {
-                                            Text("Rated:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                    HStack {
+                                        Text("Rated:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        if let rated = movie.rated {
                                             Text(rated)
                                                 .font(.caption)
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 2)
                                                 .background(Color.orange.opacity(0.2))
                                                 .cornerRadius(4)
+                                        } else {
+                                            Text("Not available")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .italic()
                                         }
                                     }
 
-                                    if let director = movie.director {
-                                        HStack {
-                                            Text("Director:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Text(director)
-                                                .font(.caption)
-                                        }
+                                    HStack {
+                                        Text("Director:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text(movie.director ?? "Not available")
+                                            .font(.caption)
+                                            .foregroundColor(movie.director != nil ? .primary : .secondary)
+                                            .italic(movie.director == nil)
                                     }
 
-                                    if let runtime = movie.runtimeMinutes {
-                                        HStack {
-                                            Text("Runtime:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
+                                    HStack {
+                                        Text("Runtime:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        if let runtime = movie.runtimeMinutes {
                                             Text("\(runtime) minutes")
                                                 .font(.caption)
+                                        } else {
+                                            Text("Not available")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .italic()
                                         }
                                     }
 
-                                    if let language = movie.language {
-                                        HStack {
-                                            Text("Language:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Text(language)
-                                                .font(.caption)
-                                        }
+                                    HStack {
+                                        Text("Language:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text(movie.language ?? "Not available")
+                                            .font(.caption)
+                                            .foregroundColor(movie.language != nil ? .primary : .secondary)
+                                            .italic(movie.language == nil)
                                     }
 
-                                    if let country = movie.country {
-                                        HStack {
-                                            Text("Country:")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                            Text(country)
-                                                .font(.caption)
-                                        }
+                                    HStack {
+                                        Text("Country:")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text(movie.country ?? "Not available")
+                                            .font(.caption)
+                                            .foregroundColor(movie.country != nil ? .primary : .secondary)
+                                            .italic(movie.country == nil)
                                     }
                                 }
                             }
 
                             // Plot/Description from enrichment
-                            if let description = movie.description, !description.isEmpty {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Plot")
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Plot")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                                if let description = movie.description, !description.isEmpty {
                                     Text(description)
                                         .font(.body)
                                         .textSelection(.enabled)
                                         .padding(8)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(6)
+                                } else {
+                                    Text("Not available")
+                                        .font(.body)
+                                        .foregroundColor(.secondary)
+                                        .italic()
+                                        .padding(8)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.gray.opacity(0.05))
                                         .cornerRadius(6)
                                 }
                             }
