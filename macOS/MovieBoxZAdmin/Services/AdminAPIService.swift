@@ -54,7 +54,12 @@ class AdminAPIService: ObservableObject {
             print("📥 [API] Response status: \(httpResponse.statusCode)")
 
             if let responseString = String(data: data, encoding: .utf8) {
-                print("📥 [API] Response body: \(responseString.prefix(500))...")
+                // Log full response for channels endpoint to debug pattern loading
+                if endpoint == "/channels" {
+                    print("📥 [API] FULL CHANNELS Response:\n\(responseString)")
+                } else {
+                    print("📥 [API] Response body: \(responseString.prefix(500))...")
+                }
             }
 
             guard (200...299).contains(httpResponse.statusCode) else {
@@ -70,6 +75,12 @@ class AdminAPIService: ObservableObject {
                 let decoder = JSONDecoder()
                 let result = try decoder.decode(APIResponse<T>.self, from: data)
                 print("✅ [API] Successfully decoded response")
+
+                // Extra logging for channels response
+                if endpoint == "/channels" {
+                    print("✅ [API] Decoded channels response successfully")
+                }
+
                 return result
             } catch {
                 print("❌ [API] Decoding error: \(error)")
