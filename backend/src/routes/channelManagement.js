@@ -545,6 +545,12 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
             }
         }
 
+        // Enforce the requested limit after filtering
+        if (limit && filteredVideos.length > limit) {
+            logger.info(`[Import Filter] 🎯 Limiting to ${limit} videos (had ${filteredVideos.length} after filtering)`)
+            filteredVideos = filteredVideos.slice(0, limit)
+        }
+
         // Update videos found
         await supabase
             .from('import_history')
