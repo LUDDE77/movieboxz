@@ -737,12 +737,57 @@ router.delete('/movies/:id', async (req, res, next) => {
     try {
         const { id } = req.params
 
-        const { error } = await supabase
+        logger.info(`🗑️ [Delete Staged Movie] Attempting to delete movie: ${id}`)
+
+        // First, check if the movie exists
+        const { data: existingMovie, error: fetchError } = await supabase
+            .from('staged_movies')
+            .select('id, title, youtube_video_title, approval_status')
+            .eq('id', id)
+            .single()
+
+        if (fetchError) {
+            logger.error(`❌ [Delete Staged Movie] Error fetching movie ${id}:`, {
+                error: fetchError.message,
+                code: fetchError.code,
+                details: fetchError.details,
+                hint: fetchError.hint
+            })
+            throw fetchError
+        }
+
+        if (!existingMovie) {
+            logger.warn(`⚠️ [Delete Staged Movie] Movie not found: ${id}`)
+            return res.status(404).json({
+                success: false,
+                error: 'Movie not found'
+            })
+        }
+
+        logger.info(`📋 [Delete Staged Movie] Found movie:`, {
+            id: existingMovie.id,
+            title: existingMovie.title,
+            youtube_title: existingMovie.youtube_video_title,
+            status: existingMovie.approval_status
+        })
+
+        // Attempt deletion
+        const { error: deleteError } = await supabase
             .from('staged_movies')
             .delete()
             .eq('id', id)
 
-        if (error) throw error
+        if (deleteError) {
+            logger.error(`❌ [Delete Staged Movie] Deletion failed for ${id}:`, {
+                error: deleteError.message,
+                code: deleteError.code,
+                details: deleteError.details,
+                hint: deleteError.hint
+            })
+            throw deleteError
+        }
+
+        logger.info(`✅ [Delete Staged Movie] Successfully deleted: ${existingMovie.title}`)
 
         res.json({
             success: true,
@@ -750,6 +795,10 @@ router.delete('/movies/:id', async (req, res, next) => {
         })
 
     } catch (error) {
+        logger.error(`💥 [Delete Staged Movie] Unexpected error:`, {
+            message: error.message,
+            stack: error.stack
+        })
         next(error)
     }
 })

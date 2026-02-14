@@ -278,25 +278,53 @@ router.delete('/:channelId/movies', async (req, res, next) => {
         const { channelId } = req.params
         const { deleteFrom = 'staging,production' } = req.query
 
+        logger.info(`🗑️ [Bulk Delete] Starting bulk delete for channel: ${channelId}`, {
+            deleteFrom,
+            sources: deleteFrom.split(',').map(s => s.trim())
+        })
+
         const sources = deleteFrom.split(',').map(s => s.trim())
         const results = {}
 
         // Delete from staging
         if (sources.includes('staging')) {
-            const { data: stagedMovies } = await supabase
+            logger.info(`📋 [Bulk Delete] Checking staged movies for channel: ${channelId}`)
+
+            const { data: stagedMovies, error: fetchError } = await supabase
                 .from('staged_movies')
                 .select('id')
                 .eq('channel_id', channelId)
 
+            if (fetchError) {
+                logger.error(`❌ [Bulk Delete] Error fetching staged movies:`, {
+                    error: fetchError.message,
+                    code: fetchError.code,
+                    details: fetchError.details
+                })
+                throw fetchError
+            }
+
             if (stagedMovies && stagedMovies.length > 0) {
-                const { error } = await supabase
+                logger.info(`🗑️ [Bulk Delete] Deleting ${stagedMovies.length} staged movies`)
+
+                const { error: deleteError } = await supabase
                     .from('staged_movies')
                     .delete()
                     .eq('channel_id', channelId)
 
-                if (error) throw error
+                if (deleteError) {
+                    logger.error(`❌ [Bulk Delete] Error deleting staged movies:`, {
+                        error: deleteError.message,
+                        code: deleteError.code,
+                        details: deleteError.details
+                    })
+                    throw deleteError
+                }
+
+                logger.info(`✅ [Bulk Delete] Deleted ${stagedMovies.length} staged movies`)
                 results.deletedFromStaging = stagedMovies.length
             } else {
+                logger.info(`ℹ️ [Bulk Delete] No staged movies found for channel`)
                 results.deletedFromStaging = 0
             }
         }
