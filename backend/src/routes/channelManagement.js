@@ -119,6 +119,11 @@ router.put('/:channelId/settings', async (req, res, next) => {
 router.post('/:channelId/import-all', async (req, res, next) => {
     try {
         const { channelId } = req.params
+
+        logger.info(`🚀 [Bulk Import] ========== IMPORT REQUEST RECEIVED ==========`)
+        logger.info(`🚀 [Bulk Import] Channel ID: ${channelId}`)
+        logger.info(`🚀 [Bulk Import] Raw request body:`, req.body)
+
         const {
             limit = null,
             sortOrder = 'latest',
@@ -126,7 +131,16 @@ router.post('/:channelId/import-all', async (req, res, next) => {
             autoEnrich = false
         } = req.body
 
-        logger.info(`[Bulk Import] Starting import for ${channelId}, limit: ${limit || 'ALL'}, sort: ${sortOrder}`)
+        logger.info(`🚀 [Bulk Import] Parsed parameters:`, {
+            limit,
+            sortOrder,
+            applySettings,
+            autoEnrich,
+            autoEnrichType: typeof autoEnrich,
+            autoEnrichRaw: req.body.autoEnrich
+        })
+
+        logger.info(`[Bulk Import] Starting import for ${channelId}, limit: ${limit || 'ALL'}, sort: ${sortOrder}, autoEnrich: ${autoEnrich}`)
 
         // Get channel info
         const { data: channel } = await supabase
