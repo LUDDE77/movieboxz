@@ -659,7 +659,15 @@ struct ExtractionComparisonRow: View {
             importBatchId: nil,
             publishedMovieId: nil,
             createdAt: "2024-01-01T00:00:00Z",
-            updatedAt: nil
+            updatedAt: nil,
+            patternMatched: true,
+            patternConfidence: 0.95,
+            extractedActor: "Rick Astley",
+            extractedGenre: "Music",
+            extractedYear: 1987,
+            importSortOrder: "latest",
+            importIndex: 0,
+            channelTag: "music"
         )
     )
 }
