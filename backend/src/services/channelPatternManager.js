@@ -99,6 +99,12 @@ class ChannelPatternManager {
                     }
                 }
 
+                // Clean up actors field - if it ends with "Movie(s)", it's a genre not an actor
+                if (metadata.actors && /\b[Mm]ovies?\b/.test(metadata.actors)) {
+                    logger.debug(`Actor field "${metadata.actors}" looks like a genre, clearing it`)
+                    metadata.actors = null
+                }
+
                 // Parse actors array if present
                 if (metadata.actors) {
                     metadata.actorsArray = this.parseActors(metadata.actors)
@@ -162,11 +168,14 @@ class ChannelPatternManager {
         if (fallbackPattern.type === 'first_segment') {
             const divider = fallbackPattern.divider || '|'
             const segments = youtubeTitle.split(divider)
-            const title = segments[0]?.trim()
+            let title = segments[0]?.trim()
 
             if (!title) {
                 return null
             }
+
+            // Remove common suffixes like "Full Movie", "FULL MOVIE", etc.
+            title = title.replace(/\s*[Ff][Uu][Ll][Ll]\s*[Mm][Oo][Vv][Ii][Ee]\s*$/i, '').trim()
 
             return {
                 title,
