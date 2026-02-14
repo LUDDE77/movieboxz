@@ -204,8 +204,7 @@ struct ChannelMovieDetailView: View {
                 }
 
                 // TMDB/IMDB Enrichment Data
-                if movie.hasEnrichment {
-                    GroupBox(label: Label("TMDB/IMDB Enrichment Data", systemImage: "film")) {
+                GroupBox(label: Label("TMDB/IMDB Enrichment Data", systemImage: "film")) {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(alignment: .top, spacing: 16) {
                                 // TMDB Poster
@@ -408,7 +407,6 @@ struct ChannelMovieDetailView: View {
                         }
                         .padding()
                     }
-                }
 
                 // Manual Edit Section
                 GroupBox(label: Label("Edit Movie Information", systemImage: "pencil.circle")) {
