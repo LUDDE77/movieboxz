@@ -6,9 +6,26 @@ class OMDbService {
         this.apiKey = process.env.OMDB_API_KEY
         this.baseUrl = 'http://www.omdbapi.com'
 
+        // Rate limiting: add delay between requests to avoid 429 errors
+        this.lastRequestTime = 0
+        this.minRequestIntervalMs = 250 // 250ms between requests = max 4 requests/second
+
         if (!this.apiKey) {
             logger.warn('OMDb API key not configured. Set OMDB_API_KEY environment variable.')
         }
+    }
+
+    async waitForRateLimit() {
+        const now = Date.now()
+        const timeSinceLastRequest = now - this.lastRequestTime
+
+        if (timeSinceLastRequest < this.minRequestIntervalMs) {
+            const waitTime = this.minRequestIntervalMs - timeSinceLastRequest
+            logger.debug(`OMDb rate limit: waiting ${waitTime}ms`)
+            await new Promise(resolve => setTimeout(resolve, waitTime))
+        }
+
+        this.lastRequestTime = Date.now()
     }
 
     /**
@@ -25,6 +42,8 @@ class OMDbService {
         }
 
         try {
+            await this.waitForRateLimit()
+
             const params = {
                 apikey: this.apiKey,
                 t: title,
@@ -64,6 +83,8 @@ class OMDbService {
         }
 
         try {
+            await this.waitForRateLimit()
+
             const response = await axios.get(this.baseUrl, {
                 params: {
                     apikey: this.apiKey,
