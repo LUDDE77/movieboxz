@@ -215,25 +215,39 @@ struct ChannelMoviesView: View {
                         }
 
                         // Pagination Controls
-                        if let staging = moviesData?.staging, staging.pagination.pages > 1 {
+                        if let staging = moviesData?.staging,
+                           let pagination = moviesData?.pagination,
+                           let totalPages = pagination.pages,
+                           totalPages > 1 {
                             HStack(spacing: 12) {
                                 Button(action: { previousPage() }) {
                                     Label("Previous", systemImage: "chevron.left")
                                 }
                                 .disabled(currentPage == 1)
 
-                                Text("Page \(currentPage) of \(staging.pagination.pages)")
-                                    .font(.headline)
-                                    .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Page \(currentPage) of \(totalPages)")
+                                        .font(.headline)
+                                        .foregroundColor(.secondary)
 
-                                Text("(\(staging.total) total movies)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    HStack(spacing: 4) {
+                                        Text("Showing \(staging.movies.count) movies")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.blue)
+                                        Text("•")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Text("\(staging.total) total")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
 
                                 Button(action: { nextPage() }) {
                                     Label("Next", systemImage: "chevron.right")
                                 }
-                                .disabled(currentPage >= staging.pagination.pages)
+                                .disabled(currentPage >= totalPages)
 
                                 Spacer()
 
@@ -332,8 +346,9 @@ struct ChannelMoviesView: View {
     }
 
     func nextPage() {
-        guard let staging = moviesData?.staging,
-              currentPage < staging.pagination.pages else { return }
+        guard let pagination = moviesData?.pagination,
+              let totalPages = pagination.pages,
+              currentPage < totalPages else { return }
         currentPage += 1
         Task { await loadMovies() }
     }
@@ -557,10 +572,17 @@ struct MovieSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label(title, systemImage: "film")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(color)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(title, systemImage: "film")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(color)
+
+                    Text("Showing \(movies.count) movies on this page")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
+                }
 
                 Spacer()
 
@@ -575,8 +597,9 @@ struct MovieSection: View {
                 .font(.caption)
             }
 
-            ForEach(movies) { movie in
+            ForEach(Array(movies.enumerated()), id: \.element.id) { index, movie in
                 ChannelMovieRow(
+                    rowNumber: index + 1,
                     movie: movie,
                     isSelected: selectedIds.contains(movie.id),
                     onToggleSelection: {
@@ -602,6 +625,7 @@ struct MovieSection: View {
 // MARK: - Channel Movie Row
 
 struct ChannelMovieRow: View {
+    let rowNumber: Int
     let movie: StagedMovie
     let isSelected: Bool
     let onToggleSelection: () -> Void
@@ -620,6 +644,7 @@ struct ChannelMovieRow: View {
 
     private var rowContent: some View {
         HStack(spacing: 12) {
+            rowNumberView
             checkboxView
             postersView
             movieInfoView
@@ -634,6 +659,14 @@ struct ChannelMovieRow: View {
     }
 
     // MARK: - Subviews
+
+    private var rowNumberView: some View {
+        Text("\(rowNumber)")
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundColor(.secondary)
+            .frame(width: 30, alignment: .trailing)
+    }
 
     private var checkboxView: some View {
         Button(action: onToggleSelection) {
