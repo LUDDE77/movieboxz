@@ -200,7 +200,8 @@ struct ChannelMoviesView: View {
                                 title: "Staging (\(staging.total))",
                                 movies: staging.movies,
                                 selectedIds: $selectedMovieIds,
-                                color: .orange
+                                color: .orange,
+                                onUpdate: loadMovies
                             )
                         }
 
@@ -210,7 +211,8 @@ struct ChannelMoviesView: View {
                                 title: "Production (\(production.total))",
                                 movies: production.movies,
                                 selectedIds: $selectedMovieIds,
-                                color: .green
+                                color: .green,
+                                onUpdate: loadMovies
                             )
                         }
 
@@ -574,6 +576,7 @@ struct MovieSection: View {
     let movies: [StagedMovie]
     @Binding var selectedIds: Set<String>
     let color: Color
+    let onUpdate: () async -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -617,7 +620,7 @@ struct MovieSection: View {
                     },
                     onUpdate: {
                         Task {
-                            await self.loadMovies()
+                            await onUpdate()
                         }
                     }
                 )
