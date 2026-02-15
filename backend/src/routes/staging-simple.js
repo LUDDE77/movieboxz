@@ -3,6 +3,7 @@ import { supabase } from '../config/database.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { movieCurator } from '../services/movieCurator.js'
 import { youtubeService } from '../services/youtubeService.js'
+import omdbService from '../services/omdbService.js'
 import { logger } from '../utils/logger.js'
 
 const router = express.Router()
@@ -304,6 +305,83 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/movies/:id/enrich-manual-imdb
+// Manually enrich from user-provided IMDB ID - system will trust this choice
+router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { imdbId, verifiedBy = 'admin' } = req.body
+
+        if (!imdbId || !imdbId.match(/^tt\d+$/)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid IMDB ID format. Must be like tt1234567'
+            })
+        }
+
+        logger.info(`[Staging] Manual IMDB enrichment: ${id} with IMDB ${imdbId}`)
+
+        // Fetch movie data from OMDB using IMDB ID
+        const omdbData = await omdbService.getByImdbId(imdbId)
+
+        if (!omdbData) {
+            return res.status(404).json({
+                success: false,
+                error: `No movie found with IMDB ID: ${imdbId}`
+            })
+        }
+
+        // Update staged movie with OMDB data and mark as manually verified
+        const updateData = {
+            // Core metadata
+            title: omdbData.title || null,
+            description: omdbData.plot || null,
+            release_year: omdbData.year || null,
+            duration_minutes: omdbData.runtime || null,
+            rating: omdbData.imdbRating || null,
+            poster_url: omdbData.poster || null,
+
+            // IMDB data
+            imdb_id: omdbData.imdbID,
+            manual_imdb_id: imdbId,
+
+            // Manual verification tracking
+            manually_verified: true,
+            verified_by: verifiedBy,
+            verified_at: new Date().toISOString(),
+
+            // Enrichment metadata
+            enrichment_source: 'manual_imdb',
+            enrichment_confidence: 1.0,
+            enriched_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        }
+
+        const { data: updated, error: updateError } = await supabase
+            .from('staged_movies')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (updateError) {
+            throw updateError
+        }
+
+        logger.info(`✅ [Staging] Movie manually verified: ${updated.title} (${imdbId})`)
+
+        res.json({
+            success: true,
+            data: updated,
+            message: `Movie enriched from IMDB ${imdbId} and marked as verified`
+        })
+
+    } catch (error) {
+        logger.error('[Staging] Manual IMDB enrichment error:', error)
+        next(error)
+    }
+})
+
 // PATCH /api/admin/staging/movies/:id - Manual edit
 router.patch('/movies/:id', async (req, res, next) => {
     try {
@@ -569,6 +647,14 @@ async function processEnrichmentBatch(batchId, movieIds, priority) {
             if (fetchError || !movie) {
                 logger.error(`❌ [Batch Enrich ${batchId}] Movie ${movieId} not found`)
                 progress.failed++
+                progress.currentIndex = i + 1
+                continue
+            }
+
+            // Skip manually verified movies - they've been vetted by a human
+            if (movie.manually_verified) {
+                logger.info(`⏭️  [Batch Enrich ${batchId}] (${i + 1}/${movieIds.length}) Skipping "${movie.title}" - manually verified`)
+                progress.skipped++
                 progress.currentIndex = i + 1
                 continue
             }

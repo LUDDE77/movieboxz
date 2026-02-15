@@ -10,8 +10,10 @@ struct ChannelMovieDetailView: View {
     @State private var editedCategory: String
     @State private var editedReleaseDate: String
     @State private var editedDescription: String
+    @State private var manualImdbId: String
 
     @State private var isSaving = false
+    @State private var isEnrichingFromIMDB = false
     @State private var error: String?
     @State private var successMessage: String?
 
@@ -22,6 +24,7 @@ struct ChannelMovieDetailView: View {
         _editedCategory = State(initialValue: movie.category ?? "")
         _editedReleaseDate = State(initialValue: movie.releaseDate ?? "")
         _editedDescription = State(initialValue: movie.description ?? "")
+        _manualImdbId = State(initialValue: movie.manualImdbId ?? movie.imdbId ?? "")
     }
 
     var body: some View {
@@ -282,23 +285,58 @@ struct ChannelMovieDetailView: View {
                                         }
                                     }
 
-                                    HStack {
-                                        Text("IMDB ID:")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        if let imdbId = movie.imdbId {
-                                            Text(imdbId)
-                                                .font(.caption)
-                                                .fontWeight(.semibold)
-                                            Link(destination: URL(string: "https://www.imdb.com/title/\(imdbId)")!) {
-                                                Image(systemName: "link")
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        // Manual IMDB Override
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("IMDB ID (editable):")
                                                     .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                                TextField("tt1234567", text: $manualImdbId)
+                                                    .textFieldStyle(.roundedBorder)
+                                                    .font(.caption)
+                                                    .frame(width: 120)
                                             }
-                                        } else {
-                                            Text("Not available")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                                .italic()
+
+                                            if !manualImdbId.isEmpty {
+                                                Link(destination: URL(string: "https://www.imdb.com/title/\(manualImdbId)")!) {
+                                                    Image(systemName: "link")
+                                                        .font(.caption)
+                                                }
+                                            }
+
+                                            Spacer()
+
+                                            // Re-enrich button
+                                            Button(action: enrichFromManualIMDB) {
+                                                HStack {
+                                                    if isEnrichingFromIMDB {
+                                                        ProgressView()
+                                                            .scaleEffect(0.8)
+                                                    } else {
+                                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                                    }
+                                                    Text("Re-enrich from IMDB")
+                                                }
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .disabled(manualImdbId.isEmpty || !manualImdbId.hasPrefix("tt") || isEnrichingFromIMDB)
+                                        }
+
+                                        // Show verification status
+                                        if movie.manuallyVerified == true {
+                                            HStack {
+                                                Image(systemName: "checkmark.seal.fill")
+                                                    .foregroundColor(.green)
+                                                Text("Manually verified")
+                                                    .font(.caption)
+                                                    .foregroundColor(.green)
+                                                if let verifiedBy = movie.verifiedBy {
+                                                    Text("by \(verifiedBy)")
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
                                         }
                                     }
 
@@ -603,6 +641,46 @@ struct ChannelMovieDetailView: View {
             }
 
             isSaving = false
+        }
+    }
+
+    func enrichFromManualIMDB() {
+        Task {
+            isEnrichingFromIMDB = true
+            error = nil
+            successMessage = nil
+
+            do {
+                print("🎯 Enriching movie \(movie.id) from manual IMDB ID: \(manualImdbId)")
+
+                // Call API to enrich from manual IMDB ID
+                let updatedMovie = try await apiService.enrichFromManualIMDB(
+                    movieId: movie.id,
+                    imdbId: manualImdbId
+                )
+
+                successMessage = "✅ Movie enriched from IMDB \(manualImdbId) and marked as verified!"
+
+                print("✅ Manual enrichment successful: \(updatedMovie.title)")
+
+                // Update local fields with enriched data
+                editedTitle = updatedMovie.title
+                editedActors = updatedMovie.actors ?? ""
+                editedCategory = updatedMovie.category ?? ""
+                editedReleaseDate = updatedMovie.releaseDate ?? ""
+                editedDescription = updatedMovie.description ?? ""
+
+                // Clear success message after 5 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    successMessage = nil
+                }
+
+            } catch {
+                self.error = "Failed to enrich from IMDB: \(error.localizedDescription)"
+                print("❌ Manual enrichment error: \(error)")
+            }
+
+            isEnrichingFromIMDB = false
         }
     }
 }

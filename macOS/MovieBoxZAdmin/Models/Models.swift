@@ -388,6 +388,12 @@ struct StagedMovie: Codable, Identifiable, Hashable {
     let enrichmentSource: String?
     let enrichmentConfidence: Double?
 
+    // Manual IMDB override fields
+    let manualImdbId: String?
+    let manuallyVerified: Bool?
+    let verifiedBy: String?
+    let verifiedAt: String?
+
     // Staging-specific fields
     let enrichmentPreview: [String: AnyCodable]?
     let manualChanges: [String: AnyCodable]?
@@ -444,6 +450,10 @@ struct StagedMovie: Codable, Identifiable, Hashable {
         case category
         case enrichmentSource = "enrichment_source"
         case enrichmentConfidence = "enrichment_confidence"
+        case manualImdbId = "manual_imdb_id"
+        case manuallyVerified = "manually_verified"
+        case verifiedBy = "verified_by"
+        case verifiedAt = "verified_at"
         case enrichmentPreview = "enrichment_preview"
         case manualChanges = "manual_changes"
         case approvalStatus = "approval_status"

@@ -324,6 +324,25 @@ class AdminAPIService: ObservableObject {
         return response.data
     }
 
+    /// Manually enrich from user-provided IMDB ID - system will trust this choice
+    func enrichFromManualIMDB(movieId: String, imdbId: String, verifiedBy: String = "admin") async throws -> StagedMovie {
+        let endpoint = "/staging/movies/\(movieId)/enrich-manual-imdb"
+
+        struct ManualIMDBRequest: Codable {
+            let imdbId: String
+            let verifiedBy: String
+        }
+
+        let body = ManualIMDBRequest(imdbId: imdbId, verifiedBy: verifiedBy)
+
+        print("🎯 [API] Manual IMDB enrichment for movie \(movieId) with IMDB \(imdbId)")
+
+        let response: APIResponse<StagedMovie> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Manual IMDB enrichment successful - movie verified")
+
+        return response.data
+    }
+
     /// Start batch enrichment (async) - returns immediately with batch ID
     func batchEnrich(movieIds: [String], priority: EnrichmentPriority = .full) async throws -> BatchEnrichmentStartResponse {
         let endpoint = "/staging/batch-enrich"
