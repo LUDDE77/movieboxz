@@ -297,6 +297,17 @@ struct ChannelMovieDetailView: View {
                                                     .textFieldStyle(.roundedBorder)
                                                     .font(.caption)
                                                     .frame(width: 120)
+                                                    .onChange(of: manualImdbId) { newValue in
+                                                        // Auto-enrich when user enters valid IMDB ID
+                                                        if newValue.count >= 9 && newValue.hasPrefix("tt") && newValue.dropFirst(2).allSatisfy({ $0.isNumber }) {
+                                                            // Debounce: wait 1 second after user stops typing
+                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                                                if manualImdbId == newValue && !isEnrichingFromIMDB {
+                                                                    enrichFromManualIMDB()
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                             }
 
                                             if !manualImdbId.isEmpty {
@@ -325,20 +336,20 @@ struct ChannelMovieDetailView: View {
                                             .disabled(isClearingEnrichment || !movie.hasEnrichment)
                                             .help("Remove incorrect enrichment data")
 
-                                            // Re-enrich button
-                                            Button(action: enrichFromManualIMDB) {
+                                            // Status indicator
+                                            if isEnrichingFromIMDB {
                                                 HStack {
-                                                    if isEnrichingFromIMDB {
-                                                        ProgressView()
-                                                            .scaleEffect(0.8)
-                                                    } else {
-                                                        Image(systemName: "arrow.triangle.2.circlepath")
-                                                    }
-                                                    Text("Re-enrich from IMDB")
+                                                    ProgressView()
+                                                        .scaleEffect(0.8)
+                                                    Text("Enriching...")
+                                                        .font(.caption)
+                                                        .foregroundColor(.blue)
                                                 }
+                                            } else if manualImdbId.count >= 9 && manualImdbId.hasPrefix("tt") {
+                                                Text("Auto-enriches on save")
+                                                    .font(.caption)
+                                                    .foregroundColor(.green)
                                             }
-                                            .buttonStyle(.borderedProminent)
-                                            .disabled(manualImdbId.isEmpty || !manualImdbId.hasPrefix("tt") || isEnrichingFromIMDB)
                                         }
 
                                         // Show verification status

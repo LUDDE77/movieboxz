@@ -214,12 +214,12 @@ struct ChannelMoviesView: View {
                             )
                         }
 
-                        // Pagination Controls
+                        // Pagination Controls - always show to allow changing items per page
                         if let staging = moviesData?.staging,
-                           let pagination = moviesData?.pagination,
-                           let totalPages = pagination.pages,
-                           totalPages > 1 {
+                           let pagination = moviesData?.pagination {
                             HStack(spacing: 12) {
+                                let totalPages = pagination.pages ?? 1
+
                                 Button(action: { previousPage() }) {
                                     Label("Previous", systemImage: "chevron.left")
                                 }
@@ -247,7 +247,7 @@ struct ChannelMoviesView: View {
                                 Button(action: { nextPage() }) {
                                     Label("Next", systemImage: "chevron.right")
                                 }
-                                .disabled(currentPage >= totalPages)
+                                .disabled(currentPage >= totalPages || staging.movies.count < itemsPerPage)
 
                                 Spacer()
 
@@ -346,9 +346,15 @@ struct ChannelMoviesView: View {
     }
 
     func nextPage() {
-        guard let pagination = moviesData?.pagination,
-              let totalPages = pagination.pages,
-              currentPage < totalPages else { return }
+        guard let pagination = moviesData?.pagination else { return }
+
+        // Calculate total pages if not provided
+        let totalPages = pagination.pages ?? {
+            guard let total = pagination.total else { return 1 }
+            return (total + itemsPerPage - 1) / itemsPerPage
+        }()
+
+        guard currentPage < totalPages else { return }
         currentPage += 1
         Task { await loadMovies() }
     }

@@ -331,19 +331,35 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             })
         }
 
+        // Extract year from release_date (YYYY-MM-DD -> YYYY)
+        let releaseYear = null
+        if (omdbData.release_date) {
+            releaseYear = parseInt(omdbData.release_date.split('-')[0])
+        }
+
         // Update staged movie with OMDB data and mark as manually verified
         const updateData = {
             // Core metadata
             title: omdbData.title || null,
-            description: omdbData.plot || null,
-            release_year: omdbData.year || null,
-            duration_minutes: omdbData.runtime || null,
-            rating: omdbData.imdbRating || null,
-            poster_url: omdbData.poster || null,
+            description: omdbData.description || null,
+            release_date: omdbData.release_date || null,
+            runtime_minutes: omdbData.runtime_minutes || null,
+            poster_path: omdbData.poster_path || null,
 
             // IMDB data
-            imdb_id: omdbData.imdbID,
+            imdb_id: omdbData.imdb_id,
+            imdb_rating: omdbData.imdb_rating || null,
+            imdb_votes: omdbData.imdb_votes || null,
             manual_imdb_id: imdbId,
+
+            // Additional metadata
+            rated: omdbData.rated || null,
+            director: omdbData.director || null,
+            actors: omdbData.actors || null,
+            language: omdbData.language || null,
+            country: omdbData.country || null,
+            category: omdbData.genre || null,
+            is_tv_show: omdbData.is_tv_show || false,
 
             // Manual verification tracking
             manually_verified: true,
