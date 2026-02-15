@@ -614,6 +614,11 @@ struct MovieSection: View {
                         } else {
                             selectedIds.insert(movie.id)
                         }
+                    },
+                    onUpdate: {
+                        Task {
+                            await loadMovies()
+                        }
                     }
                 )
             }
@@ -635,6 +640,7 @@ struct ChannelMovieRow: View {
     let movie: StagedMovie
     let isSelected: Bool
     let onToggleSelection: () -> Void
+    let onUpdate: () -> Void
     @State private var showDetail = false
 
     var body: some View {
@@ -644,7 +650,7 @@ struct ChannelMovieRow: View {
             .cornerRadius(8)
             .overlay(borderOverlay)
             .sheet(isPresented: $showDetail) {
-                ChannelMovieDetailView(movie: movie)
+                ChannelMovieDetailView(movie: movie, onUpdate: onUpdate)
             }
     }
 

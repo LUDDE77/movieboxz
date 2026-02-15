@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChannelMovieDetailView: View {
     let movie: StagedMovie
+    let onUpdate: (() -> Void)?
     @StateObject private var apiService = AdminAPIService()
     @Environment(\.dismiss) private var dismiss
 
@@ -17,9 +18,11 @@ struct ChannelMovieDetailView: View {
     @State private var isClearingEnrichment = false
     @State private var error: String?
     @State private var successMessage: String?
+    @State private var changesSaved = false
 
-    init(movie: StagedMovie) {
+    init(movie: StagedMovie, onUpdate: (() -> Void)? = nil) {
         self.movie = movie
+        self.onUpdate = onUpdate
         _editedTitle = State(initialValue: movie.title)
         _editedActors = State(initialValue: movie.actors ?? "")
         _editedCategory = State(initialValue: movie.category ?? "")
@@ -287,28 +290,43 @@ struct ChannelMovieDetailView: View {
                                     }
 
                                     VStack(alignment: .leading, spacing: 8) {
-                                        // Manual IMDB Override
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text("IMDB ID (editable):")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                                TextField("tt1234567", text: $manualImdbId)
-                                                    .textFieldStyle(.roundedBorder)
-                                                    .font(.caption)
-                                                    .frame(width: 120)
-                                                    .onChange(of: manualImdbId) { newValue in
-                                                        // Auto-enrich when user enters valid IMDB ID
-                                                        if newValue.count >= 9 && newValue.hasPrefix("tt") && newValue.dropFirst(2).allSatisfy({ $0.isNumber }) {
-                                                            // Debounce: wait 1 second after user stops typing
-                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                                                if manualImdbId == newValue && !isEnrichingFromIMDB {
-                                                                    enrichFromManualIMDB()
+                                        // Manual IMDB Override - Always available
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text("Manual IMDB Override:")
+                                                .font(.subheadline)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(.primary)
+
+                                            Text("Enter any IMDB ID to manually enrich this movie (works even if not yet enriched)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .italic()
+
+                                            HStack {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text("IMDB ID:")
+                                                        .font(.caption)
+                                                        .fontWeight(.medium)
+                                                        .foregroundColor(.secondary)
+                                                    TextField("Enter IMDB ID (e.g., tt1234567)", text: $manualImdbId)
+                                                        .textFieldStyle(.roundedBorder)
+                                                        .font(.body)
+                                                        .frame(width: 200)
+                                                        .onChange(of: manualImdbId) { newValue in
+                                                            print("🎯 IMDB ID changed to: \(newValue)")
+                                                            // Auto-enrich when user enters valid IMDB ID
+                                                            if newValue.count >= 9 && newValue.hasPrefix("tt") && newValue.dropFirst(2).allSatisfy({ $0.isNumber }) {
+                                                                print("✅ Valid IMDB ID detected, will enrich in 1 second...")
+                                                                // Debounce: wait 1 second after user stops typing
+                                                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                                                    if manualImdbId == newValue && !isEnrichingFromIMDB {
+                                                                        print("🚀 Triggering manual enrichment...")
+                                                                        enrichFromManualIMDB()
+                                                                    }
                                                                 }
                                                             }
                                                         }
-                                                    }
-                                            }
+                                                }
 
                                             if !manualImdbId.isEmpty {
                                                 Link(destination: URL(string: "https://www.imdb.com/title/\(manualImdbId)")!) {
@@ -350,6 +368,7 @@ struct ChannelMovieDetailView: View {
                                                     .font(.caption)
                                                     .foregroundColor(.green)
                                             }
+                                        }
                                         }
 
                                         // Show verification status
@@ -659,6 +678,10 @@ struct ChannelMovieDetailView: View {
                 } else {
                     _ = try await apiService.updateStagedMovie(movieId: movie.id, updates: updates)
                     successMessage = "Changes saved successfully (\(updates.count) fields updated)"
+                    changesSaved = true
+
+                    // Notify parent to refresh
+                    onUpdate?()
                 }
 
                 // Clear success message after 3 seconds
@@ -699,6 +722,9 @@ struct ChannelMovieDetailView: View {
                 editedReleaseDate = updatedMovie.releaseDate ?? ""
                 editedDescription = updatedMovie.description ?? ""
 
+                // Notify parent to refresh
+                onUpdate?()
+
                 // Clear success message after 5 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                     successMessage = nil
@@ -737,6 +763,9 @@ struct ChannelMovieDetailView: View {
                 editedActors = updatedMovie.actors ?? ""
                 editedCategory = updatedMovie.category ?? ""
                 editedReleaseDate = updatedMovie.releaseDate ?? ""
+
+                // Notify parent to refresh
+                onUpdate?()
 
                 // Clear success message after 5 seconds
                 DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
