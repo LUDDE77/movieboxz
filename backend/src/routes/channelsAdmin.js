@@ -93,15 +93,29 @@ router.post('/', async (req, res, next) => {
             })
         }
 
-        // Fetch channel info from YouTube
+        // Fetch channel info from YouTube (resolves handles to channel IDs)
         logger.info(`[Channels Admin] Fetching info for channel: ${channelId}`)
         const channelInfo = await youtubeService.getChannelInfo(channelId)
 
-        // Create channel record
+        // Check if channel already exists using resolved ID
+        const { data: existingResolved } = await supabase
+            .from('channels')
+            .select('id')
+            .eq('id', channelInfo.id)
+            .single()
+
+        if (existingResolved) {
+            return res.status(409).json({
+                success: false,
+                error: 'Channel already exists'
+            })
+        }
+
+        // Create channel record using resolved channel ID
         const { data: newChannel, error } = await supabase
             .from('channels')
             .insert({
-                id: channelId,
+                id: channelInfo.id,
                 title: channelInfo.title,
                 description: channelInfo.description,
                 thumbnail_url: channelInfo.thumbnails?.high?.url || channelInfo.thumbnails?.default?.url,
@@ -287,9 +301,10 @@ router.post('/:id/test-pattern', async (req, res, next) => {
 })
 
 // DELETE /api/admin/channels/:id - Delete a channel
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id(*)', async (req, res, next) => {
     try {
-        const { id } = req.params
+        // Decode the ID to handle @ symbols and other special characters
+        const id = decodeURIComponent(req.params.id)
 
         // Check if channel has movies in production
         const { count: prodCount } = await supabase
