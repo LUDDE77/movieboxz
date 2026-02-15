@@ -301,10 +301,13 @@ router.post('/:id/test-pattern', async (req, res, next) => {
 })
 
 // DELETE /api/admin/channels/:id - Delete a channel
-router.delete('/:id(*)', async (req, res, next) => {
+// Must be defined last to avoid matching other routes
+router.delete('/:id', async (req, res, next) => {
     try {
         // Decode the ID to handle @ symbols and other special characters
         const id = decodeURIComponent(req.params.id)
+
+        logger.info(`[Channels Admin] Delete request for channel: ${id}`)
 
         // Check if channel has movies in production
         const { count: prodCount } = await supabase
