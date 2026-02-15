@@ -322,14 +322,27 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         logger.info(`[Staging] Manual IMDB enrichment: ${id} with IMDB ${imdbId}`)
 
         // Fetch movie data from OMDB using IMDB ID
-        const omdbData = await omdbService.getByImdbId(imdbId)
+        let omdbData
+        try {
+            omdbData = await omdbService.getByImdbId(imdbId)
+        } catch (error) {
+            logger.error(`[Staging] OMDB API error:`, error)
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to fetch movie data from OMDB',
+                details: error.message
+            })
+        }
 
         if (!omdbData) {
+            logger.warn(`[Staging] No OMDB data found for IMDB ID: ${imdbId}`)
             return res.status(404).json({
                 success: false,
                 error: `No movie found with IMDB ID: ${imdbId}`
             })
         }
+
+        logger.info(`[Staging] OMDB data retrieved:`, JSON.stringify(omdbData, null, 2))
 
         // Extract year from release_date (YYYY-MM-DD -> YYYY)
         let releaseYear = null
@@ -373,6 +386,8 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             updated_at: new Date().toISOString()
         }
 
+        logger.info(`[Staging] Updating staged movie with data:`, JSON.stringify(updateData, null, 2))
+
         const { data: updated, error: updateError } = await supabase
             .from('staged_movies')
             .update(updateData)
@@ -381,7 +396,12 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             .single()
 
         if (updateError) {
+            logger.error(`[Staging] Database update error:`, updateError)
             throw updateError
+        }
+
+        if (!updated) {
+            throw new Error(`Movie with ID ${id} not found`)
         }
 
         logger.info(`✅ [Staging] Movie manually verified: ${updated.title} (${imdbId})`)
