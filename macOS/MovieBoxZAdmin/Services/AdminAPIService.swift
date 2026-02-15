@@ -343,6 +343,18 @@ class AdminAPIService: ObservableObject {
         return response.data
     }
 
+    /// Clear all enrichment data - reset movie to unenriched state
+    func clearEnrichment(movieId: String) async throws -> StagedMovie {
+        let endpoint = "/staging/movies/\(movieId)/clear-enrichment"
+
+        print("🗑️ [API] Clearing enrichment for movie \(movieId)")
+
+        let response: APIResponse<StagedMovie> = try await request(endpoint: endpoint, method: "POST")
+        print("✅ [API] Enrichment cleared successfully")
+
+        return response.data
+    }
+
     /// Start batch enrichment (async) - returns immediately with batch ID
     func batchEnrich(movieIds: [String], priority: EnrichmentPriority = .full) async throws -> BatchEnrichmentStartResponse {
         let endpoint = "/staging/batch-enrich"

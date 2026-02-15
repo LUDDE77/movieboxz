@@ -14,6 +14,7 @@ struct ChannelMovieDetailView: View {
 
     @State private var isSaving = false
     @State private var isEnrichingFromIMDB = false
+    @State private var isClearingEnrichment = false
     @State private var error: String?
     @State private var successMessage: String?
 
@@ -306,6 +307,23 @@ struct ChannelMovieDetailView: View {
                                             }
 
                                             Spacer()
+
+                                            // Clear enrichment button
+                                            Button(action: clearEnrichment) {
+                                                HStack {
+                                                    if isClearingEnrichment {
+                                                        ProgressView()
+                                                            .scaleEffect(0.8)
+                                                    } else {
+                                                        Image(systemName: "trash")
+                                                    }
+                                                    Text("Clear")
+                                                }
+                                            }
+                                            .buttonStyle(.bordered)
+                                            .foregroundColor(.red)
+                                            .disabled(isClearingEnrichment || !movie.hasEnrichment)
+                                            .help("Remove incorrect enrichment data")
 
                                             // Re-enrich button
                                             Button(action: enrichFromManualIMDB) {
@@ -681,6 +699,45 @@ struct ChannelMovieDetailView: View {
             }
 
             isEnrichingFromIMDB = false
+        }
+    }
+
+    func clearEnrichment() {
+        Task {
+            isClearingEnrichment = true
+            error = nil
+            successMessage = nil
+
+            do {
+                print("🗑️ Clearing enrichment for movie \(movie.id)")
+
+                // Call API to clear enrichment
+                let updatedMovie = try await apiService.clearEnrichment(movieId: movie.id)
+
+                successMessage = "✅ Enrichment cleared - movie reset to unenriched state"
+
+                print("✅ Clear enrichment successful")
+
+                // Clear local IMDB field
+                manualImdbId = ""
+
+                // Reset edited fields to show cleared state
+                editedDescription = ""
+                editedActors = updatedMovie.actors ?? ""
+                editedCategory = updatedMovie.category ?? ""
+                editedReleaseDate = updatedMovie.releaseDate ?? ""
+
+                // Clear success message after 5 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    successMessage = nil
+                }
+
+            } catch {
+                self.error = "Failed to clear enrichment: \(error.localizedDescription)"
+                print("❌ Clear enrichment error: \(error)")
+            }
+
+            isClearingEnrichment = false
         }
     }
 }

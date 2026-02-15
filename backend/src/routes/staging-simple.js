@@ -382,6 +382,81 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/movies/:id/clear-enrichment
+// Clear all enrichment data (reset to unenriched state)
+router.post('/movies/:id/clear-enrichment', async (req, res, next) => {
+    try {
+        const { id } = req.params
+
+        logger.info(`[Staging] Clearing enrichment for movie: ${id}`)
+
+        // Clear all enrichment fields but keep YouTube data
+        const updateData = {
+            // Clear TMDB/IMDB IDs
+            tmdb_id: null,
+            imdb_id: null,
+            manual_imdb_id: null,
+
+            // Clear enriched metadata (keep title as it might be from pattern extraction)
+            description: null,
+            release_date: null,
+            runtime_minutes: null,
+            poster_path: null,
+            backdrop_path: null,
+            vote_average: null,
+            vote_count: null,
+            popularity: null,
+            imdb_rating: null,
+            imdb_votes: null,
+            rated: null,
+            director: null,
+            actors: null,
+            language: null,
+            country: null,
+            is_tv_show: null,
+            category: null,
+
+            // Clear enrichment metadata
+            enrichment_source: null,
+            enrichment_confidence: null,
+            enriched_at: null,
+
+            // Clear manual verification
+            manually_verified: false,
+            verified_by: null,
+            verified_at: null,
+
+            // Clear preview
+            enrichment_preview: null,
+
+            updated_at: new Date().toISOString()
+        }
+
+        const { data: updated, error: updateError } = await supabase
+            .from('staged_movies')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (updateError) {
+            throw updateError
+        }
+
+        logger.info(`✅ [Staging] Enrichment cleared for: ${updated.title}`)
+
+        res.json({
+            success: true,
+            data: updated,
+            message: 'Enrichment data cleared - movie reset to unenriched state'
+        })
+
+    } catch (error) {
+        logger.error('[Staging] Clear enrichment error:', error)
+        next(error)
+    }
+})
+
 // PATCH /api/admin/staging/movies/:id - Manual edit
 router.patch('/movies/:id', async (req, res, next) => {
     try {
