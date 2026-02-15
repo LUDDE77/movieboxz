@@ -308,25 +308,38 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
 // POST /api/admin/staging/movies/:id/enrich-manual-imdb
 // Manually enrich from user-provided IMDB ID - system will trust this choice
 router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
+    const startTime = Date.now()
+    logger.info(`\n${'='.repeat(80)}`)
+    logger.info(`[Staging] 🎬 MANUAL IMDB ENRICHMENT REQUEST`)
+    logger.info(`[Staging] Movie ID: ${req.params.id}`)
+    logger.info(`[Staging] Request body:`, JSON.stringify(req.body, null, 2))
+    logger.info(`${'='.repeat(80)}\n`)
+
     try {
         const { id } = req.params
         const { imdbId, verifiedBy = 'admin' } = req.body
 
+        logger.info(`[Staging] Step 1: Validate IMDB ID format`)
         if (!imdbId || !imdbId.match(/^tt\d+$/)) {
+            logger.error(`[Staging] ❌ Invalid IMDB ID format: ${imdbId}`)
             return res.status(400).json({
                 success: false,
                 error: 'Invalid IMDB ID format. Must be like tt1234567'
             })
         }
+        logger.info(`[Staging] ✅ IMDB ID format valid: ${imdbId}`)
 
-        logger.info(`[Staging] Manual IMDB enrichment: ${id} with IMDB ${imdbId}`)
+        logger.info(`[Staging] Step 2: Fetch data from OMDB API`)
 
         // Fetch movie data from OMDB using IMDB ID
         let omdbData
         try {
+            logger.info(`[Staging]   → Calling omdbService.getByImdbId(${imdbId})`)
             omdbData = await omdbService.getByImdbId(imdbId)
+            logger.info(`[Staging]   → OMDB API call completed`)
         } catch (error) {
-            logger.error(`[Staging] OMDB API error:`, error)
+            logger.error(`[Staging] ❌ OMDB API error:`, error)
+            logger.error(`[Staging]   Error stack:`, error.stack)
             return res.status(500).json({
                 success: false,
                 error: 'Failed to fetch movie data from OMDB',
@@ -335,24 +348,30 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         }
 
         if (!omdbData) {
-            logger.warn(`[Staging] No OMDB data found for IMDB ID: ${imdbId}`)
+            logger.warn(`[Staging] ⚠️  No OMDB data found for IMDB ID: ${imdbId}`)
             return res.status(404).json({
                 success: false,
                 error: `No movie found with IMDB ID: ${imdbId}`
             })
         }
 
-        logger.info(`[Staging] OMDB data retrieved:`, JSON.stringify(omdbData, null, 2))
+        logger.info(`[Staging] ✅ OMDB data retrieved successfully`)
+        logger.info(`[Staging]   Title: ${omdbData.title}`)
+        logger.info(`[Staging]   IMDB ID: ${omdbData.imdb_id}`)
+        logger.info(`[Staging]   Full OMDB data:`, JSON.stringify(omdbData, null, 2))
 
-        // Validate that we have required data
+        logger.info(`[Staging] Step 3: Validate OMDB data`)
         if (!omdbData.title) {
-            logger.error(`[Staging] OMDB data missing required title field`)
+            logger.error(`[Staging] ❌ OMDB data missing required title field`)
             return res.status(500).json({
                 success: false,
                 error: 'OMDB data incomplete - missing title',
                 details: 'The movie data from OMDB is missing the title field'
             })
         }
+        logger.info(`[Staging] ✅ OMDB data validation passed`)
+
+        logger.info(`[Staging] Step 4: Build update data object`)
 
         // Extract year from release_date (YYYY-MM-DD -> YYYY)
         let releaseYear = null
@@ -396,7 +415,13 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             updated_at: new Date().toISOString()
         }
 
-        logger.info(`[Staging] Updating staged movie with data:`, JSON.stringify(updateData, null, 2))
+        logger.info(`[Staging] ✅ Update data object built`)
+        logger.info(`[Staging]   Fields to update: ${Object.keys(updateData).join(', ')}`)
+        logger.info(`[Staging]   Full update data:`, JSON.stringify(updateData, null, 2))
+
+        logger.info(`[Staging] Step 5: Update database`)
+        logger.info(`[Staging]   → Calling supabase.from('staged_movies').update()`)
+        logger.info(`[Staging]   → WHERE id = ${id}`)
 
         const { data: updated, error: updateError } = await supabase
             .from('staged_movies')
@@ -406,15 +431,28 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             .single()
 
         if (updateError) {
-            logger.error(`[Staging] Database update error:`, updateError)
+            logger.error(`[Staging] ❌ Database update error:`)
+            logger.error(`[Staging]   Error code: ${updateError.code}`)
+            logger.error(`[Staging]   Error message: ${updateError.message}`)
+            logger.error(`[Staging]   Error details:`, JSON.stringify(updateError, null, 2))
             throw updateError
         }
 
         if (!updated) {
+            logger.error(`[Staging] ❌ No movie returned after update (movie not found?)`)
             throw new Error(`Movie with ID ${id} not found`)
         }
 
-        logger.info(`✅ [Staging] Movie manually verified: ${updated.title} (${imdbId})`)
+        logger.info(`[Staging] ✅ Database update successful`)
+        logger.info(`[Staging]   Updated movie: ${updated.title}`)
+        logger.info(`[Staging]   IMDB ID: ${updated.imdb_id}`)
+
+        const duration = Date.now() - startTime
+        logger.info(`\n${'='.repeat(80)}`)
+        logger.info(`[Staging] ✅ MANUAL IMDB ENRICHMENT COMPLETED`)
+        logger.info(`[Staging] Duration: ${duration}ms`)
+        logger.info(`[Staging] Movie: ${updated.title} (${imdbId})`)
+        logger.info(`${'='.repeat(80)}\n`)
 
         res.json({
             success: true,
@@ -423,7 +461,14 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         })
 
     } catch (error) {
-        logger.error('[Staging] Manual IMDB enrichment error:', error)
+        const duration = Date.now() - startTime
+        logger.error(`\n${'='.repeat(80)}`)
+        logger.error(`[Staging] ❌ MANUAL IMDB ENRICHMENT FAILED`)
+        logger.error(`[Staging] Duration: ${duration}ms`)
+        logger.error(`[Staging] Error type: ${error.constructor.name}`)
+        logger.error(`[Staging] Error message: ${error.message}`)
+        logger.error(`[Staging] Error stack:`, error.stack)
+        logger.error(`${'='.repeat(80)}\n`)
         next(error)
     }
 })
