@@ -607,7 +607,12 @@ class AdminAPIService: ObservableObject {
     }
 
     func deleteChannel(channelId: String) async throws {
-        let endpoint = "/api/admin/channels/\(channelId)"
+        // URL-encode the channel ID to handle @ symbols and special characters
+        guard let encodedId = channelId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            throw APIError.invalidURL
+        }
+
+        let endpoint = "/api/admin/channels/\(encodedId)"
 
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
