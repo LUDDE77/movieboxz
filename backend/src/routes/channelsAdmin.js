@@ -303,30 +303,85 @@ router.post('/:id/test-pattern', async (req, res, next) => {
 // DELETE /api/admin/channels/:id - Delete a channel
 // Must be defined last to avoid matching other routes
 router.delete('/:id', async (req, res, next) => {
+    const startTime = Date.now()
+    logger.info(`\n${'='.repeat(80)}`)
+    logger.info(`[Channels Admin] 🗑️  CHANNEL DELETE REQUEST`)
+    logger.info(`[Channels Admin] Raw params.id: ${req.params.id}`)
+    logger.info(`[Channels Admin] Full URL path: ${req.path}`)
+    logger.info(`[Channels Admin] Full URL: ${req.originalUrl}`)
+    logger.info(`${'='.repeat(80)}\n`)
+
     try {
+        logger.info(`[Channels Admin] Step 1: Decode channel ID`)
         // Decode the ID to handle @ symbols and other special characters
         const id = decodeURIComponent(req.params.id)
+        logger.info(`[Channels Admin] ✅ Decoded ID: ${id}`)
+        logger.info(`[Channels Admin]   Original: ${req.params.id}`)
+        logger.info(`[Channels Admin]   Decoded:  ${id}`)
 
-        logger.info(`[Channels Admin] Delete request for channel: ${id}`)
+        logger.info(`[Channels Admin] Step 2: Check if channel exists`)
+        const { data: channel, error: channelError } = await supabase
+            .from('channels')
+            .select('id, title')
+            .eq('id', id)
+            .single()
 
-        // Check if channel has movies in production
-        const { count: prodCount } = await supabase
+        if (channelError) {
+            logger.error(`[Channels Admin] ❌ Error checking channel existence:`)
+            logger.error(`[Channels Admin]   Error code: ${channelError.code}`)
+            logger.error(`[Channels Admin]   Error message: ${channelError.message}`)
+            logger.error(`[Channels Admin]   Error details:`, JSON.stringify(channelError, null, 2))
+        }
+
+        if (!channel) {
+            logger.error(`[Channels Admin] ❌ Channel not found with ID: ${id}`)
+            logger.error(`[Channels Admin]   Searched in: channels table`)
+            logger.error(`[Channels Admin]   WHERE id = '${id}'`)
+            return res.status(404).json({
+                success: false,
+                error: `Channel not found with ID: ${id}`,
+                details: {
+                    searchedId: id,
+                    originalId: req.params.id,
+                    decodedId: decodeURIComponent(req.params.id)
+                }
+            })
+        }
+
+        logger.info(`[Channels Admin] ✅ Channel found: ${channel.title} (${channel.id})`)
+
+        logger.info(`[Channels Admin] Step 3: Check for movies in production`)
+        const { count: prodCount, error: prodError } = await supabase
             .from('movies')
             .select('*', { count: 'exact', head: true })
             .eq('channel_id', id)
 
-        // Check if channel has movies in staging
-        const { count: stagingCount } = await supabase
+        if (prodError) {
+            logger.error(`[Channels Admin] ❌ Error checking production movies:`, prodError)
+        }
+        logger.info(`[Channels Admin]   Production movies: ${prodCount || 0}`)
+
+        logger.info(`[Channels Admin] Step 4: Check for movies in staging`)
+        const { count: stagingCount, error: stagingError } = await supabase
             .from('staged_movies')
             .select('*', { count: 'exact', head: true })
             .eq('channel_id', id)
 
+        if (stagingError) {
+            logger.error(`[Channels Admin] ❌ Error checking staging movies:`, stagingError)
+        }
+        logger.info(`[Channels Admin]   Staging movies: ${stagingCount || 0}`)
+
         const totalMovies = (prodCount || 0) + (stagingCount || 0)
+        logger.info(`[Channels Admin]   Total movies: ${totalMovies}`)
 
         if (totalMovies > 0) {
+            logger.warn(`[Channels Admin] ⚠️  Cannot delete - channel has movies`)
             const locations = []
             if (prodCount > 0) locations.push(`${prodCount} in production`)
             if (stagingCount > 0) locations.push(`${stagingCount} in staging`)
+
+            logger.info(`[Channels Admin]   Locations: ${locations.join(' and ')}`)
 
             return res.status(409).json({
                 success: false,
@@ -339,25 +394,53 @@ router.delete('/:id', async (req, res, next) => {
             })
         }
 
-        // Delete channel pattern first
-        await channelPatternManager.deletePattern(id)
+        logger.info(`[Channels Admin] ✅ No movies found - safe to delete`)
 
-        // Delete channel
-        const { error } = await supabase
+        logger.info(`[Channels Admin] Step 5: Delete channel pattern`)
+        try {
+            await channelPatternManager.deletePattern(id)
+            logger.info(`[Channels Admin] ✅ Channel pattern deleted (or none existed)`)
+        } catch (patternError) {
+            logger.warn(`[Channels Admin] ⚠️  Error deleting pattern (may not exist):`, patternError.message)
+        }
+
+        logger.info(`[Channels Admin] Step 6: Delete channel from database`)
+        logger.info(`[Channels Admin]   → DELETE FROM channels WHERE id = '${id}'`)
+        const { error: deleteError } = await supabase
             .from('channels')
             .delete()
             .eq('id', id)
 
-        if (error) throw error
+        if (deleteError) {
+            logger.error(`[Channels Admin] ❌ Database delete error:`)
+            logger.error(`[Channels Admin]   Error code: ${deleteError.code}`)
+            logger.error(`[Channels Admin]   Error message: ${deleteError.message}`)
+            logger.error(`[Channels Admin]   Error details:`, JSON.stringify(deleteError, null, 2))
+            throw deleteError
+        }
 
-        logger.info(`[Channels Admin] Deleted channel: ${id}`)
+        logger.info(`[Channels Admin] ✅ Channel deleted successfully`)
+
+        const duration = Date.now() - startTime
+        logger.info(`\n${'='.repeat(80)}`)
+        logger.info(`[Channels Admin] ✅ CHANNEL DELETE COMPLETED`)
+        logger.info(`[Channels Admin] Duration: ${duration}ms`)
+        logger.info(`[Channels Admin] Channel: ${channel.title} (${id})`)
+        logger.info(`${'='.repeat(80)}\n`)
 
         res.json({
             success: true,
             message: 'Channel deleted successfully'
         })
     } catch (error) {
-        logger.error('[Channels Admin] Delete channel error:', error)
+        const duration = Date.now() - startTime
+        logger.error(`\n${'='.repeat(80)}`)
+        logger.error(`[Channels Admin] ❌ CHANNEL DELETE FAILED`)
+        logger.error(`[Channels Admin] Duration: ${duration}ms`)
+        logger.error(`[Channels Admin] Error type: ${error.constructor.name}`)
+        logger.error(`[Channels Admin] Error message: ${error.message}`)
+        logger.error(`[Channels Admin] Error stack:`, error.stack)
+        logger.error(`${'='.repeat(80)}\n`)
         next(error)
     }
 })
