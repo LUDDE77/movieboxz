@@ -324,15 +324,28 @@ class AdminAPIService: ObservableObject {
         return response.data
     }
 
-    /// Batch enrich multiple staged movies
-    func batchEnrich(movieIds: [String], priority: EnrichmentPriority = .full) async throws -> BatchEnrichmentResult {
+    /// Start batch enrichment (async) - returns immediately with batch ID
+    func batchEnrich(movieIds: [String], priority: EnrichmentPriority = .full) async throws -> BatchEnrichmentStartResponse {
         let endpoint = "/staging/batch-enrich"
         let body = BatchEnrichmentRequest(movieIds: movieIds, priority: priority.rawValue)
 
-        print("📦 [API] Batch enriching \(movieIds.count) movies with priority \(priority.rawValue)")
+        print("📦 [API] Starting batch enrichment for \(movieIds.count) movies with priority \(priority.rawValue)")
 
-        let response: APIResponse<BatchEnrichmentResult> = try await request(endpoint: endpoint, method: "POST", body: body)
-        print("✅ [API] Batch enrichment completed: \(response.data.enriched)/\(response.data.total) enriched, \(response.data.failed) failed, \(response.data.skipped) skipped")
+        let response: APIResponse<BatchEnrichmentStartResponse> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Batch enrichment started: batchId=\(response.data.batchId), total=\(response.data.total)")
+
+        return response.data
+    }
+
+    /// Get batch enrichment progress
+    func getBatchEnrichmentProgress(batchId: String) async throws -> BatchEnrichmentProgress {
+        let endpoint = "/staging/batch-enrich/\(batchId)/status"
+
+        let response: APIResponse<BatchEnrichmentProgress> = try await request(endpoint: endpoint, method: "GET")
+
+        if let percentage = response.data.percentage {
+            print("📊 [API] Enrichment progress: \(percentage)% (\(response.data.enriched + response.data.failed + response.data.skipped)/\(response.data.total))")
+        }
 
         return response.data
     }

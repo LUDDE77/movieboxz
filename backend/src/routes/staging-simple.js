@@ -7,6 +7,9 @@ import { logger } from '../utils/logger.js'
 
 const router = express.Router()
 
+// In-memory store for batch enrichment progress
+const enrichmentProgress = new Map()
+
 // POST /api/admin/staging/import - Import movies to staging
 router.post('/import', async (req, res, next) => {
     try {
@@ -492,7 +495,7 @@ router.post('/publish', async (req, res, next) => {
     }
 })
 
-// POST /api/admin/staging/batch-enrich - Batch enrich staged movies
+// POST /api/admin/staging/batch-enrich - Start batch enrichment (async)
 router.post('/batch-enrich', async (req, res, next) => {
     try {
         const { movieIds, priority = 'full' } = req.body
@@ -504,146 +507,188 @@ router.post('/batch-enrich', async (req, res, next) => {
             })
         }
 
-        logger.info(`📦 [Batch Enrich] Starting batch enrichment for ${movieIds.length} movies`)
+        // Generate batch ID
+        const batchId = `enrich_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-        const results = {
+        logger.info(`📦 [Batch Enrich] Starting batch enrichment for ${movieIds.length} movies (batch: ${batchId})`)
+
+        // Initialize progress tracking
+        enrichmentProgress.set(batchId, {
+            status: 'running',
             total: movieIds.length,
             enriched: 0,
             failed: 0,
             skipped: 0,
-            details: []
-        }
+            current: null,
+            currentIndex: 0,
+            startedAt: new Date().toISOString()
+        })
 
-        for (const movieId of movieIds) {
-            try {
-                // Fetch movie data
-                const { data: movie, error: fetchError } = await supabase
-                    .from('staged_movies')
-                    .select('*')
-                    .eq('id', movieId)
-                    .single()
-
-                if (fetchError || !movie) {
-                    logger.error(`❌ [Batch Enrich] Movie ${movieId} not found`)
-                    results.failed++
-                    results.details.push({
-                        movieId,
-                        success: false,
-                        error: 'Movie not found'
-                    })
-                    continue
-                }
-
-                logger.info(`🔍 [Batch Enrich] Enriching: "${movie.title}" (${movieId})`)
-
-                // Call enrichment
-                const enrichResult = await selectiveEnrichment.enrichSelective(
-                    {
-                        title: movie.title,
-                        actors: movie.extracted_actor,
-                        year: movie.extracted_year,
-                        youtube_video_title: movie.youtube_video_title,
-                        channel_id: movie.channel_id,
-                        channel_title: null,
-                        published_at: movie.published_at
-                    },
-                    {
-                        priority: priority,
-                        previewOnly: false,
-                        preferTmdb: true
-                    }
-                )
-
-                if (enrichResult.success && enrichResult.preview) {
-                    // Update movie with enrichment data
-                    const enrichmentUpdate = {
-                        enrichment_source: enrichResult.source,
-                        tmdb_id: enrichResult.metadata?.tmdb_id,
-                        imdb_id: enrichResult.metadata?.imdb_id,
-                        enrichment_confidence: enrichResult.confidence,
-                        last_enriched: new Date().toISOString(),
-                        poster_path: enrichResult.preview.poster_path,
-                        backdrop_path: enrichResult.preview.backdrop_path,
-                        description: enrichResult.preview.description,
-                        release_date: enrichResult.preview.release_date,
-                        runtime_minutes: enrichResult.preview.runtime_minutes,
-                        vote_average: enrichResult.preview.vote_average,
-                        vote_count: enrichResult.preview.vote_count,
-                        imdb_rating: enrichResult.preview.imdb_rating,
-                        imdb_votes: enrichResult.preview.imdb_votes,
-                        popularity: enrichResult.preview.popularity,
-                        rated: enrichResult.preview.rated,
-                        director: enrichResult.preview.director,
-                        actors: enrichResult.preview.actors,
-                        language: enrichResult.preview.language,
-                        country: enrichResult.preview.country,
-                        category: enrichResult.preview.category
-                    }
-
-                    // Remove undefined values
-                    Object.keys(enrichmentUpdate).forEach(key =>
-                        enrichmentUpdate[key] === undefined && delete enrichmentUpdate[key]
-                    )
-
-                    const { error: updateError } = await supabase
-                        .from('staged_movies')
-                        .update(enrichmentUpdate)
-                        .eq('id', movieId)
-
-                    if (updateError) {
-                        logger.error(`❌ [Batch Enrich] Update failed for ${movie.title}:`, updateError)
-                        results.failed++
-                        results.details.push({
-                            movieId,
-                            title: movie.title,
-                            success: false,
-                            error: updateError.message
-                        })
-                    } else {
-                        logger.info(`✅ [Batch Enrich] Enriched: ${movie.title} (${enrichResult.fieldsEnriched?.length || 0} fields from ${enrichResult.source})`)
-                        results.enriched++
-                        results.details.push({
-                            movieId,
-                            title: movie.title,
-                            success: true,
-                            source: enrichResult.source,
-                            confidence: enrichResult.confidence,
-                            fieldsEnriched: enrichResult.fieldsEnriched?.length || 0
-                        })
-                    }
-                } else {
-                    logger.warn(`⚠️ [Batch Enrich] No enrichment data for ${movie.title}: ${enrichResult.message}`)
-                    results.skipped++
-                    results.details.push({
-                        movieId,
-                        title: movie.title,
-                        success: false,
-                        skipped: true,
-                        reason: enrichResult.message
-                    })
-                }
-
-            } catch (movieError) {
-                logger.error(`💥 [Batch Enrich] Error enriching ${movieId}:`, movieError)
-                results.failed++
-                results.details.push({
-                    movieId,
-                    success: false,
-                    error: movieError.message
-                })
-            }
-        }
-
-        logger.info(`📦 [Batch Enrich] Complete: ${results.enriched} enriched, ${results.failed} failed, ${results.skipped} skipped`)
-
+        // Return immediately with batch ID
         res.json({
             success: true,
-            data: results,
-            message: `Enriched ${results.enriched} of ${results.total} movies`
+            data: {
+                batchId,
+                status: 'running',
+                total: movieIds.length
+            }
+        })
+
+        // Process enrichment in background
+        processEnrichmentBatch(batchId, movieIds, priority).catch(err => {
+            logger.error(`[Batch Enrich] Background process error:`, err)
+            const progress = enrichmentProgress.get(batchId)
+            if (progress) {
+                progress.status = 'failed'
+                progress.error = err.message
+            }
         })
 
     } catch (error) {
         logger.error('[Batch Enrich] Error:', error)
+        next(error)
+    }
+})
+
+// Background processing function
+async function processEnrichmentBatch(batchId, movieIds, priority) {
+    const progress = enrichmentProgress.get(batchId)
+    if (!progress) return
+
+    for (let i = 0; i < movieIds.length; i++) {
+        const movieId = movieIds[i]
+
+        try {
+            // Fetch movie data
+            const { data: movie, error: fetchError } = await supabase
+                .from('staged_movies')
+                .select('*')
+                .eq('id', movieId)
+                .single()
+
+            if (fetchError || !movie) {
+                logger.error(`❌ [Batch Enrich ${batchId}] Movie ${movieId} not found`)
+                progress.failed++
+                progress.currentIndex = i + 1
+                continue
+            }
+
+            // Update progress with current movie
+            progress.current = movie.title
+            progress.currentIndex = i + 1
+            logger.info(`🔍 [Batch Enrich ${batchId}] (${i + 1}/${movieIds.length}) Enriching: "${movie.title}"`)
+
+            // Call enrichment
+            const enrichResult = await selectiveEnrichment.enrichSelective(
+                {
+                    title: movie.title,
+                    actors: movie.extracted_actor,
+                    year: movie.extracted_year,
+                    youtube_video_title: movie.youtube_video_title,
+                    channel_id: movie.channel_id,
+                    channel_title: null,
+                    published_at: movie.published_at
+                },
+                {
+                    priority: priority,
+                    previewOnly: false,
+                    preferTmdb: true
+                }
+            )
+
+            if (enrichResult.success && enrichResult.preview) {
+                // Update movie with enrichment data
+                const enrichmentUpdate = {
+                    enrichment_source: enrichResult.source,
+                    tmdb_id: enrichResult.metadata?.tmdb_id,
+                    imdb_id: enrichResult.metadata?.imdb_id,
+                    enrichment_confidence: enrichResult.confidence,
+                    poster_path: enrichResult.preview.poster_path,
+                    backdrop_path: enrichResult.preview.backdrop_path,
+                    description: enrichResult.preview.description,
+                    release_date: enrichResult.preview.release_date,
+                    runtime_minutes: enrichResult.preview.runtime_minutes,
+                    vote_average: enrichResult.preview.vote_average,
+                    vote_count: enrichResult.preview.vote_count,
+                    imdb_rating: enrichResult.preview.imdb_rating,
+                    imdb_votes: enrichResult.preview.imdb_votes,
+                    popularity: enrichResult.preview.popularity,
+                    rated: enrichResult.preview.rated,
+                    director: enrichResult.preview.director,
+                    actors: enrichResult.preview.actors,
+                    language: enrichResult.preview.language,
+                    country: enrichResult.preview.country,
+                    category: enrichResult.preview.category
+                }
+
+                // Remove undefined values
+                Object.keys(enrichmentUpdate).forEach(key =>
+                    enrichmentUpdate[key] === undefined && delete enrichmentUpdate[key]
+                )
+
+                const { error: updateError } = await supabase
+                    .from('staged_movies')
+                    .update(enrichmentUpdate)
+                    .eq('id', movieId)
+
+                if (updateError) {
+                    logger.error(`❌ [Batch Enrich ${batchId}] Update failed for ${movie.title}:`, updateError)
+                    progress.failed++
+                } else {
+                    logger.info(`✅ [Batch Enrich ${batchId}] Enriched: ${movie.title} from ${enrichResult.source}`)
+                    progress.enriched++
+                }
+            } else {
+                logger.warn(`⚠️ [Batch Enrich ${batchId}] No enrichment data for ${movie.title}: ${enrichResult.message}`)
+                progress.skipped++
+            }
+
+        } catch (movieError) {
+            logger.error(`💥 [Batch Enrich ${batchId}] Error enriching ${movieId}:`, movieError)
+            progress.failed++
+        }
+    }
+
+    // Mark as completed
+    progress.status = 'completed'
+    progress.completedAt = new Date().toISOString()
+    logger.info(`📦 [Batch Enrich ${batchId}] Complete: ${progress.enriched} enriched, ${progress.failed} failed, ${progress.skipped} skipped`)
+
+    // Auto-cleanup after 5 minutes
+    setTimeout(() => {
+        enrichmentProgress.delete(batchId)
+        logger.info(`🧹 [Batch Enrich] Cleaned up progress for batch ${batchId}`)
+    }, 5 * 60 * 1000)
+}
+
+// GET /api/admin/staging/batch-enrich/:batchId/status - Get enrichment progress
+router.get('/batch-enrich/:batchId/status', async (req, res, next) => {
+    try {
+        const { batchId } = req.params
+        const progress = enrichmentProgress.get(batchId)
+
+        if (!progress) {
+            return res.status(404).json({
+                success: false,
+                error: 'Batch enrichment not found or expired'
+            })
+        }
+
+        // Calculate percentage
+        const processed = progress.enriched + progress.failed + progress.skipped
+        const percentage = progress.total > 0
+            ? Math.round((processed / progress.total) * 100)
+            : 0
+
+        res.json({
+            success: true,
+            data: {
+                ...progress,
+                percentage
+            }
+        })
+    } catch (error) {
+        logger.error('[Batch Enrich Status] Error:', error)
         next(error)
     }
 })

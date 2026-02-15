@@ -717,6 +717,28 @@ struct BatchEnrichmentDetail: Codable {
     }
 }
 
+// Batch enrichment start response
+struct BatchEnrichmentStartResponse: Codable {
+    let batchId: String
+    let status: String
+    let total: Int
+}
+
+// Batch enrichment progress
+struct BatchEnrichmentProgress: Codable {
+    let status: String
+    let total: Int
+    let enriched: Int
+    let failed: Int
+    let skipped: Int
+    let current: String?
+    let currentIndex: Int
+    let percentage: Int?
+    let startedAt: String?
+    let completedAt: String?
+}
+}
+
 // Publish request
 struct PublishRequest: Codable {
     let ids: [String]?

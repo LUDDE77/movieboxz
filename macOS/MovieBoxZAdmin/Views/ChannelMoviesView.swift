@@ -365,20 +365,14 @@ struct ChannelMoviesView: View {
         showEnrichmentProgress = true
 
         do {
-            let result = try await apiService.batchEnrich(
+            // Start enrichment (returns immediately with batch ID)
+            let startResponse = try await apiService.batchEnrich(
                 movieIds: Array(selectedMovieIds),
                 priority: .full
             )
 
-            // Update progress to completed
-            enrichmentProgress = EnrichmentProgress(
-                status: "completed",
-                total: result.total,
-                enriched: result.enriched,
-                failed: result.failed,
-                skipped: result.skipped,
-                current: nil
-            )
+            // Poll for progress updates
+            await pollEnrichmentProgress(batchId: startResponse.batchId)
 
             // Reload movies to show enrichment data
             await loadMovies()
@@ -399,6 +393,35 @@ struct ChannelMoviesView: View {
         }
 
         isPerformingBatchAction = false
+    }
+
+    func pollEnrichmentProgress(batchId: String) async {
+        while true {
+            do {
+                let progress = try await apiService.getBatchEnrichmentProgress(batchId: batchId)
+
+                // Update UI with progress
+                enrichmentProgress = EnrichmentProgress(
+                    status: progress.status,
+                    total: progress.total,
+                    enriched: progress.enriched,
+                    failed: progress.failed,
+                    skipped: progress.skipped,
+                    current: progress.current
+                )
+
+                // Break if completed or failed
+                if progress.status == "completed" || progress.status == "failed" {
+                    break
+                }
+
+                // Wait before next poll (1 second)
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+            } catch {
+                print("Error polling enrichment progress: \(error)")
+                break
+            }
+        }
     }
 
     func enrichAllUnenriched() async {
@@ -438,20 +461,14 @@ struct ChannelMoviesView: View {
             )
             showEnrichmentProgress = true
 
-            let result = try await apiService.batchEnrich(
+            // Start enrichment (returns immediately with batch ID)
+            let startResponse = try await apiService.batchEnrich(
                 movieIds: unenrichedIds,
                 priority: .full
             )
 
-            // Update progress to completed
-            enrichmentProgress = EnrichmentProgress(
-                status: "completed",
-                total: result.total,
-                enriched: result.enriched,
-                failed: result.failed,
-                skipped: result.skipped,
-                current: nil
-            )
+            // Poll for progress updates
+            await pollEnrichmentProgress(batchId: startResponse.batchId)
 
             // Reload movies to show enrichment data
             await loadMovies()
@@ -470,7 +487,6 @@ struct ChannelMoviesView: View {
 
         isPerformingBatchAction = false
     }
-}
 }
 
 // MARK: - Movie Section
