@@ -291,16 +291,33 @@ router.delete('/:id', async (req, res, next) => {
     try {
         const { id } = req.params
 
-        // Check if channel has movies
-        const { count } = await supabase
+        // Check if channel has movies in production
+        const { count: prodCount } = await supabase
             .from('movies')
             .select('*', { count: 'exact', head: true })
             .eq('channel_id', id)
 
-        if (count && count > 0) {
+        // Check if channel has movies in staging
+        const { count: stagingCount } = await supabase
+            .from('staged_movies')
+            .select('*', { count: 'exact', head: true })
+            .eq('channel_id', id)
+
+        const totalMovies = (prodCount || 0) + (stagingCount || 0)
+
+        if (totalMovies > 0) {
+            const locations = []
+            if (prodCount > 0) locations.push(`${prodCount} in production`)
+            if (stagingCount > 0) locations.push(`${stagingCount} in staging`)
+
             return res.status(409).json({
                 success: false,
-                error: `Cannot delete channel with ${count} movies. Delete movies first.`
+                error: `Cannot delete channel with ${locations.join(' and ')}. Delete movies first using the channel management page.`,
+                details: {
+                    production: prodCount || 0,
+                    staging: stagingCount || 0,
+                    total: totalMovies
+                }
             })
         }
 

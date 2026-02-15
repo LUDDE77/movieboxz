@@ -509,7 +509,7 @@ class YouTubeService {
             const channelId = await this.resolveChannelIdentifier(channelIdOrHandle)
 
             const response = await this.youtube.channels.list({
-                part: ['snippet', 'statistics', 'status'],
+                part: ['snippet', 'statistics', 'status', 'brandingSettings'],
                 id: [channelId]
             })
 
@@ -535,8 +535,8 @@ class YouTubeService {
                 title: channel.snippet.title,
                 description: channel.snippet.description,
                 customUrl: channel.snippet.customUrl,
-                thumbnailUrl: channel.snippet.thumbnails?.default?.url,
-                bannerUrl: channel.snippet.thumbnails?.high?.url,
+                thumbnails: channel.snippet.thumbnails,
+                bannerImageUrl: channel.brandingSettings?.image?.bannerExternalUrl,
                 publishedAt: channel.snippet.publishedAt,
                 country: channel.snippet.country,
                 subscriberCount: parseInt(channel.statistics.subscriberCount) || 0,
