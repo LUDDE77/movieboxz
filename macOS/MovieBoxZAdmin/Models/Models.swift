@@ -737,7 +737,6 @@ struct BatchEnrichmentProgress: Codable {
     let startedAt: String?
     let completedAt: String?
 }
-}
 
 // Publish request
 struct PublishRequest: Codable {

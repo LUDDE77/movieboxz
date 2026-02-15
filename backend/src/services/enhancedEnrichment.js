@@ -61,57 +61,112 @@ class EnhancedEnrichment {
     }
 
     /**
-     * Search TMDB with actor context
+     * Search TMDB by title, then rank by actors and year
      * @param {string} title - Cleaned movie/show title
      * @param {Array<string>} actorHints - Actor names from title
      * @param {number} publishYear - Year from YouTube publish date
      * @param {string} mediaHint - 'movie' or 'tv' hint
-     * @returns {Array} TMDB search results
+     * @param {number} extractedYear - Year extracted from title pattern (if any)
+     * @returns {Array} TMDB search results ranked by relevance
      */
-    async searchTMDBWithActors(title, actorHints, publishYear, mediaHint) {
-        const results = []
+    async searchTMDBWithActors(title, actorHints, publishYear, mediaHint, extractedYear = null) {
+        logger.debug(`🔍 Searching TMDB by title: "${title}"`)
 
-        // Strategy 1: Search with actor name (if available)
+        // Step 1: Search by TITLE ONLY (no year filter to get all matches)
+        const movieResults = await tmdbService.searchMovies(title, null)
+        const tvResults = await tmdbService.searchTVSeries(title, null)
+
+        // Add media_type to each result
+        movieResults.forEach(r => r.media_type = 'movie')
+        tvResults.forEach(r => r.media_type = 'tv')
+
+        const allResults = [...movieResults, ...tvResults]
+
+        if (allResults.length === 0) {
+            logger.debug(`No TMDB results found for: "${title}"`)
+            return []
+        }
+
+        logger.debug(`Found ${allResults.length} TMDB results, now ranking by actors/year...`)
+
+        // Step 2: Score each result based on actors and year
+        const scoredResults = []
+        for (const result of allResults) {
+            const score = await this.scoreResult(result, actorHints, publishYear, extractedYear, mediaHint)
+            scoredResults.push({ ...result, relevanceScore: score })
+        }
+
+        // Step 3: Sort by relevance score (highest first)
+        scoredResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+
+        logger.debug(`Top 3 results:`, scoredResults.slice(0, 3).map(r => ({
+            title: r.title || r.name,
+            year: r.release_date || r.first_air_date,
+            score: r.relevanceScore,
+            media_type: r.media_type
+        })))
+
+        return scoredResults
+    }
+
+    /**
+     * Score a TMDB result based on actors, year, and media type
+     * @param {Object} result - TMDB search result
+     * @param {Array<string>} actorHints - Extracted actor names
+     * @param {number} publishYear - YouTube publish year
+     * @param {number} extractedYear - Year extracted from title pattern
+     * @param {string} mediaHint - 'movie' or 'tv' hint
+     * @returns {number} Score 0-100
+     */
+    async scoreResult(result, actorHints, publishYear, extractedYear, mediaHint) {
+        let score = 0
+
+        // 1. Actor match (40 points)
         if (actorHints && actorHints.length > 0) {
-            const actorQuery = `${title} ${actorHints[0]}`
-            logger.debug(`Strategy 1: Searching with actor context: "${actorQuery}"`)
-
-            // Search both movies and TV series
-            const movieResults = await tmdbService.searchMovies(actorQuery, publishYear)
-            const tvResults = await tmdbService.searchTVSeries(actorQuery, publishYear)
-
-            // Add media_type to each result
-            movieResults.forEach(r => r.media_type = 'movie')
-            tvResults.forEach(r => r.media_type = 'tv')
-
-            results.push(...movieResults, ...tvResults)
+            const actorMatch = await this.validateActorMatch(result.id, result.media_type, { actors: actorHints })
+            if (actorMatch) {
+                score += 40
+                logger.debug(`  ✓ Actor match found (+40 points)`)
+            }
         }
 
-        // Strategy 2: Fallback to title-only search
-        if (results.length === 0) {
-            logger.debug(`Strategy 2: Fallback to title-only: "${title}"`)
+        // 2. Year match (30 points)
+        const resultYear = result.media_type === 'movie'
+            ? new Date(result.release_date).getFullYear()
+            : new Date(result.first_air_date).getFullYear()
 
-            // Search both movies and TV series
-            const movieResults = await tmdbService.searchMovies(title, publishYear)
-            const tvResults = await tmdbService.searchTVSeries(title, publishYear)
+        // Prefer extracted year over publish year (pattern year is more reliable)
+        const targetYear = extractedYear || publishYear
 
-            // Add media_type to each result
-            movieResults.forEach(r => r.media_type = 'movie')
-            tvResults.forEach(r => r.media_type = 'tv')
-
-            results.push(...movieResults, ...tvResults)
+        if (!isNaN(resultYear) && !isNaN(targetYear)) {
+            const yearDiff = Math.abs(resultYear - targetYear)
+            if (yearDiff === 0) {
+                score += 30
+                logger.debug(`  ✓ Exact year match: ${resultYear} (+30 points)`)
+            } else if (yearDiff <= 1) {
+                score += 20
+                logger.debug(`  ≈ Close year match: ${resultYear} vs ${targetYear} (+20 points)`)
+            } else if (yearDiff <= 3) {
+                score += 10
+                logger.debug(`  ~ Approximate year: ${resultYear} vs ${targetYear} (+10 points)`)
+            }
         }
 
-        // Prioritize based on media hint
-        if (mediaHint && results.length > 0) {
-            results.sort((a, b) => {
-                const aMatch = a.media_type === mediaHint ? 1 : 0
-                const bMatch = b.media_type === mediaHint ? 1 : 0
-                return bMatch - aMatch
-            })
+        // 3. Media type match (20 points)
+        if (mediaHint === result.media_type) {
+            score += 20
+            logger.debug(`  ✓ Media type match: ${result.media_type} (+20 points)`)
         }
 
-        return results
+        // 4. Popularity bonus (10 points) - prefer popular results when ambiguous
+        const popularity = result.popularity || 0
+        if (popularity > 50) {
+            score += 10
+        } else if (popularity > 20) {
+            score += 5
+        }
+
+        return score
     }
 
     /**
@@ -470,7 +525,8 @@ class EnhancedEnrichment {
                 actorHints.title,
                 actorHints.actors,
                 publishYear,
-                actorHints.mediaHint
+                actorHints.mediaHint,
+                actorHints.year  // Pass extracted year for better matching
             )
 
             logger.info(`🎬 [EnhancedEnrichment] TMDB search results:`, {

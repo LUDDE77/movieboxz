@@ -307,7 +307,7 @@ struct ChannelManagementView: View {
             if let updatedChannel = channels.first(where: { $0.id == currentChannelId }) {
                 selectedChannel = updatedChannel
                 print("✅ [Pattern] Re-selected updated channel: \(updatedChannel.title)")
-                print("✅ [Pattern] Updated channel hasPattern: \(updatedChannel.hasPattern)")
+                print("✅ [Pattern] Updated channel hasPattern: \(String(describing: updatedChannel.hasPattern))")
 
                 // Reload the pattern into the form fields so user can see what they saved
                 if let pattern = updatedChannel.pattern {

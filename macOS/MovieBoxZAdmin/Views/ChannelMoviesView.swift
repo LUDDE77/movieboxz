@@ -11,6 +11,10 @@ struct ChannelMoviesView: View {
     @State private var error: String?
     @State private var successMessage: String?
 
+    // Pagination
+    @State private var currentPage = 1
+    @State private var itemsPerPage = 100
+
     // Batch operations
     @State private var selectedMovieIds: Set<String> = []
     @State private var showDeleteConfirm = false
@@ -210,6 +214,46 @@ struct ChannelMoviesView: View {
                             )
                         }
 
+                        // Pagination Controls
+                        if let staging = moviesData?.staging, staging.pagination.pages > 1 {
+                            HStack(spacing: 12) {
+                                Button(action: { previousPage() }) {
+                                    Label("Previous", systemImage: "chevron.left")
+                                }
+                                .disabled(currentPage == 1)
+
+                                Text("Page \(currentPage) of \(staging.pagination.pages)")
+                                    .font(.headline)
+                                    .foregroundColor(.secondary)
+
+                                Text("(\(staging.total) total movies)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Button(action: { nextPage() }) {
+                                    Label("Next", systemImage: "chevron.right")
+                                }
+                                .disabled(currentPage >= staging.pagination.pages)
+
+                                Spacer()
+
+                                Picker("Items per page", selection: $itemsPerPage) {
+                                    Text("50").tag(50)
+                                    Text("100").tag(100)
+                                    Text("200").tag(200)
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 150)
+                                .onChange(of: itemsPerPage) { _ in
+                                    currentPage = 1
+                                    Task { await loadMovies() }
+                                }
+                            }
+                            .padding()
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+
                         if moviesData?.staging?.movies.isEmpty == true && moviesData?.production?.movies.isEmpty == true {
                             VStack(spacing: 12) {
                                 Image(systemName: "film")
@@ -276,8 +320,8 @@ struct ChannelMoviesView: View {
             let data = try await apiService.getChannelMovies(
                 channelId: channel.id,
                 source: source,
-                page: 1,
-                limit: 50
+                page: currentPage,
+                limit: itemsPerPage
             )
             moviesData = data
         } catch {
@@ -285,6 +329,19 @@ struct ChannelMoviesView: View {
         }
 
         isLoading = false
+    }
+
+    func nextPage() {
+        guard let staging = moviesData?.staging,
+              currentPage < staging.pagination.pages else { return }
+        currentPage += 1
+        Task { await loadMovies() }
+    }
+
+    func previousPage() {
+        guard currentPage > 1 else { return }
+        currentPage -= 1
+        Task { await loadMovies() }
     }
 
     func deleteAllMovies(from source: String) {
