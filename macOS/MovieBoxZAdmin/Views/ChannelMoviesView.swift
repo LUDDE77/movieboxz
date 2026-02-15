@@ -216,12 +216,29 @@ struct ChannelMoviesView: View {
                             )
                         }
 
-                        // Pagination Controls - always show to allow changing items per page
-                        if let staging = moviesData?.staging,
-                           let pagination = moviesData?.pagination {
-                            HStack(spacing: 12) {
-                                let totalPages = pagination.pages ?? 1
+                        // Pagination Controls - always show when we have movies
+                        if let moviesData = moviesData,
+                           (moviesData.staging != nil || moviesData.production != nil) {
+                            let pagination = moviesData.pagination
+                            let staging = moviesData.staging
+                            let production = moviesData.production
 
+                            // Calculate total pages
+                            let totalPages: Int = {
+                                if let pages = pagination?.pages {
+                                    return pages
+                                }
+                                if let total = pagination?.total {
+                                    return max(1, (total + itemsPerPage - 1) / itemsPerPage)
+                                }
+                                return 1
+                            }()
+
+                            // Count movies shown
+                            let moviesShown = (staging?.movies.count ?? 0) + (production?.movies.count ?? 0)
+                            let totalMovies = (staging?.total ?? 0) + (production?.total ?? 0)
+
+                            HStack(spacing: 12) {
                                 Button(action: { previousPage() }) {
                                     Label("Previous", systemImage: "chevron.left")
                                 }
@@ -233,23 +250,25 @@ struct ChannelMoviesView: View {
                                         .foregroundColor(.secondary)
 
                                     HStack(spacing: 4) {
-                                        Text("Showing \(staging.movies.count) movies")
+                                        Text("Showing \(moviesShown) movies")
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.blue)
-                                        Text("•")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        Text("\(staging.total) total")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                        if totalMovies > 0 {
+                                            Text("•")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                            Text("\(totalMovies) total")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                 }
 
                                 Button(action: { nextPage() }) {
                                     Label("Next", systemImage: "chevron.right")
                                 }
-                                .disabled(currentPage >= totalPages || staging.movies.count < itemsPerPage)
+                                .disabled(currentPage >= totalPages || moviesShown < itemsPerPage)
 
                                 Spacer()
 
@@ -260,7 +279,7 @@ struct ChannelMoviesView: View {
                                 }
                                 .pickerStyle(.menu)
                                 .frame(width: 150)
-                                .onChange(of: itemsPerPage) { _ in
+                                .onChange(of: itemsPerPage) { oldValue, newValue in
                                     currentPage = 1
                                     Task { await loadMovies() }
                                 }

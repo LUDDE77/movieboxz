@@ -344,6 +344,16 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
 
         logger.info(`[Staging] OMDB data retrieved:`, JSON.stringify(omdbData, null, 2))
 
+        // Validate that we have required data
+        if (!omdbData.title) {
+            logger.error(`[Staging] OMDB data missing required title field`)
+            return res.status(500).json({
+                success: false,
+                error: 'OMDB data incomplete - missing title',
+                details: 'The movie data from OMDB is missing the title field'
+            })
+        }
+
         // Extract year from release_date (YYYY-MM-DD -> YYYY)
         let releaseYear = null
         if (omdbData.release_date) {
@@ -352,8 +362,8 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
 
         // Update staged movie with OMDB data and mark as manually verified
         const updateData = {
-            // Core metadata
-            title: omdbData.title || null,
+            // Core metadata - title is required
+            title: omdbData.title,
             description: omdbData.description || null,
             release_date: omdbData.release_date || null,
             runtime_minutes: omdbData.runtime_minutes || null,
