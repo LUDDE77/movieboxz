@@ -617,7 +617,7 @@ struct MovieSection: View {
                     },
                     onUpdate: {
                         Task {
-                            await loadMovies()
+                            await self.loadMovies()
                         }
                     }
                 )

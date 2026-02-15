@@ -312,7 +312,7 @@ struct ChannelMovieDetailView: View {
                                                         .textFieldStyle(.roundedBorder)
                                                         .font(.body)
                                                         .frame(width: 200)
-                                                        .onChange(of: manualImdbId) { newValue in
+                                                        .onChange(of: manualImdbId) { oldValue, newValue in
                                                             print("🎯 IMDB ID changed to: \(newValue)")
                                                             // Auto-enrich when user enters valid IMDB ID
                                                             if newValue.count >= 9 && newValue.hasPrefix("tt") && newValue.dropFirst(2).allSatisfy({ $0.isNumber }) {

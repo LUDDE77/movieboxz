@@ -206,7 +206,7 @@ struct ChannelManagementView: View {
             // Log pattern status for each channel
             for channel in channels {
                 print("📥 [LoadChannels] Channel: \(channel.title) (ID: \(channel.id))")
-                print("📥 [LoadChannels]   - hasPattern: \(channel.hasPattern)")
+                print("📥 [LoadChannels]   - hasPattern: \(String(describing: channel.hasPattern))")
                 print("📥 [LoadChannels]   - pattern is nil: \(channel.pattern == nil)")
                 if let pattern = channel.pattern {
                     print("📥 [LoadChannels]   - pattern has \(pattern.patterns.count) rules")
