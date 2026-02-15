@@ -466,7 +466,16 @@ struct MovieRow: View {
         HStack(spacing: 12) {
             // Poster thumbnail
             if let posterPath = movie.posterPath {
-                AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")) { image in
+                // Handle both full URLs (OMDB) and paths (TMDB)
+                let posterURL: URL? = {
+                    if posterPath.hasPrefix("http") {
+                        return URL(string: posterPath)
+                    } else {
+                        return URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")
+                    }
+                }()
+
+                AsyncImage(url: posterURL) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -554,7 +563,16 @@ struct MovieDetailView: View {
                 // Header with poster
                 HStack(alignment: .top, spacing: 16) {
                     if let posterPath = movie.posterPath {
-                        AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w300\(posterPath)")) { image in
+                        // Handle both full URLs (OMDB) and paths (TMDB)
+                        let posterURL: URL? = {
+                            if posterPath.hasPrefix("http") {
+                                return URL(string: posterPath)
+                            } else {
+                                return URL(string: "https://image.tmdb.org/t/p/w300\(posterPath)")
+                            }
+                        }()
+
+                        AsyncImage(url: posterURL) { image in
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)

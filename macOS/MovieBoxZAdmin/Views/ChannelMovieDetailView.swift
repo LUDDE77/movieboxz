@@ -214,14 +214,25 @@ struct ChannelMovieDetailView: View {
                 GroupBox(label: Label("TMDB/IMDB Enrichment Data", systemImage: "film")) {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(alignment: .top, spacing: 16) {
-                                // TMDB Poster
+                                // Movie Poster (TMDB or OMDB)
                                 if let posterPath = movie.posterPath {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text("TMDB Poster")
+                                        Text("Movie Poster")
                                             .font(.caption)
                                             .fontWeight(.semibold)
                                             .foregroundColor(.secondary)
-                                        AsyncImage(url: URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")) { image in
+                                        // Handle both full URLs (OMDB) and paths (TMDB)
+                                        let posterURL: URL? = {
+                                            if posterPath.hasPrefix("http") {
+                                                // Full URL from OMDB/IMDB
+                                                return URL(string: posterPath)
+                                            } else {
+                                                // TMDB path - prepend CDN URL
+                                                return URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")
+                                            }
+                                        }()
+
+                                        AsyncImage(url: posterURL) { image in
                                             image
                                                 .resizable()
                                                 .aspectRatio(contentMode: .fit)

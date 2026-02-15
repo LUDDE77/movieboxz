@@ -25,6 +25,9 @@ struct ChannelManagementView: View {
     @State private var testResults: PatternTestData?
     @State private var isTestingPattern = false
 
+    // Tab selection
+    @State private var selectedTab = 0
+
     var body: some View {
         NavigationSplitView {
             // MARK: - Sidebar (Channel List)
@@ -66,6 +69,10 @@ struct ChannelManagementView: View {
                         print("🔄 [Channel] Switched to: \(newValue?.title ?? "none") (\(newValue?.id ?? ""))")
                         print("🔄 [Channel] New channel hasPattern: \(newValue?.hasPattern ?? false)")
                         print("🔄 [Channel] New channel pattern is nil: \(newValue?.pattern == nil)")
+
+                        // Reset to Pattern tab when switching channels
+                        selectedTab = 0
+                        print("🔄 [Channel] Reset to Pattern tab (tab 0)")
 
                         // Clear state
                         patternRules = []
@@ -122,7 +129,7 @@ struct ChannelManagementView: View {
         } detail: {
             // MARK: - Detail View
             if let channel = selectedChannel {
-                TabView {
+                TabView(selection: $selectedTab) {
                     // Pattern Tab
                     ChannelPatternView(
                         channel: channel,
@@ -141,30 +148,35 @@ struct ChannelManagementView: View {
                     .tabItem {
                         Label("Pattern", systemImage: "doc.text.magnifyingglass")
                     }
+                    .tag(0)
 
                     // Settings Tab
                     ChannelSettingsView(channel: channel)
                         .tabItem {
                             Label("Settings", systemImage: "gear")
                         }
+                        .tag(1)
 
                     // Import Tab
                     BulkImportView(channel: channel)
                         .tabItem {
                             Label("Import", systemImage: "arrow.down.circle")
                         }
+                        .tag(2)
 
                     // Movies Tab
                     ChannelMoviesView(channel: channel)
                         .tabItem {
                             Label("Movies", systemImage: "film")
                         }
+                        .tag(3)
 
                     // History Tab
                     ImportHistoryView(channel: channel)
                         .tabItem {
                             Label("History", systemImage: "clock.arrow.circlepath")
                         }
+                        .tag(4)
                 }
             } else {
                 VStack {

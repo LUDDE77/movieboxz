@@ -95,10 +95,11 @@ app.use('/api/movies', moviesRouter)
 app.use('/api/channels', channelsRouter)
 app.use('/api/browse', browseRouter)
 app.use('/api/user', userRouter)
-app.use('/api/admin', adminRouter)
+// Mount specific admin routes BEFORE general admin router to prevent conflicts
 app.use('/api/admin/channels', channelsAdminRouter)
 app.use('/api/admin/channel-management', channelManagementRouter)
 app.use('/api/admin/staging', stagingRouter)
+app.use('/api/admin', adminRouter)
 
 // Root endpoint
 app.get('/', (req, res) => {
