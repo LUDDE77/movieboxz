@@ -17,6 +17,10 @@ struct ChannelMoviesView: View {
     @State private var showReimportConfirm = false
     @State private var isPerformingBatchAction = false
 
+    // Enrichment progress
+    @State private var showEnrichmentProgress = false
+    @State private var enrichmentProgress: EnrichmentProgress?
+
     var body: some View {
         VStack(spacing: 0) {
             // Header with filters and stats
@@ -251,6 +255,12 @@ struct ChannelMoviesView: View {
         } message: {
             Text("Choose whether to keep existing movies or delete and re-import everything.")
         }
+        .sheet(isPresented: $showEnrichmentProgress) {
+            EnrichmentProgressModal(
+                progress: enrichmentProgress,
+                onClose: { showEnrichmentProgress = false }
+            )
+        }
         .task {
             await loadMovies()
         }
@@ -343,25 +353,48 @@ struct ChannelMoviesView: View {
         error = nil
         successMessage = nil
 
+        // Show progress modal
+        enrichmentProgress = EnrichmentProgress(
+            status: "running",
+            total: selectedMovieIds.count,
+            enriched: 0,
+            failed: 0,
+            skipped: 0,
+            current: nil
+        )
+        showEnrichmentProgress = true
+
         do {
             let result = try await apiService.batchEnrich(
                 movieIds: Array(selectedMovieIds),
                 priority: .full
             )
 
-            successMessage = "Enriched \(result.enriched) of \(result.total) movies (\(result.failed) failed, \(result.skipped) skipped)"
+            // Update progress to completed
+            enrichmentProgress = EnrichmentProgress(
+                status: "completed",
+                total: result.total,
+                enriched: result.enriched,
+                failed: result.failed,
+                skipped: result.skipped,
+                current: nil
+            )
 
             // Reload movies to show enrichment data
             await loadMovies()
 
             // Clear selection
             selectedMovieIds.removeAll()
-
-            // Clear success message after 8 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-                successMessage = nil
-            }
         } catch {
+            // Update progress to failed
+            enrichmentProgress = EnrichmentProgress(
+                status: "failed",
+                total: selectedMovieIds.count,
+                enriched: 0,
+                failed: 0,
+                skipped: 0,
+                current: nil
+            )
             self.error = "Failed to enrich movies: \(error.localizedDescription)"
         }
 
@@ -394,26 +427,50 @@ struct ChannelMoviesView: View {
                 return
             }
 
+            // Show progress modal
+            enrichmentProgress = EnrichmentProgress(
+                status: "running",
+                total: unenrichedIds.count,
+                enriched: 0,
+                failed: 0,
+                skipped: 0,
+                current: nil
+            )
+            showEnrichmentProgress = true
+
             let result = try await apiService.batchEnrich(
                 movieIds: unenrichedIds,
                 priority: .full
             )
 
-            successMessage = "Enriched \(result.enriched) of \(unenrichedIds.count) unenriched movies (\(result.failed) failed, \(result.skipped) skipped)"
+            // Update progress to completed
+            enrichmentProgress = EnrichmentProgress(
+                status: "completed",
+                total: result.total,
+                enriched: result.enriched,
+                failed: result.failed,
+                skipped: result.skipped,
+                current: nil
+            )
 
             // Reload movies to show enrichment data
             await loadMovies()
-
-            // Clear success message after 8 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-                successMessage = nil
-            }
         } catch {
+            // Update progress to failed
+            enrichmentProgress = EnrichmentProgress(
+                status: "failed",
+                total: 0,
+                enriched: 0,
+                failed: 0,
+                skipped: 0,
+                current: nil
+            )
             self.error = "Failed to enrich movies: \(error.localizedDescription)"
         }
 
         isPerformingBatchAction = false
     }
+}
 }
 
 // MARK: - Movie Section
@@ -646,6 +703,145 @@ struct ChannelMovieRow: View {
         case "rejected": return .red
         case "pending": return .orange
         default: return .gray
+        }
+    }
+}
+
+// MARK: - Enrichment Progress Model
+
+struct EnrichmentProgress {
+    let status: String
+    let total: Int
+    let enriched: Int
+    let failed: Int
+    let skipped: Int
+    let current: String?
+
+    var percentage: Int {
+        guard total > 0 else { return 0 }
+        let completed = enriched + failed + skipped
+        return Int((Double(completed) / Double(total)) * 100)
+    }
+}
+
+// MARK: - Enrichment Progress Modal
+
+struct EnrichmentProgressModal: View {
+    let progress: EnrichmentProgress?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            HStack {
+                Image(systemName: statusIcon)
+                    .font(.largeTitle)
+                    .foregroundColor(statusColor)
+                Text("Enriching Movies")
+                    .font(.title)
+                    .fontWeight(.bold)
+            }
+
+            if let progress = progress {
+                // Progress bar
+                if progress.status == "running" {
+                    VStack(spacing: 8) {
+                        ProgressView(value: Double(progress.percentage), total: 100.0)
+                            .frame(width: 400)
+
+                        Text("\(progress.percentage)%")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
+                }
+
+                // Current movie
+                if let currentTitle = progress.current {
+                    VStack(spacing: 4) {
+                        Text("Current movie:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(currentTitle)
+                            .font(.subheadline)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .frame(width: 400)
+                    }
+                }
+
+                // Statistics
+                VStack(spacing: 12) {
+                    HStack(spacing: 40) {
+                        StatItem(label: "Total", value: "\(progress.total)", color: .blue)
+                        StatItem(label: "Enriched", value: "\(progress.enriched)", color: .green)
+                        StatItem(label: "Skipped", value: "\(progress.skipped)", color: .orange)
+                        StatItem(label: "Failed", value: "\(progress.failed)", color: .red)
+                    }
+                }
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(12)
+
+                // Status-specific actions
+                if progress.status == "completed" {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Enrichment completed!")
+                            .fontWeight(.semibold)
+                    }
+                    .padding()
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(8)
+
+                    Button("Close") {
+                        onClose()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                } else if progress.status == "failed" {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                        Text("Enrichment failed")
+                            .fontWeight(.semibold)
+                    }
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(8)
+
+                    Button("Close") {
+                        onClose()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                } else {
+                    ProgressView("Enriching movies...")
+                        .scaleEffect(1.2)
+                }
+            } else {
+                ProgressView("Initializing enrichment...")
+            }
+        }
+        .padding(40)
+        .frame(width: 600)
+    }
+
+    var statusIcon: String {
+        guard let progress = progress else { return "sparkles" }
+        switch progress.status {
+        case "completed": return "checkmark.circle.fill"
+        case "failed": return "xmark.circle.fill"
+        default: return "sparkles"
+        }
+    }
+
+    var statusColor: Color {
+        guard let progress = progress else { return .blue }
+        switch progress.status {
+        case "completed": return .green
+        case "failed": return .red
+        default: return .blue
         }
     }
 }
