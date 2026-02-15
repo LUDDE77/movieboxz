@@ -492,4 +492,160 @@ router.post('/publish', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/batch-enrich - Batch enrich staged movies
+router.post('/batch-enrich', async (req, res, next) => {
+    try {
+        const { movieIds, priority = 'full' } = req.body
+
+        if (!movieIds || !Array.isArray(movieIds) || movieIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'movieIds array is required'
+            })
+        }
+
+        logger.info(`📦 [Batch Enrich] Starting batch enrichment for ${movieIds.length} movies`)
+
+        const results = {
+            total: movieIds.length,
+            enriched: 0,
+            failed: 0,
+            skipped: 0,
+            details: []
+        }
+
+        for (const movieId of movieIds) {
+            try {
+                // Fetch movie data
+                const { data: movie, error: fetchError } = await supabase
+                    .from('staged_movies')
+                    .select('*')
+                    .eq('id', movieId)
+                    .single()
+
+                if (fetchError || !movie) {
+                    logger.error(`❌ [Batch Enrich] Movie ${movieId} not found`)
+                    results.failed++
+                    results.details.push({
+                        movieId,
+                        success: false,
+                        error: 'Movie not found'
+                    })
+                    continue
+                }
+
+                logger.info(`🔍 [Batch Enrich] Enriching: "${movie.title}" (${movieId})`)
+
+                // Call enrichment
+                const enrichResult = await selectiveEnrichment.enrichSelective(
+                    {
+                        title: movie.title,
+                        actors: movie.extracted_actor,
+                        year: movie.extracted_year,
+                        youtube_video_title: movie.youtube_video_title,
+                        channel_id: movie.channel_id,
+                        channel_title: null,
+                        published_at: movie.published_at
+                    },
+                    {
+                        priority: priority,
+                        previewOnly: false,
+                        preferTmdb: true
+                    }
+                )
+
+                if (enrichResult.success && enrichResult.preview) {
+                    // Update movie with enrichment data
+                    const enrichmentUpdate = {
+                        enrichment_source: enrichResult.source,
+                        tmdb_id: enrichResult.metadata?.tmdb_id,
+                        imdb_id: enrichResult.metadata?.imdb_id,
+                        enrichment_confidence: enrichResult.confidence,
+                        last_enriched: new Date().toISOString(),
+                        poster_path: enrichResult.preview.poster_path,
+                        backdrop_path: enrichResult.preview.backdrop_path,
+                        description: enrichResult.preview.description,
+                        release_date: enrichResult.preview.release_date,
+                        runtime_minutes: enrichResult.preview.runtime_minutes,
+                        vote_average: enrichResult.preview.vote_average,
+                        vote_count: enrichResult.preview.vote_count,
+                        imdb_rating: enrichResult.preview.imdb_rating,
+                        imdb_votes: enrichResult.preview.imdb_votes,
+                        popularity: enrichResult.preview.popularity,
+                        rated: enrichResult.preview.rated,
+                        director: enrichResult.preview.director,
+                        actors: enrichResult.preview.actors,
+                        language: enrichResult.preview.language,
+                        country: enrichResult.preview.country,
+                        category: enrichResult.preview.category
+                    }
+
+                    // Remove undefined values
+                    Object.keys(enrichmentUpdate).forEach(key =>
+                        enrichmentUpdate[key] === undefined && delete enrichmentUpdate[key]
+                    )
+
+                    const { error: updateError } = await supabase
+                        .from('staged_movies')
+                        .update(enrichmentUpdate)
+                        .eq('id', movieId)
+
+                    if (updateError) {
+                        logger.error(`❌ [Batch Enrich] Update failed for ${movie.title}:`, updateError)
+                        results.failed++
+                        results.details.push({
+                            movieId,
+                            title: movie.title,
+                            success: false,
+                            error: updateError.message
+                        })
+                    } else {
+                        logger.info(`✅ [Batch Enrich] Enriched: ${movie.title} (${enrichResult.fieldsEnriched?.length || 0} fields from ${enrichResult.source})`)
+                        results.enriched++
+                        results.details.push({
+                            movieId,
+                            title: movie.title,
+                            success: true,
+                            source: enrichResult.source,
+                            confidence: enrichResult.confidence,
+                            fieldsEnriched: enrichResult.fieldsEnriched?.length || 0
+                        })
+                    }
+                } else {
+                    logger.warn(`⚠️ [Batch Enrich] No enrichment data for ${movie.title}: ${enrichResult.message}`)
+                    results.skipped++
+                    results.details.push({
+                        movieId,
+                        title: movie.title,
+                        success: false,
+                        skipped: true,
+                        reason: enrichResult.message
+                    })
+                }
+
+            } catch (movieError) {
+                logger.error(`💥 [Batch Enrich] Error enriching ${movieId}:`, movieError)
+                results.failed++
+                results.details.push({
+                    movieId,
+                    success: false,
+                    error: movieError.message
+                })
+            }
+        }
+
+        logger.info(`📦 [Batch Enrich] Complete: ${results.enriched} enriched, ${results.failed} failed, ${results.skipped} skipped`)
+
+        res.json({
+            success: true,
+            data: results,
+            message: `Enriched ${results.enriched} of ${results.total} movies`
+        })
+
+    } catch (error) {
+        logger.error('[Batch Enrich] Error:', error)
+        next(error)
+    }
+})
+
 export default router
