@@ -170,6 +170,9 @@ struct StagingView: View {
                     },
                     onReject: {
                         Task { await rejectMovie(movie, reason: "Manual rejection") }
+                    },
+                    onToggleTvSeries: { isTvSeries in
+                        Task { await toggleTvSeries(movie: movie, isTvSeries: isTvSeries) }
                     }
                 )
             } else {
@@ -408,6 +411,21 @@ struct StagingView: View {
         }
     }
 
+    func toggleTvSeries(movie: StagedMovie, isTvSeries: Bool) async {
+        do {
+            let updated = try await apiService.updateStagedMovie(
+                movieId: movie.id,
+                updates: ["is_tv_series": isTvSeries]
+            )
+            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
+                stagedMovies[index] = updated
+                selectedMovie = updated
+            }
+        } catch {
+            errorMessage = "Failed to update TV series flag: \(error.localizedDescription)"
+        }
+    }
+
     func deleteMovie(_ movie: StagedMovie) async {
         do {
             try await apiService.deleteStagedMovie(movieId: movie.id)
@@ -512,6 +530,11 @@ struct MovieRow: View {
                         text: movie.approvalStatus.rawValue.capitalized,
                         color: statusColor(movie.approvalStatus)
                     )
+
+                    // TV Series badge
+                    if movie.isTvSeries == true {
+                        StatusBadge(text: "TV Series", color: .purple)
+                    }
                 }
             }
 
@@ -556,6 +579,7 @@ struct MovieDetailView: View {
     let onEdit: () -> Void
     let onApprove: () -> Void
     let onReject: () -> Void
+    let onToggleTvSeries: (Bool) -> Void
 
     var body: some View {
         ScrollView {
@@ -716,6 +740,36 @@ struct MovieDetailView: View {
                             .tint(.red)
                         }
                     }
+                }
+
+                // Classification
+                GroupBox("Classification") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(isOn: Binding(
+                            get: { movie.isTvSeries ?? false },
+                            set: { onToggleTvSeries($0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("TV Series")
+                                    .font(.body)
+                                Text("Mark this video as a TV series instead of a movie")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if movie.isTvShow == true {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                                Text("OMDB also detected this as a TV show")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
 
                 // Metadata

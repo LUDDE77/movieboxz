@@ -25,6 +25,8 @@ struct ChannelSettingsView: View {
     @State private var minDurationMinutes: String = ""
     @State private var maxDurationMinutes: String = ""
     @State private var filterShorts = true
+    @State private var isKidsContent = false
+    @State private var isTvSeriesChannel = false
 
     var body: some View {
         ScrollView {
@@ -192,6 +194,24 @@ struct ChannelSettingsView: View {
                         .padding()
                     }
 
+                    // Content Classification
+                    GroupBox(label: Label("Content Classification", systemImage: "rectangle.badge.checkmark")) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Toggle("Kids / Cartoons channel", isOn: $isKidsContent)
+                                .help("Mark this channel as kids or cartoon content")
+
+                            Toggle("TV Series channel", isOn: $isTvSeriesChannel)
+                                .help("All videos imported from this channel will be marked as TV series by default")
+
+                            if isTvSeriesChannel {
+                                Text("Imported videos will be flagged as TV series. You can override this per video in the staging view.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                    }
+
                     // Statistics (read-only)
                     if let settings = settings {
                         GroupBox(label: Label("Statistics", systemImage: "chart.bar")) {
@@ -300,6 +320,8 @@ struct ChannelSettingsView: View {
             minDurationMinutes = loadedSettings.minDurationMinutes.map(String.init) ?? ""
             maxDurationMinutes = loadedSettings.maxDurationMinutes.map(String.init) ?? ""
             filterShorts = loadedSettings.filterShorts
+            isKidsContent = loadedSettings.isKidsContent
+            isTvSeriesChannel = loadedSettings.isTvSeriesChannel
         } catch {
             self.error = "Failed to load settings: \(error.localizedDescription)"
         }
@@ -340,6 +362,8 @@ struct ChannelSettingsView: View {
                 updatedSettings.minDurationMinutes = minDurationMinutes.isEmpty ? nil : Int(minDurationMinutes)
                 updatedSettings.maxDurationMinutes = maxDurationMinutes.isEmpty ? nil : Int(maxDurationMinutes)
                 updatedSettings.filterShorts = filterShorts
+                updatedSettings.isKidsContent = isKidsContent
+                updatedSettings.isTvSeriesChannel = isTvSeriesChannel
 
                 print("💾 [Settings] Updated minDurationMinutes: \(String(describing: updatedSettings.minDurationMinutes))")
                 print("💾 [Settings] Updated maxDurationMinutes: \(String(describing: updatedSettings.maxDurationMinutes))")

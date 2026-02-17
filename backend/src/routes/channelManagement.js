@@ -74,7 +74,8 @@ router.put('/:channelId/settings', async (req, res, next) => {
             'default_enrichment_priority', 'auto_enrich_on_import',
             'auto_approve_threshold', 'require_manual_review',
             'channel_tag', 'is_featured', 'quality_tier',
-            'min_duration_minutes', 'max_duration_minutes', 'filter_shorts'
+            'min_duration_minutes', 'max_duration_minutes', 'filter_shorts',
+            'is_kids_content', 'is_tv_series_channel'
         ]
 
         const cleanUpdates = {}
@@ -673,6 +674,8 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     import_sort_order: sortOrder,
                     import_index: i,
                     channel_tag: channelSettings?.channel_tag,
+                    // Propagate channel-level flags
+                    is_tv_series: channelSettings?.is_tv_series_channel || false,
                     // Save extracted metadata from pattern
                     pattern_matched: parsed.patternMatched || false,
                     pattern_confidence: parsed.confidence || 0

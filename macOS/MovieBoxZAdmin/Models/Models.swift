@@ -416,6 +416,7 @@ struct StagedMovie: Codable, Identifiable, Hashable {
     let importSortOrder: String?
     let importIndex: Int?
     let channelTag: String?
+    var isTvSeries: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -473,6 +474,7 @@ struct StagedMovie: Codable, Identifiable, Hashable {
         case importSortOrder = "import_sort_order"
         case importIndex = "import_index"
         case channelTag = "channel_tag"
+        case isTvSeries = "is_tv_series"
     }
 
     // Computed properties
@@ -786,6 +788,8 @@ struct ChannelSettings: Codable, Identifiable, Hashable {
     var minDurationMinutes: Int?
     var maxDurationMinutes: Int?
     var filterShorts: Bool
+    var isKidsContent: Bool
+    var isTvSeriesChannel: Bool
     let lastImportAt: String?
     let totalImported: Int
     let totalPublished: Int
@@ -808,6 +812,8 @@ struct ChannelSettings: Codable, Identifiable, Hashable {
         case minDurationMinutes = "min_duration_minutes"
         case maxDurationMinutes = "max_duration_minutes"
         case filterShorts = "filter_shorts"
+        case isKidsContent = "is_kids_content"
+        case isTvSeriesChannel = "is_tv_series_channel"
         case lastImportAt = "last_import_at"
         case totalImported = "total_imported"
         case totalPublished = "total_published"
