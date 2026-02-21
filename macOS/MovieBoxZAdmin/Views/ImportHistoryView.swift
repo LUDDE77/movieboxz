@@ -318,37 +318,37 @@ struct ImportDetailsSheet: View {
 
             // Import Info
             VStack(alignment: .leading, spacing: 16) {
-                DetailRow(label: "Import Type", value: importRecord.importType.capitalized)
+                DetailRow(label: "Import Type", value: importRecord.importType.capitalized, labelWidth: 150, showColon: true)
 
                 if let limit = importRecord.importLimit {
-                    DetailRow(label: "Limit", value: "\(limit) videos")
+                    DetailRow(label: "Limit", value: "\(limit) videos", labelWidth: 150, showColon: true)
                 } else {
-                    DetailRow(label: "Limit", value: "All videos")
+                    DetailRow(label: "Limit", value: "All videos", labelWidth: 150, showColon: true)
                 }
 
                 if let sortOrder = importRecord.sortOrder {
-                    DetailRow(label: "Sort Order", value: ImportSortOrder(rawValue: sortOrder)?.displayName ?? sortOrder)
+                    DetailRow(label: "Sort Order", value: ImportSortOrder(rawValue: sortOrder)?.displayName ?? sortOrder, labelWidth: 150, showColon: true)
                 }
 
-                DetailRow(label: "Status", value: importRecord.status.capitalized)
+                DetailRow(label: "Status", value: importRecord.status.capitalized, labelWidth: 150, showColon: true)
 
                 Divider()
 
-                DetailRow(label: "Videos Found", value: "\(importRecord.videosFound)")
-                DetailRow(label: "Videos Imported", value: "\(importRecord.videosImported)")
-                DetailRow(label: "Videos Skipped", value: "\(importRecord.videosSkipped)")
-                DetailRow(label: "Videos Failed", value: "\(importRecord.videosFailed)")
+                DetailRow(label: "Videos Found", value: "\(importRecord.videosFound)", labelWidth: 150, showColon: true)
+                DetailRow(label: "Videos Imported", value: "\(importRecord.videosImported)", labelWidth: 150, showColon: true)
+                DetailRow(label: "Videos Skipped", value: "\(importRecord.videosSkipped)", labelWidth: 150, showColon: true)
+                DetailRow(label: "Videos Failed", value: "\(importRecord.videosFailed)", labelWidth: 150, showColon: true)
 
                 Divider()
 
-                DetailRow(label: "Started At", value: formatDate(importRecord.startedAt))
+                DetailRow(label: "Started At", value: formatDate(importRecord.startedAt), labelWidth: 150, showColon: true)
 
                 if let completed = importRecord.completedAt {
-                    DetailRow(label: "Completed At", value: formatDate(completed))
+                    DetailRow(label: "Completed At", value: formatDate(completed), labelWidth: 150, showColon: true)
                 }
 
                 if importRecord.durationSeconds != nil {
-                    DetailRow(label: "Duration", value: importRecord.formattedDuration)
+                    DetailRow(label: "Duration", value: importRecord.formattedDuration, labelWidth: 150, showColon: true)
                 }
 
                 if let error = importRecord.errorMessage {
@@ -382,22 +382,6 @@ struct ImportDetailsSheet: View {
         displayFormatter.dateStyle = .medium
         displayFormatter.timeStyle = .medium
         return displayFormatter.string(from: date)
-    }
-}
-
-struct DetailRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack {
-            Text(label + ":")
-                .font(.headline)
-                .frame(width: 150, alignment: .leading)
-            Text(value)
-                .foregroundColor(.secondary)
-            Spacer()
-        }
     }
 }
 

@@ -12,14 +12,12 @@ struct AdminView: View {
             List(selection: $selectedTab) {
                 Label("Dashboard", systemImage: "chart.bar.fill")
                     .tag(0)
-                Label("Staging", systemImage: "tray.fill")
-                    .tag(1)
                 Label("Movies", systemImage: "film.fill")
-                    .tag(2)
+                    .tag(1)
                 Label("Channel Setup", systemImage: "tv.fill")
-                    .tag(3)
+                    .tag(2)
                 Label("Genres", systemImage: "theatermasks.fill")
-                    .tag(4)
+                    .tag(3)
             }
             .navigationTitle("Admin")
             .frame(minWidth: 200)
@@ -29,12 +27,10 @@ struct AdminView: View {
                 case 0:
                     DashboardView(stats: stats, isLoading: isLoadingStats, error: statsError)
                 case 1:
-                    StagingView()
-                case 2:
                     MoviesView()
-                case 3:
+                case 2:
                     ChannelManagementView()
-                case 4:
+                case 3:
                     GenresView()
                 default:
                     Text("Select a section")

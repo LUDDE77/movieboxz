@@ -649,6 +649,14 @@ router.post('/publish', async (req, res, next) => {
         let failed = 0
         const movieIds = []
 
+        // If specific IDs provided, approve them first
+        if (ids && ids.length > 0) {
+            await supabase
+                .from('staged_movies')
+                .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
+                .in('id', ids)
+        }
+
         // Get approved staged movies
         let query = supabase
             .from('staged_movies')
@@ -696,6 +704,8 @@ router.post('/publish', async (req, res, next) => {
                         language: stagedMovie.language,
                         country: stagedMovie.country,
                         is_tv_show: stagedMovie.is_tv_show,
+                        is_tv_series: stagedMovie.is_tv_series,
+                        is_kids_content: stagedMovie.is_kids_content,
                         category: stagedMovie.category,
                         enrichment_source: stagedMovie.enrichment_source,
                         enrichment_confidence: stagedMovie.enrichment_confidence,

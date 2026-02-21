@@ -552,22 +552,6 @@ struct MovieRow: View {
     }
 }
 
-struct StatusBadge: View {
-    let text: String
-    let color: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption2)
-            .fontWeight(.medium)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.2))
-            .foregroundColor(color)
-            .cornerRadius(4)
-    }
-}
-
 struct MovieDetailView: View {
     let movie: StagedMovie
     let enrichmentPreview: EnrichmentPreview?

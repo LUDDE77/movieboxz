@@ -117,16 +117,34 @@ struct ChannelMoviesView: View {
                     .buttonStyle(.bordered)
                     .disabled(isPerformingBatchAction)
 
-                    Button(action: { /* batch approve */ }) {
+                    Button(action: {
+                        Task {
+                            await approveSelectedMovies()
+                        }
+                    }) {
                         Label("Approve Selected", systemImage: "checkmark.circle")
                     }
                     .buttonStyle(.bordered)
-                    .disabled(isPerformingBatchAction)
+                    .disabled(isPerformingBatchAction || selectedMovieIds.isEmpty)
 
-                    Button(role: .destructive, action: { /* batch delete */ }) {
+                    Button(role: .destructive, action: {
+                        showDeleteConfirm = true
+                    }) {
                         Label("Delete Selected", systemImage: "trash")
                     }
-                    .disabled(isPerformingBatchAction)
+                    .disabled(isPerformingBatchAction || selectedMovieIds.isEmpty)
+                    .confirmationDialog(
+                        "Delete \(selectedMovieIds.count) selected movies?",
+                        isPresented: $showDeleteConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete from Staging", role: .destructive) {
+                            Task {
+                                await deleteSelectedMovies()
+                            }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    }
 
                     Button("Clear Selection") {
                         selectedMovieIds.removeAll()
@@ -268,7 +286,7 @@ struct ChannelMoviesView: View {
                                 Button(action: { nextPage() }) {
                                     Label("Next", systemImage: "chevron.right")
                                 }
-                                .disabled(currentPage >= totalPages || moviesShown < itemsPerPage)
+                                .disabled(currentPage >= totalPages)
 
                                 Spacer()
 
@@ -445,6 +463,80 @@ struct ChannelMoviesView: View {
 
             isPerformingBatchAction = false
         }
+    }
+
+    func approveSelectedMovies() async {
+        guard !selectedMovieIds.isEmpty else { return }
+
+        isPerformingBatchAction = true
+        error = nil
+        successMessage = nil
+
+        do {
+            let result = try await apiService.publishStagedMovies(movieIds: Array(selectedMovieIds))
+
+            if result.published > 0 {
+                successMessage = "Published \(result.published) movies to production"
+                if result.failed > 0 {
+                    successMessage! += " (\(result.failed) failed)"
+                }
+            } else if result.failed > 0 {
+                error = "Failed to publish \(result.failed) movies"
+            }
+
+            // Clear selection and reload
+            selectedMovieIds.removeAll()
+            await loadMovies()
+
+            // Clear success message after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                successMessage = nil
+            }
+        } catch {
+            self.error = "Failed to publish movies: \(error.localizedDescription)"
+        }
+
+        isPerformingBatchAction = false
+    }
+
+    func deleteSelectedMovies() async {
+        guard !selectedMovieIds.isEmpty else { return }
+
+        isPerformingBatchAction = true
+        error = nil
+        successMessage = nil
+
+        var deletedCount = 0
+        var failedCount = 0
+
+        for movieId in selectedMovieIds {
+            do {
+                try await apiService.deleteStagedMovie(movieId: movieId)
+                deletedCount += 1
+            } catch {
+                failedCount += 1
+            }
+        }
+
+        if deletedCount > 0 {
+            successMessage = "Deleted \(deletedCount) movies"
+            if failedCount > 0 {
+                successMessage! += " (\(failedCount) failed)"
+            }
+        } else if failedCount > 0 {
+            error = "Failed to delete \(failedCount) movies"
+        }
+
+        // Clear selection and reload
+        selectedMovieIds.removeAll()
+        await loadMovies()
+
+        // Clear success message after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            successMessage = nil
+        }
+
+        isPerformingBatchAction = false
     }
 
     func batchEnrich() async {
