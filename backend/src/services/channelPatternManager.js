@@ -205,9 +205,26 @@ class ChannelPatternManager {
     stripEmojis(text) {
         if (!text) return text
 
-        // Remove emojis using regex
-        return text.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]|[\u{FE00}-\u{FE0F}]|[\u{1F018}-\u{1F270}]|[\u{238C}-\u{2454}]|[\u{20D0}-\u{20FF}]/gu, '')
-            .replace(/\s+/g, ' ')
+        // Remove emojis using comprehensive regex
+        // This covers: emoticons, symbols, pictographs, transport, flags, etc.
+        return text
+            .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // Emoticons
+            .replace(/[\u{1F300}-\u{1F5FF}]/gu, '') // Misc Symbols and Pictographs
+            .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // Transport and Map
+            .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // Flags
+            .replace(/[\u{2600}-\u{26FF}]/gu, '')   // Misc symbols (stars, crosses, etc)
+            .replace(/[\u{2700}-\u{27BF}]/gu, '')   // Dingbats
+            .replace(/[\u{1F900}-\u{1F9FF}]/gu, '') // Supplemental Symbols and Pictographs
+            .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '') // Chess Symbols
+            .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '') // Symbols and Pictographs Extended-A
+            .replace(/[\u{FE00}-\u{FE0F}]/gu, '')   // Variation Selectors
+            .replace(/[\u{1F018}-\u{1F270}]/gu, '') // Various asian characters
+            .replace(/[\u{238C}-\u{2454}]/gu, '')   // Misc items
+            .replace(/[\u{20D0}-\u{20FF}]/gu, '')   // Combining Diacritical Marks
+            .replace(/[\u{2190}-\u{21FF}]/gu, '')   // Arrows
+            .replace(/[\u{2300}-\u{23FF}]/gu, '')   // Misc Technical (including ⭐)
+            .replace(/[\u{2B00}-\u{2BFF}]/gu, '')   // Misc Symbols and Arrows
+            .replace(/\s+/g, ' ')                    // Collapse multiple spaces
             .trim()
     }
 
