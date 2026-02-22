@@ -117,6 +117,114 @@ router.post('/import', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/import-playlist - Import movies from playlist to staging
+router.post('/import-playlist', async (req, res, next) => {
+    try {
+        const { playlistId, channelId = null, limit = 50, batchId } = req.body
+
+        if (!playlistId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required field: playlistId'
+            })
+        }
+
+        logger.info(`[Staging] Importing ${limit} videos from playlist: ${playlistId}`)
+
+        // Fetch videos from YouTube playlist
+        const videos = await youtubeService.getPlaylistItems(playlistId, {
+            maxResults: limit
+        })
+
+        let imported = 0
+        let skipped = 0
+        const importedMovies = []
+
+        for (const video of videos) {
+            try {
+                // Check if already in staging
+                const { data: inStaging } = await supabase
+                    .from('staged_movies')
+                    .select('id')
+                    .eq('youtube_video_id', video.id)
+                    .single()
+
+                if (inStaging) {
+                    logger.info(`Skipping ${video.title} - already in staging`)
+                    skipped++
+                    continue
+                }
+
+                // Check if already published to production
+                const { data: inProduction } = await supabase
+                    .from('movies')
+                    .select('id')
+                    .eq('youtube_video_id', video.id)
+                    .single()
+
+                if (inProduction) {
+                    logger.info(`Skipping ${video.title} - already published to production`)
+                    skipped++
+                    continue
+                }
+
+                // Use provided channelId or the one from the video
+                const movieChannelId = channelId || video.channelId
+
+                // Extract metadata using channel pattern
+                const parsed = await movieCurator.extractMetadata(video.title, movieChannelId)
+
+                // Calculate duration in minutes
+                const durationMinutes = movieCurator.parseDuration(video.duration)
+
+                // Create staged movie record
+                const { data: stagedMovie, error } = await supabase
+                    .from('staged_movies')
+                    .insert({
+                        youtube_video_id: video.id,
+                        youtube_video_title: video.title,
+                        title: parsed.title || video.title,
+                        description: video.description,
+                        channel_id: movieChannelId,
+                        runtime_minutes: Math.round(durationMinutes),
+                        view_count: parseInt(video.viewCount) || 0,
+                        like_count: parseInt(video.likeCount) || 0,
+                        comment_count: parseInt(video.commentCount) || 0,
+                        published_at: video.publishedAt,
+                        approval_status: 'pending',
+                        import_batch_id: batchId || null,
+                        region_restrictions: video.regionRestriction || null
+                    })
+                    .select()
+                    .single()
+
+                if (error) throw error
+
+                importedMovies.push(stagedMovie)
+                imported++
+            } catch (error) {
+                logger.error(`[Staging] Failed to import video ${video.id}:`, error)
+                skipped++
+            }
+        }
+
+        logger.info(`[Staging] Playlist import complete: ${imported} imported, ${skipped} skipped`)
+
+        res.json({
+            success: true,
+            data: {
+                imported,
+                skipped,
+                batchId: batchId || null,
+                movies: importedMovies
+            }
+        })
+    } catch (error) {
+        logger.error('[Staging] Playlist import error:', error)
+        next(error)
+    }
+})
+
 // GET /api/admin/staging/stats - Get staging statistics
 router.get('/stats', async (req, res, next) => {
     try {
