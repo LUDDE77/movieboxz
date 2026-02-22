@@ -675,6 +675,35 @@ class AdminAPIService: ObservableObject {
         print(String(repeating: "=", count: 80) + "\n")
     }
 
+    /// Update channel classification (content type and pattern source)
+    func updateChannelClassification(channelId: String, hasMovies: Bool, hasSeries: Bool, hasKidsContent: Bool, patternSource: String) async throws -> ChannelWithPattern {
+        print("🏷️ [API] Updating channel classification for \(channelId)")
+        print("🏷️ [API]   hasMovies: \(hasMovies)")
+        print("🏷️ [API]   hasSeries: \(hasSeries)")
+        print("🏷️ [API]   hasKidsContent: \(hasKidsContent)")
+        print("🏷️ [API]   patternSource: \(patternSource)")
+
+        struct UpdateBody: Codable {
+            let has_movies: Bool
+            let has_series: Bool
+            let has_kids_content: Bool
+            let pattern_source: String
+        }
+
+        let body = UpdateBody(
+            has_movies: hasMovies,
+            has_series: hasSeries,
+            has_kids_content: hasKidsContent,
+            pattern_source: patternSource
+        )
+
+        let endpoint = "/channels/\(channelId)"
+        let response: APIResponse<ChannelWithPattern> = try await request(endpoint: endpoint, method: "PUT", body: body)
+        print("✅ [API] Channel classification updated")
+
+        return response.data
+    }
+
     // MARK: - Channel Management Advanced
 
     /// Get or create channel settings
@@ -886,6 +915,58 @@ class AdminAPIService: ObservableObject {
 
         let response: APIResponse<ImportHistoryData> = try await request(endpoint: endpoint)
         print("✅ [API] Found \(response.data.imports.count) import records")
+
+        return response.data
+    }
+
+    // MARK: - Production Movie Management
+
+    /// Update a production movie
+    func updateProductionMovie(movieId: String, updates: [String: Any]) async throws -> Movie {
+        let endpoint = "/movies/\(movieId)"
+
+        print("✏️ [API] Updating production movie \(movieId)")
+
+        guard let url = URL(string: "\(baseURL)/api/admin\(endpoint)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: updates)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode == 401 {
+            throw APIError.unauthorized
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        let apiResponse = try JSONDecoder().decode(APIResponse<Movie>.self, from: data)
+        print("✅ [API] Production movie updated successfully")
+
+        return apiResponse.data
+    }
+
+    /// Enrich a production movie
+    func enrichProductionMovie(movieId: String, priority: EnrichmentPriority) async throws -> Movie {
+        let endpoint = "/movies/\(movieId)/enrich"
+        let body = ["priority": priority.rawValue]
+
+        print("✨ [API] Enriching production movie \(movieId) with priority: \(priority.rawValue)")
+
+        let response: APIResponse<Movie> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Production movie enriched successfully")
 
         return response.data
     }

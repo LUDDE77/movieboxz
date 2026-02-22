@@ -178,6 +178,7 @@ struct ChannelManagementView: View {
                         }
                         .tag(4)
                 }
+                .id(channel.id) // Force full view recreation when channel changes
             } else {
                 VStack {
                     Image(systemName: "tv")
@@ -477,6 +478,46 @@ struct ChannelRow: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                // Content type badges
+                HStack(spacing: 4) {
+                    if channel.hasMovies {
+                        Text("Movies")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.2))
+                            .foregroundColor(.blue)
+                            .cornerRadius(4)
+                    }
+                    if channel.hasSeries {
+                        Text("Series")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.purple.opacity(0.2))
+                            .foregroundColor(.purple)
+                            .cornerRadius(4)
+                    }
+                    if channel.hasKidsContent {
+                        Text("Kids")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.green.opacity(0.2))
+                            .foregroundColor(.green)
+                            .cornerRadius(4)
+                    }
+                    if channel.patternSource == "description" {
+                        Text("⚙️ Desc")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.2))
+                            .foregroundColor(.orange)
+                            .cornerRadius(4)
+                    }
+                }
             }
 
             Spacer()
@@ -555,6 +596,11 @@ struct ChannelPatternView: View {
                 .padding()
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(12)
+
+                Divider()
+
+                // MARK: - Channel Classification
+                ChannelClassificationView(channel: channel)
 
                 Divider()
 
@@ -1022,6 +1068,126 @@ struct AddChannelSheet: View {
         }
         .padding(30)
         .frame(width: 500)
+    }
+}
+
+// MARK: - Channel Classification View
+
+struct ChannelClassificationView: View {
+    let channel: ChannelWithPattern
+    @StateObject private var apiService = AdminAPIService()
+    @State private var hasMovies: Bool
+    @State private var hasSeries: Bool
+    @State private var hasKidsContent: Bool
+    @State private var patternSource: String
+    @State private var isSaving = false
+    @State private var saveMessage: String?
+
+    init(channel: ChannelWithPattern) {
+        self.channel = channel
+        _hasMovies = State(initialValue: channel.hasMovies)
+        _hasSeries = State(initialValue: channel.hasSeries)
+        _hasKidsContent = State(initialValue: channel.hasKidsContent)
+        _patternSource = State(initialValue: channel.patternSource)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Channel Classification")
+                    .font(.title2)
+                    .fontWeight(.bold)
+
+                Spacer()
+
+                if let message = saveMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Content Type")
+                    .font(.headline)
+
+                Toggle("Contains Movies", isOn: $hasMovies)
+                Toggle("Contains TV Series", isOn: $hasSeries)
+                Toggle("Contains Kids Content", isOn: $hasKidsContent)
+
+                Divider()
+                    .padding(.vertical, 4)
+
+                Text("Pattern Source")
+                    .font(.headline)
+
+                Picker("Extract metadata from", selection: $patternSource) {
+                    Text("Title").tag("title")
+                    Text("Description").tag("description")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 300)
+
+                Text(patternSource == "title"
+                    ? "Patterns will extract metadata from video titles (recommended)"
+                    : "Patterns will extract metadata from video descriptions (use when titles lack structure)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            HStack {
+                Spacer()
+                Button(action: { Task { await saveChanges() } }) {
+                    if isSaving {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Saving...")
+                        }
+                    } else {
+                        Label("Save Changes", systemImage: "checkmark.circle.fill")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isSaving || !hasChanges)
+                Spacer()
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.05))
+        .cornerRadius(12)
+    }
+
+    var hasChanges: Bool {
+        hasMovies != channel.hasMovies ||
+        hasSeries != channel.hasSeries ||
+        hasKidsContent != channel.hasKidsContent ||
+        patternSource != channel.patternSource
+    }
+
+    func saveChanges() async {
+        isSaving = true
+        saveMessage = nil
+
+        do {
+            _ = try await apiService.updateChannelClassification(
+                channelId: channel.id,
+                hasMovies: hasMovies,
+                hasSeries: hasSeries,
+                hasKidsContent: hasKidsContent,
+                patternSource: patternSource
+            )
+            saveMessage = "✓ Saved"
+
+            // Clear message after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                saveMessage = nil
+            }
+        } catch {
+            saveMessage = "Failed to save: \(error.localizedDescription)"
+        }
+
+        isSaving = false
     }
 }
 

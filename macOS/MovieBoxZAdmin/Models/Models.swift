@@ -60,6 +60,8 @@ struct Movie: Codable, Identifiable {
     let actors: String?
     let country: String?
     let isTvShow: Bool?
+    let isTvSeries: Bool?
+    let isKidsContent: Bool?
     let posterPath: String?
     let backdropPath: String?
     let enrichmentSource: String?
@@ -98,6 +100,8 @@ struct Movie: Codable, Identifiable {
         case actors
         case country
         case isTvShow = "is_tv_show"
+        case isTvSeries = "is_tv_series"
+        case isKidsContent = "is_kids_content"
         case posterPath = "poster_path"
         case backdropPath = "backdrop_path"
         case enrichmentSource = "enrichment_source"
@@ -224,6 +228,12 @@ struct ChannelWithPattern: Codable, Identifiable, Hashable {
     let isCurated: Bool
     let hasPattern: Bool?
     let pattern: ChannelPattern?
+    // Content type classification
+    let hasMovies: Bool
+    let hasSeries: Bool
+    let hasKidsContent: Bool
+    // Pattern source
+    let patternSource: String
     let createdAt: String?
     let updatedAt: String?
 
@@ -237,6 +247,10 @@ struct ChannelWithPattern: Codable, Identifiable, Hashable {
         case isCurated = "is_curated"
         case hasPattern = "has_pattern"
         case pattern
+        case hasMovies = "has_movies"
+        case hasSeries = "has_series"
+        case hasKidsContent = "has_kids_content"
+        case patternSource = "pattern_source"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
