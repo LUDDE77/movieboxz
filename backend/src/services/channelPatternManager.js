@@ -135,6 +135,14 @@ class ChannelPatternManager {
                     metadata.year = parseInt(metadata.year, 10)
                 }
 
+                // Strip emojis from title and episode_name
+                if (metadata.title) {
+                    metadata.title = this.stripEmojis(metadata.title)
+                }
+                if (metadata.episode_name) {
+                    metadata.episode_name = this.stripEmojis(metadata.episode_name)
+                }
+
                 // Parse season and episode to integers
                 if (metadata.season) {
                     metadata.season = parseInt(metadata.season, 10)
