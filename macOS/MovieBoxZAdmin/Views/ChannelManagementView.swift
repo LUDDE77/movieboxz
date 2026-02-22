@@ -9,6 +9,9 @@ struct ChannelManagementView: View {
     @State private var isLoading = false
     @State private var error: String?
 
+    // Filter state
+    @State private var channelFilter: ChannelFilter = .all
+
     // Add channel form
     @State private var showAddChannel = false
     @State private var newChannelId = ""
@@ -28,18 +31,65 @@ struct ChannelManagementView: View {
     // Tab selection
     @State private var selectedTab = 0
 
+    // Filtered channels based on selected filter
+    var filteredChannels: [ChannelWithPattern] {
+        switch channelFilter {
+        case .all:
+            return channels
+        case .movies:
+            return channels.filter { $0.hasMovies }
+        case .series:
+            return channels.filter { $0.hasSeries }
+        case .kids:
+            return channels.filter { $0.hasKidsContent }
+        }
+    }
+
     var body: some View {
         NavigationSplitView {
             // MARK: - Sidebar (Channel List)
             VStack(spacing: 0) {
                 // Header
-                HStack {
-                    Text("Channels")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    Spacer()
-                    Button(action: { showAddChannel = true }) {
-                        Label("Add Channel", systemImage: "plus")
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Channels")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Spacer()
+                        Button(action: { showAddChannel = true }) {
+                            Label("Add Channel", systemImage: "plus")
+                        }
+                    }
+
+                    // Filter buttons
+                    HStack(spacing: 8) {
+                        FilterButton(
+                            title: "All",
+                            count: channels.count,
+                            isSelected: channelFilter == .all,
+                            action: { channelFilter = .all }
+                        )
+
+                        FilterButton(
+                            title: "Movies",
+                            count: channels.filter { $0.hasMovies }.count,
+                            isSelected: channelFilter == .movies,
+                            action: { channelFilter = .movies }
+                        )
+
+                        FilterButton(
+                            title: "Series",
+                            count: channels.filter { $0.hasSeries }.count,
+                            isSelected: channelFilter == .series,
+                            action: { channelFilter = .series }
+                        )
+
+                        FilterButton(
+                            title: "Kids",
+                            count: channels.filter { $0.hasKidsContent }.count,
+                            isSelected: channelFilter == .kids,
+                            action: { channelFilter = .kids }
+                        )
                     }
                 }
                 .padding()
@@ -58,7 +108,7 @@ struct ChannelManagementView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     // Channel list
-                    List(channels, selection: $selectedChannel) { channel in
+                    List(filteredChannels, selection: $selectedChannel) { channel in
                         ChannelRow(channel: channel)
                             .tag(channel)
                     }
@@ -1188,6 +1238,42 @@ struct ChannelClassificationView: View {
         }
 
         isSaving = false
+    }
+}
+
+// MARK: - Channel Filter Enum
+
+enum ChannelFilter {
+    case all
+    case movies
+    case series
+    case kids
+}
+
+// MARK: - Filter Button Component
+
+struct FilterButton: View {
+    let title: String
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                Text("(\(count))")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor : Color.gray.opacity(0.1))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
     }
 }
 
