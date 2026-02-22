@@ -98,6 +98,96 @@ router.post('/import', async (req, res, next) => {
     }
 })
 
+/**
+ * Import playlist movies to staging table
+ * POST /api/staging/import-playlist
+ * Body: { playlistId, channelId (optional), limit, batchId }
+ */
+router.post('/import-playlist', async (req, res, next) => {
+    try {
+        const { playlistId, channelId = null, limit = 50, batchId = null } = req.body
+
+        if (!playlistId) {
+            return res.status(400).json({
+                error: 'playlistId required'
+            })
+        }
+
+        logger.info(`Importing playlist to staging: ${playlistId}`)
+
+        // Fetch movies from YouTube playlist
+        const youtubeMovies = await movieCurator.fetchPlaylistMovies(playlistId, limit)
+
+        if (youtubeMovies.length === 0) {
+            return res.json({
+                success: true,
+                imported: 0,
+                skipped: 0,
+                message: 'No movies found in playlist'
+            })
+        }
+
+        // Import to staging table
+        const imported = []
+        const skipped = []
+
+        for (const movie of youtubeMovies) {
+            // Check if already in staging (pending)
+            const { data: existing } = await supabase
+                .from('staged_movies')
+                .select('id')
+                .eq('youtube_video_id', movie.youtubeVideoId)
+                .eq('approval_status', 'pending')
+                .single()
+
+            if (existing) {
+                skipped.push(movie.youtubeVideoId)
+                continue
+            }
+
+            // Use provided channelId or the one from the video
+            const movieChannelId = channelId || movie.channelId
+
+            // Insert to staging
+            const { data, error } = await supabase
+                .from('staged_movies')
+                .insert({
+                    youtube_video_id: movie.youtubeVideoId,
+                    youtube_video_title: movie.title,
+                    title: movie.cleanTitle || movie.title,
+                    channel_id: movieChannelId,
+                    description: movie.description,
+                    published_at: movie.publishedAt,
+                    view_count: movie.viewCount,
+                    like_count: movie.likeCount,
+                    comment_count: movie.commentCount,
+                    approval_status: 'pending',
+                    import_batch_id: batchId
+                })
+                .select()
+                .single()
+
+            if (error) {
+                logger.error(`Failed to import ${movie.youtubeVideoId}:`, error)
+                skipped.push(movie.youtubeVideoId)
+            } else {
+                imported.push(data)
+            }
+        }
+
+        res.json({
+            success: true,
+            imported: imported.length,
+            skipped: skipped.length,
+            batchId,
+            movies: imported
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
 // =============================================================================
 // 2. LIST/FILTER STAGED MOVIES
 // =============================================================================
@@ -649,12 +739,33 @@ router.post('/publish', async (req, res, next) => {
                     const { data, error: updateError } = await supabase
                         .from('movies')
                         .update({
+                            youtube_video_title: stagedMovie.youtube_video_title,
                             title: stagedMovie.title,
                             description: stagedMovie.description,
                             poster_path: stagedMovie.poster_path,
+                            backdrop_path: stagedMovie.backdrop_path,
+                            release_date: stagedMovie.release_date,
+                            runtime_minutes: stagedMovie.runtime_minutes,
                             tmdb_id: stagedMovie.tmdb_id,
                             imdb_id: stagedMovie.imdb_id,
-                            // ... copy all relevant fields
+                            enrichment_source: stagedMovie.enrichment_source,
+                            enrichment_confidence: stagedMovie.enrichment_confidence,
+                            vote_average: stagedMovie.vote_average,
+                            vote_count: stagedMovie.vote_count,
+                            imdb_rating: stagedMovie.imdb_rating,
+                            imdb_votes: stagedMovie.imdb_votes,
+                            director: stagedMovie.director,
+                            actors: stagedMovie.actors,
+                            language: stagedMovie.language,
+                            country: stagedMovie.country,
+                            rated: stagedMovie.rated,
+                            is_tv_show: stagedMovie.is_tv_show,
+                            is_tv_series: stagedMovie.is_tv_series,
+                            is_kids_content: stagedMovie.is_kids_content,
+                            view_count: stagedMovie.view_count,
+                            like_count: stagedMovie.like_count,
+                            comment_count: stagedMovie.comment_count,
+                            published_at: stagedMovie.published_at
                         })
                         .eq('id', existing.id)
                         .select()
@@ -690,6 +801,8 @@ router.post('/publish', async (req, res, next) => {
                             country: stagedMovie.country,
                             rated: stagedMovie.rated,
                             is_tv_show: stagedMovie.is_tv_show,
+                            is_tv_series: stagedMovie.is_tv_series,
+                            is_kids_content: stagedMovie.is_kids_content,
                             view_count: stagedMovie.view_count,
                             like_count: stagedMovie.like_count,
                             comment_count: stagedMovie.comment_count,
@@ -718,10 +831,11 @@ router.post('/publish', async (req, res, next) => {
 
         res.json({
             success: true,
-            published: published.length,
-            failed: failed.length,
-            publishedIds: published,
-            errors: failed
+            data: {
+                published: published.length,
+                failed: failed.length,
+                movieIds: published
+            }
         })
 
     } catch (error) {

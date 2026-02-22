@@ -562,6 +562,128 @@ class YouTubeService {
         }
     }
 
+    /**
+     * Get videos from a YouTube playlist
+     * @param {string} playlistId - The playlist ID
+     * @param {object} options - Options for fetching
+     * @param {number} options.maxResults - Maximum number of videos to fetch (default: 500)
+     * @returns {Promise<Array>} Array of video objects
+     */
+    async getPlaylistItems(playlistId, options = {}) {
+        const startTime = Date.now()
+
+        try {
+            const { maxResults = 500 } = options
+
+            logger.info(`Fetching up to ${maxResults} videos from playlist: ${playlistId}`)
+
+            let allVideos = []
+            let nextPageToken = null
+            let totalFetched = 0
+            let pageCount = 0
+            let totalQuotaUsed = 0
+
+            // Loop to fetch all pages until we reach maxResults or no more pages
+            do {
+                pageCount++
+                const pageSize = Math.min(50, maxResults - totalFetched)  // API max is 50 per request
+
+                // Get playlist items
+                const playlistParams = {
+                    part: ['snippet', 'contentDetails'],
+                    playlistId: playlistId,
+                    maxResults: pageSize,
+                    pageToken: nextPageToken
+                }
+
+                logger.info(`Fetching playlist page ${pageCount} (${pageSize} items)...`)
+
+                const playlistResponse = await this.youtube.playlistItems.list(playlistParams)
+                this.updateQuotaUsage(1) // playlistItems.list costs 1 unit
+                totalQuotaUsed += 1
+
+                if (!playlistResponse.data.items || playlistResponse.data.items.length === 0) {
+                    logger.info('No more videos found in playlist')
+                    break
+                }
+
+                // Get video IDs for detailed info
+                const videoIds = playlistResponse.data.items
+                    .map(item => item.contentDetails?.videoId)
+                    .filter(Boolean)
+
+                // Get detailed video information
+                const videosResponse = await this.youtube.videos.list({
+                    part: ['snippet', 'contentDetails', 'status', 'statistics'],
+                    id: videoIds
+                })
+
+                this.updateQuotaUsage(1) // videos.list costs 1 unit
+                totalQuotaUsed += 1
+
+                // Map video data
+                const videos = videosResponse.data.items.map(video => ({
+                    id: video.id,
+                    title: video.snippet.title,
+                    description: video.snippet.description,
+                    channelId: video.snippet.channelId,
+                    channelTitle: video.snippet.channelTitle,
+                    publishedAt: video.snippet.publishedAt,
+                    thumbnails: video.snippet.thumbnails,
+                    duration: video.contentDetails.duration,
+                    embeddable: video.status.embeddable,
+                    uploadStatus: video.status.uploadStatus,
+                    privacyStatus: video.status.privacyStatus,
+                    viewCount: parseInt(video.statistics.viewCount) || 0,
+                    likeCount: parseInt(video.statistics.likeCount) || 0,
+                    commentCount: parseInt(video.statistics.commentCount) || 0,
+                    regionRestriction: video.contentDetails.regionRestriction || null
+                }))
+
+                allVideos.push(...videos)
+                totalFetched += videos.length
+
+                // Get next page token
+                nextPageToken = playlistResponse.data.nextPageToken
+
+                logger.info(`Fetched ${videos.length} videos (Total: ${totalFetched}/${maxResults}, Quota: ${totalQuotaUsed} units)`)
+
+                // Small delay to avoid rate limiting (100ms)
+                await new Promise(resolve => setTimeout(resolve, 100))
+
+            } while (nextPageToken && totalFetched < maxResults)
+
+            logger.info(`✅ Completed fetching ${totalFetched} videos from playlist across ${pageCount} page(s), used ${totalQuotaUsed} quota units`)
+
+            // Log API usage
+            await dbOperations.logApiUsage(
+                'youtube',
+                `playlistItems.list + videos.list (${pageCount} pages)`,
+                'GET',
+                totalQuotaUsed,
+                200,
+                Date.now() - startTime
+            )
+
+            return allVideos
+
+        } catch (error) {
+            logger.error(`Error fetching playlist items ${playlistId}:`, error.message)
+
+            await dbOperations.logApiUsage(
+                'youtube',
+                'playlistItems.list + videos.list',
+                'GET',
+                0,
+                error.response?.status || 500,
+                Date.now() - startTime,
+                error.message
+            )
+
+            throw error
+        }
+    }
+
     // =============================================================================
     // MOVIE DISCOVERY HELPERS
     // =============================================================================

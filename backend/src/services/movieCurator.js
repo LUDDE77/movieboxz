@@ -360,6 +360,96 @@ class MovieCurator {
     }
 
     /**
+     * Fetch movies from a channel (for staging import)
+     * @param {string} channelIdOrTitle - Channel ID or title
+     * @param {number} limit - Maximum number of videos to fetch
+     * @returns {Promise<Array>} Array of movie objects formatted for staging
+     */
+    async fetchChannelMovies(channelIdOrTitle, limit = 50) {
+        try {
+            logger.info(`Fetching movies from channel: ${channelIdOrTitle}`)
+
+            // Resolve channel ID
+            const channelId = await youtubeService.resolveChannelIdentifier(channelIdOrTitle)
+
+            // Get channel info
+            const channelInfo = await youtubeService.getChannelInfo(channelId)
+
+            // Fetch videos from channel
+            const videos = await youtubeService.getChannelVideos(channelId, {
+                maxResults: limit
+            })
+
+            // Filter and format videos that look like movies
+            const movies = videos
+                .filter(video => this.isLikelyMovie(video))
+                .map(video => ({
+                    youtubeVideoId: video.id,
+                    title: video.title,
+                    cleanTitle: null, // Will be populated by pattern extraction
+                    description: video.description,
+                    channelId: video.channelId,
+                    channelTitle: video.channelTitle,
+                    publishedAt: video.publishedAt,
+                    durationMinutes: this.parseDuration(video.duration),
+                    viewCount: video.viewCount,
+                    likeCount: video.likeCount,
+                    commentCount: video.commentCount,
+                    thumbnails: video.thumbnails
+                }))
+
+            logger.info(`Found ${movies.length} movies from ${videos.length} videos`)
+            return movies
+
+        } catch (error) {
+            logger.error(`Error fetching channel movies: ${error.message}`)
+            throw error
+        }
+    }
+
+    /**
+     * Fetch movies from a YouTube playlist (for staging import)
+     * @param {string} playlistId - Playlist ID
+     * @param {number} limit - Maximum number of videos to fetch
+     * @returns {Promise<Array>} Array of movie objects formatted for staging
+     */
+    async fetchPlaylistMovies(playlistId, limit = 50) {
+        try {
+            logger.info(`Fetching movies from playlist: ${playlistId}`)
+
+            // Fetch videos from playlist
+            const videos = await youtubeService.getPlaylistItems(playlistId, {
+                maxResults: limit
+            })
+
+            // Filter and format videos that look like movies
+            const movies = videos
+                .filter(video => this.isLikelyMovie(video))
+                .map(video => ({
+                    youtubeVideoId: video.id,
+                    title: video.title,
+                    cleanTitle: null, // Will be populated by pattern extraction
+                    description: video.description,
+                    channelId: video.channelId,
+                    channelTitle: video.channelTitle,
+                    publishedAt: video.publishedAt,
+                    durationMinutes: this.parseDuration(video.duration),
+                    viewCount: video.viewCount,
+                    likeCount: video.likeCount,
+                    commentCount: video.commentCount,
+                    thumbnails: video.thumbnails
+                }))
+
+            logger.info(`Found ${movies.length} movies from ${videos.length} videos in playlist`)
+            return movies
+
+        } catch (error) {
+            logger.error(`Error fetching playlist movies: ${error.message}`)
+            throw error
+        }
+    }
+
+    /**
      * Curate movies from a channel
      */
     async curateChannelMovies(channelId, options = {}) {
