@@ -461,8 +461,14 @@ router.get('/:channelId/movies', async (req, res, next) => {
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1)
 
+            // Add approval_status field for Swift compatibility
+            const moviesWithStatus = (movies || []).map(movie => ({
+                ...movie,
+                approval_status: 'approved' // Production movies are always approved
+            }))
+
             results.production = {
-                movies: movies || [],
+                movies: moviesWithStatus,
                 total: count || 0
             }
         }
@@ -676,6 +682,7 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     channel_tag: channelSettings?.channel_tag,
                     // Propagate channel-level flags
                     is_tv_series: channelSettings?.is_tv_series_channel || false,
+                    is_kids_content: channelSettings?.is_kids_content || false,
                     // Save extracted metadata from pattern
                     pattern_matched: parsed.patternMatched || false,
                     pattern_confidence: parsed.confidence || 0
