@@ -49,6 +49,12 @@ router.get('/', async (req, res, next) => {
                 is_curated: channel.is_curated,
                 has_pattern: pattern !== null,
                 pattern: pattern,
+                // Content type flags
+                has_movies: channel.has_movies !== false, // defaults to true
+                has_series: channel.has_series || false,
+                has_kids_content: channel.has_kids_content || false,
+                // Pattern source
+                pattern_source: channel.pattern_source || 'title',
                 created_at: channel.created_at,
                 updated_at: channel.updated_at
             }
@@ -296,6 +302,61 @@ router.post('/:id/test-pattern', async (req, res, next) => {
         })
     } catch (error) {
         logger.error('[Channels Admin] Test pattern error:', error)
+        next(error)
+    }
+})
+
+// PUT /api/admin/channels/:id - Update channel metadata
+router.put('/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const updates = req.body
+
+        // Validate allowed fields
+        const allowedFields = [
+            'has_movies', 'has_series', 'has_kids_content', 'pattern_source'
+        ]
+
+        const cleanUpdates = {}
+        allowedFields.forEach(field => {
+            if (updates[field] !== undefined) {
+                cleanUpdates[field] = updates[field]
+            }
+        })
+
+        if (Object.keys(cleanUpdates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No valid fields to update'
+            })
+        }
+
+        // Update channel
+        const { data: channel, error } = await supabase
+            .from('channels')
+            .update(cleanUpdates)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) throw error
+
+        if (!channel) {
+            return res.status(404).json({
+                success: false,
+                error: 'Channel not found'
+            })
+        }
+
+        logger.info(`[Channels Admin] Updated channel ${id}:`, cleanUpdates)
+
+        res.json({
+            success: true,
+            data: channel,
+            message: 'Channel updated successfully'
+        })
+    } catch (error) {
+        logger.error('[Channels Admin] Update channel error:', error)
         next(error)
     }
 })
