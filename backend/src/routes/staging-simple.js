@@ -69,6 +69,9 @@ router.post('/import', async (req, res, next) => {
                 // Calculate duration in minutes
                 const durationMinutes = movieCurator.parseDuration(video.duration)
 
+                // Determine if this is a TV series based on episode metadata
+                const isTvSeries = !!(parsed.episode_name || parsed.season || parsed.episode)
+
                 // Create staged movie record
                 const { data: stagedMovie, error } = await supabase
                     .from('staged_movies')
@@ -85,7 +88,18 @@ router.post('/import', async (req, res, next) => {
                         published_at: video.publishedAt,
                         approval_status: 'pending',
                         import_batch_id: batchId || null,
-                        region_restrictions: video.regionRestriction || null
+                        region_restrictions: video.regionRestriction || null,
+                        // Episode metadata
+                        is_tv_series: isTvSeries,
+                        episode_name: parsed.episode_name || null,
+                        season_number: parsed.season || null,
+                        episode_number: parsed.episode || null,
+                        // Pattern metadata
+                        pattern_matched: parsed.patternMatched || false,
+                        pattern_confidence: parsed.confidence || 0,
+                        extracted_actor: parsed.actors || null,
+                        extracted_genre: parsed.genre || null,
+                        extracted_year: parsed.year || null
                     })
                     .select()
                     .single()
@@ -177,6 +191,9 @@ router.post('/import-playlist', async (req, res, next) => {
                 // Calculate duration in minutes
                 const durationMinutes = movieCurator.parseDuration(video.duration)
 
+                // Determine if this is a TV series based on episode metadata
+                const isTvSeries = !!(parsed.episode_name || parsed.season || parsed.episode)
+
                 // Create staged movie record
                 const { data: stagedMovie, error } = await supabase
                     .from('staged_movies')
@@ -193,7 +210,18 @@ router.post('/import-playlist', async (req, res, next) => {
                         published_at: video.publishedAt,
                         approval_status: 'pending',
                         import_batch_id: batchId || null,
-                        region_restrictions: video.regionRestriction || null
+                        region_restrictions: video.regionRestriction || null,
+                        // Episode metadata
+                        is_tv_series: isTvSeries,
+                        episode_name: parsed.episode_name || null,
+                        season_number: parsed.season || null,
+                        episode_number: parsed.episode || null,
+                        // Pattern metadata
+                        pattern_matched: parsed.patternMatched || false,
+                        pattern_confidence: parsed.confidence || 0,
+                        extracted_actor: parsed.actors || null,
+                        extracted_genre: parsed.genre || null,
+                        extracted_year: parsed.year || null
                     })
                     .select()
                     .single()

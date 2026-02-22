@@ -1101,6 +1101,10 @@ struct EnrichmentProgressModal: View {
             isCurated: false,
             hasPattern: false,
             pattern: nil,
+            hasMovies: true,
+            hasSeries: false,
+            hasKidsContent: false,
+            patternSource: "title",
             createdAt: "",
             updatedAt: nil
         )

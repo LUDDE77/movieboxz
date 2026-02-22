@@ -111,7 +111,10 @@ class ChannelPatternManager {
                     title: metadata.title,
                     genre: metadata.genre,
                     actors: metadata.actors,
-                    year: metadata.year
+                    year: metadata.year,
+                    episode_name: metadata.episode_name,
+                    season: metadata.season,
+                    episode: metadata.episode
                 })
 
                 // Clean up actors field - if it ends with "Movie(s)", it's a genre not an actor
@@ -132,11 +135,22 @@ class ChannelPatternManager {
                     metadata.year = parseInt(metadata.year, 10)
                 }
 
+                // Parse season and episode to integers
+                if (metadata.season) {
+                    metadata.season = parseInt(metadata.season, 10)
+                }
+                if (metadata.episode) {
+                    metadata.episode = parseInt(metadata.episode, 10)
+                }
+
                 logger.debug('Pattern matched successfully', {
                     title: metadata.title,
                     actors: metadata.actorsArray,
                     genre: metadata.genre,
-                    year: metadata.year
+                    year: metadata.year,
+                    episode_name: metadata.episode_name,
+                    season: metadata.season,
+                    episode: metadata.episode
                 })
 
                 return {
