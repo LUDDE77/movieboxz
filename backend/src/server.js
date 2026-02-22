@@ -70,7 +70,9 @@ const limiter = rateLimit({
         code: 'RATE_LIMIT_EXCEEDED'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Skip rate limiting for admin endpoints (already protected by API key auth)
+    skip: (req) => req.path.startsWith('/api/admin')
 })
 
 const speedLimiter = slowDown({
