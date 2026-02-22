@@ -314,7 +314,8 @@ class YouTubeService {
                     privacyStatus: video.status.privacyStatus,
                     viewCount: parseInt(video.statistics.viewCount) || 0,
                     likeCount: parseInt(video.statistics.likeCount) || 0,
-                    commentCount: parseInt(video.statistics.commentCount) || 0
+                    commentCount: parseInt(video.statistics.commentCount) || 0,
+                    regionRestriction: video.contentDetails.regionRestriction || null
                 }))
 
                 allVideos.push(...videos)

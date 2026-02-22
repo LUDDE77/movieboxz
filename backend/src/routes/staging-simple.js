@@ -84,7 +84,8 @@ router.post('/import', async (req, res, next) => {
                         comment_count: parseInt(video.commentCount) || 0,
                         published_at: video.publishedAt,
                         approval_status: 'pending',
-                        import_batch_id: batchId || null
+                        import_batch_id: batchId || null,
+                        region_restrictions: video.regionRestriction || null
                     })
                     .select()
                     .single()
