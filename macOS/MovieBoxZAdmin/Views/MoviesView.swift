@@ -711,9 +711,7 @@ struct ProductionMovieEditView: View {
                     // Read-only metadata
                     GroupBox("Metadata (Read-only)") {
                         VStack(alignment: .leading, spacing: 8) {
-                            if let youtubeId = movie.youtubeVideoId {
-                                InfoRow(label: "YouTube ID", value: youtubeId)
-                            }
+                            InfoRow(label: "YouTube ID", value: movie.youtubeVideoId)
                             if let imdbId = movie.imdbId {
                                 InfoRow(label: "IMDB ID", value: imdbId)
                             }
