@@ -785,6 +785,7 @@ router.post('/publish', async (req, res, next) => {
         let published = 0
         let failed = 0
         const movieIds = []
+        const errors = []
 
         // If specific IDs provided, approve them first
         if (ids && ids.length > 0) {
@@ -868,6 +869,13 @@ router.post('/publish', async (req, res, next) => {
                 published++
             } catch (error) {
                 logger.error(`[Staging] Failed to publish movie ${stagedMovie.id}:`, error)
+                errors.push({
+                    movieId: stagedMovie.id,
+                    movieTitle: stagedMovie.title,
+                    error: error.message,
+                    errorCode: error.code,
+                    errorDetails: error.details || error.hint
+                })
                 failed++
             }
         }
@@ -877,7 +885,8 @@ router.post('/publish', async (req, res, next) => {
             data: {
                 published,
                 failed,
-                movieIds
+                movieIds,
+                errors: errors.length > 0 ? errors : undefined
             }
         })
     } catch (error) {
