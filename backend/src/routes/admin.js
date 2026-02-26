@@ -1789,7 +1789,7 @@ router.post('/manual-enrichment-queue/:queueId/skip', async (req, res, next) => 
 // =============================================================================
 router.delete('/manual-enrichment-queue/:queueId', async (req, res, next) => {
     try {
-        const { queueId } = req.params
+        const { queueId} = req.params
 
         logger.info(`Admin deleting queue entry: ${queueId}`)
 
@@ -1801,6 +1801,164 @@ router.delete('/manual-enrichment-queue/:queueId', async (req, res, next) => {
         })
 
     } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// PRODUCTION MOVIE MANAGEMENT
+// =============================================================================
+
+/**
+ * PATCH /api/admin/movies/:id
+ * Update production movie metadata
+ */
+router.patch('/movies/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const updates = req.body
+
+        logger.info(`[Production Movies] Updating movie ${id}`)
+
+        // Allowed fields for update
+        const allowedFields = [
+            'title', 'description', 'release_date', 'director', 'actors',
+            'is_tv_series', 'is_kids_content', 'is_available'
+        ]
+
+        const cleanUpdates = {}
+        allowedFields.forEach(field => {
+            if (updates[field] !== undefined) {
+                cleanUpdates[field] = updates[field]
+            }
+        })
+
+        if (Object.keys(cleanUpdates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No valid fields to update'
+            })
+        }
+
+        cleanUpdates.updated_at = new Date().toISOString()
+
+        const { data: movie, error } = await supabase
+            .from('movies')
+            .update(cleanUpdates)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) throw error
+
+        if (!movie) {
+            return res.status(404).json({
+                success: false,
+                error: 'Movie not found'
+            })
+        }
+
+        res.json({
+            success: true,
+            data: movie
+        })
+
+    } catch (error) {
+        logger.error('[Production Movies] Update error:', error)
+        next(error)
+    }
+})
+
+/**
+ * POST /api/admin/movies/:id/enrich
+ * Manually enrich a production movie
+ */
+router.post('/movies/:id/enrich', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { priority = 'full' } = req.body
+
+        logger.info(`[Production Movies] Enriching movie ${id} with priority: ${priority}`)
+
+        // Get the movie
+        const { data: movie, error: fetchError } = await supabase
+            .from('movies')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (fetchError) throw fetchError
+
+        if (!movie) {
+            return res.status(404).json({
+                success: false,
+                error: 'Movie not found'
+            })
+        }
+
+        // Enrich using enhanced enrichment service
+        const enriched = await enhancedEnrichment.enrichMovie({
+            title: movie.title,
+            youtube_video_title: movie.youtube_video_title,
+            releaseDate: movie.release_date
+        }, priority)
+
+        // Update movie with enrichment data
+        const updateData = {
+            tmdb_id: enriched.tmdb_id,
+            imdb_id: enriched.imdb_id,
+            poster_path: enriched.poster_path,
+            backdrop_path: enriched.backdrop_path,
+            vote_average: enriched.vote_average,
+            vote_count: enriched.vote_count,
+            popularity: enriched.popularity,
+            imdb_rating: enriched.imdb_rating,
+            imdb_votes: enriched.imdb_votes,
+            rated: enriched.rated,
+            director: enriched.director,
+            actors: enriched.actors,
+            language: enriched.language,
+            country: enriched.country,
+            is_tv_show: enriched.is_tv_show,
+            category: enriched.category,
+            enrichment_source: enriched.enrichment_source,
+            enrichment_confidence: enriched.enrichment_confidence,
+            updated_at: new Date().toISOString()
+        }
+
+        // Only update description if we got one and the movie doesn't have one
+        if (enriched.description && !movie.description) {
+            updateData.description = enriched.description
+        }
+
+        // Only update release_date if we got one and the movie doesn't have one
+        if (enriched.release_date && !movie.release_date) {
+            updateData.release_date = enriched.release_date
+        }
+
+        // Only update runtime if we got one and the movie doesn't have one
+        if (enriched.runtime_minutes && !movie.runtime_minutes) {
+            updateData.runtime_minutes = enriched.runtime_minutes
+        }
+
+        const { data: updatedMovie, error: updateError } = await supabase
+            .from('movies')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (updateError) throw updateError
+
+        logger.info(`[Production Movies] Successfully enriched movie ${id}`)
+
+        res.json({
+            success: true,
+            data: updatedMovie
+        })
+
+    } catch (error) {
+        logger.error('[Production Movies] Enrichment error:', error)
         next(error)
     }
 })
