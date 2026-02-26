@@ -812,6 +812,12 @@ router.post('/publish', async (req, res, next) => {
         for (const stagedMovie of stagedMovies || []) {
             try {
                 // Insert into movies table
+                // Convert enrichment_confidence from 0-100 scale to 0-1 scale if needed
+                let enrichmentConfidence = stagedMovie.enrichment_confidence
+                if (enrichmentConfidence != null && enrichmentConfidence > 1) {
+                    enrichmentConfidence = enrichmentConfidence / 100
+                }
+
                 const { data: insertedMovie, error: insertError } = await supabase
                     .from('movies')
                     .insert({
@@ -846,7 +852,7 @@ router.post('/publish', async (req, res, next) => {
                         is_kids_content: stagedMovie.is_kids_content,
                         category: stagedMovie.category,
                         enrichment_source: stagedMovie.enrichment_source,
-                        enrichment_confidence: stagedMovie.enrichment_confidence,
+                        enrichment_confidence: enrichmentConfidence,
                         is_available: true
                     })
                     .select('id')
