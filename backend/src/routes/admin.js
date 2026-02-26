@@ -1985,4 +1985,197 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
     }
 })
 
+/**
+ * POST /api/admin/movies/:id/genres
+ * Update genres for a production movie
+ */
+router.post('/movies/:id/genres', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { genreIds } = req.body
+
+        logger.info(`[Production Movies] Updating genres for movie ${id}`)
+
+        if (!Array.isArray(genreIds)) {
+            return res.status(400).json({
+                success: false,
+                error: 'genreIds must be an array'
+            })
+        }
+
+        // Delete existing genre associations
+        const { error: deleteError } = await supabase
+            .from('movie_genres')
+            .delete()
+            .eq('movie_id', id)
+
+        if (deleteError) throw deleteError
+
+        // Insert new genre associations if any
+        if (genreIds.length > 0) {
+            const genreAssociations = genreIds.map(genreId => ({
+                movie_id: id,
+                genre_id: genreId
+            }))
+
+            const { error: insertError } = await supabase
+                .from('movie_genres')
+                .insert(genreAssociations)
+
+            if (insertError) throw insertError
+        }
+
+        // Fetch updated movie with genres
+        const { data: movie, error: fetchError } = await supabase
+            .from('movies')
+            .select(`
+                *,
+                genres:movie_genres(
+                    genre:genres(*)
+                )
+            `)
+            .eq('id', id)
+            .single()
+
+        if (fetchError) throw fetchError
+
+        if (!movie) {
+            return res.status(404).json({
+                success: false,
+                error: 'Movie not found'
+            })
+        }
+
+        // Transform genres to match expected format
+        const transformedMovie = {
+            ...movie,
+            genres: movie.genres?.map(mg => mg.genre) || []
+        }
+
+        logger.info(`[Production Movies] Successfully updated genres for movie ${id}`)
+
+        res.json({
+            success: true,
+            data: transformedMovie
+        })
+
+    } catch (error) {
+        logger.error('[Production Movies] Genre update error:', error)
+        next(error)
+    }
+})
+
+/**
+ * POST /api/admin/movies/:id/enrich-manual-imdb
+ * Manually enrich a production movie from a specific IMDB ID
+ */
+router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { imdbId } = req.body
+
+        logger.info(`[Production Movies] Manual IMDB enrichment for movie ${id} with IMDB ${imdbId}`)
+
+        if (!imdbId || !imdbId.startsWith('tt')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid IMDB ID required (must start with "tt")'
+            })
+        }
+
+        // Get the movie
+        const { data: movie, error: fetchError } = await supabase
+            .from('movies')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (fetchError) throw fetchError
+
+        if (!movie) {
+            return res.status(404).json({
+                success: false,
+                error: 'Movie not found'
+            })
+        }
+
+        // Enrich using the specific IMDB ID
+        const enriched = await enhancedEnrichment.enrichMovie({
+            title: movie.title,
+            youtube_video_title: movie.youtube_video_title,
+            releaseDate: movie.release_date,
+            imdbId: imdbId  // Force this specific IMDB ID
+        }, 'full')
+
+        // Update movie with enrichment data
+        const updateData = {
+            imdb_id: imdbId,  // Force the IMDB ID the user specified
+            tmdb_id: enriched.tmdb_id,
+            poster_path: enriched.poster_path,
+            backdrop_path: enriched.backdrop_path,
+            vote_average: enriched.vote_average,
+            vote_count: enriched.vote_count,
+            popularity: enriched.popularity,
+            imdb_rating: enriched.imdb_rating,
+            imdb_votes: enriched.imdb_votes,
+            rated: enriched.rated,
+            director: enriched.director,
+            actors: enriched.actors,
+            language: enriched.language,
+            country: enriched.country,
+            is_tv_show: enriched.is_tv_show,
+            category: enriched.category,
+            enrichment_source: 'manual_imdb',
+            enrichment_confidence: 1.0,  // User verified
+            updated_at: new Date().toISOString()
+        }
+
+        // Update description if we got one and movie doesn't have one
+        if (enriched.description && !movie.description) {
+            updateData.description = enriched.description
+        }
+
+        // Update release_date if we got one and movie doesn't have one
+        if (enriched.release_date && !movie.release_date) {
+            updateData.release_date = enriched.release_date
+        }
+
+        // Update runtime if we got one and movie doesn't have one
+        if (enriched.runtime_minutes && !movie.runtime_minutes) {
+            updateData.runtime_minutes = enriched.runtime_minutes
+        }
+
+        const { data: updatedMovie, error: updateError } = await supabase
+            .from('movies')
+            .update(updateData)
+            .eq('id', id)
+            .select(`
+                *,
+                genres:movie_genres(
+                    genre:genres(*)
+                )
+            `)
+            .single()
+
+        if (updateError) throw updateError
+
+        // Transform genres to match expected format
+        const transformedMovie = {
+            ...updatedMovie,
+            genres: updatedMovie.genres?.map(mg => mg.genre) || []
+        }
+
+        logger.info(`[Production Movies] Successfully enriched movie ${id} with manual IMDB ${imdbId}`)
+
+        res.json({
+            success: true,
+            data: transformedMovie
+        })
+
+    } catch (error) {
+        logger.error('[Production Movies] Manual IMDB enrichment error:', error)
+        next(error)
+    }
+})
+
 export default router

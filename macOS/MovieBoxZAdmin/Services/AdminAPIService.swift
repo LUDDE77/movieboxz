@@ -970,4 +970,40 @@ class AdminAPIService: ObservableObject {
 
         return response.data
     }
+
+    /// Update genres for a production movie
+    func updateProductionMovieGenres(movieId: String, genreIds: [String]) async throws -> Movie {
+        let endpoint = "/movies/\(movieId)/genres"
+
+        struct GenreUpdateBody: Codable {
+            let genreIds: [String]
+        }
+
+        let body = GenreUpdateBody(genreIds: genreIds)
+
+        print("🏷️ [API] Updating genres for production movie \(movieId)")
+
+        let response: APIResponse<Movie> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Production movie genres updated successfully")
+
+        return response.data
+    }
+
+    /// Enrich a production movie with a manual IMDB ID
+    func enrichProductionMovieWithManualIMDB(movieId: String, imdbId: String) async throws -> Movie {
+        let endpoint = "/movies/\(movieId)/enrich-manual-imdb"
+
+        struct ManualIMDBBody: Codable {
+            let imdbId: String
+        }
+
+        let body = ManualIMDBBody(imdbId: imdbId)
+
+        print("🎯 [API] Manual IMDB enrichment for production movie \(movieId) with IMDB \(imdbId)")
+
+        let response: APIResponse<Movie> = try await request(endpoint: endpoint, method: "POST", body: body)
+        print("✅ [API] Production movie enriched with manual IMDB successfully")
+
+        return response.data
+    }
 }
