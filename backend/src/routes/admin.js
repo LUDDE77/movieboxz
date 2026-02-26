@@ -1846,7 +1846,12 @@ router.patch('/movies/:id', async (req, res, next) => {
             .from('movies')
             .update(cleanUpdates)
             .eq('id', id)
-            .select()
+            .select(`
+                *,
+                genres:movie_genres(
+                    genre:genres(*)
+                )
+            `)
             .single()
 
         if (error) throw error
@@ -1858,9 +1863,15 @@ router.patch('/movies/:id', async (req, res, next) => {
             })
         }
 
+        // Transform genres to match expected format
+        const transformedMovie = {
+            ...movie,
+            genres: movie.genres?.map(mg => mg.genre) || []
+        }
+
         res.json({
             success: true,
-            data: movie
+            data: transformedMovie
         })
 
     } catch (error) {
@@ -1945,16 +1956,27 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
             .from('movies')
             .update(updateData)
             .eq('id', id)
-            .select()
+            .select(`
+                *,
+                genres:movie_genres(
+                    genre:genres(*)
+                )
+            `)
             .single()
 
         if (updateError) throw updateError
+
+        // Transform genres to match expected format
+        const transformedMovie = {
+            ...updatedMovie,
+            genres: updatedMovie.genres?.map(mg => mg.genre) || []
+        }
 
         logger.info(`[Production Movies] Successfully enriched movie ${id}`)
 
         res.json({
             success: true,
-            data: updatedMovie
+            data: transformedMovie
         })
 
     } catch (error) {
