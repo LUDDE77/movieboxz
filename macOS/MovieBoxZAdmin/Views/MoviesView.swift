@@ -14,7 +14,6 @@ struct MoviesView: View {
 
     // Edit state
     @State private var editingMovie: Movie?
-    @State private var showEditSheet = false
 
     // Enrichment state
     @State private var isEnriching = false
@@ -36,31 +35,25 @@ struct MoviesView: View {
                 contentView
             }
         }
-        .sheet(isPresented: $showEditSheet) {
+        .sheet(item: $editingMovie) { movie in
             print("📋 [MoviesView] SHEET CONTENT BLOCK EXECUTING")
-            print("📋 [MoviesView] showEditSheet = \(showEditSheet)")
-            print("📋 [MoviesView] editingMovie is nil: \(editingMovie == nil)")
+            print("📋 [MoviesView] Movie: \(movie.title)")
+            print("📋 [MoviesView] Creating ProductionMovieEditView...")
 
-            if let movie = editingMovie {
-                print("📋 [MoviesView] Creating ProductionMovieEditView for: \(movie.title)")
-                return AnyView(ProductionMovieEditView(
-                    movie: movie,
-                    onSave: { updates in
-                        print("💾 [MoviesView] onSave called with \(updates.count) updates")
-                        Task {
-                            await updateMovieWithChanges(movie, updates: updates)
-                        }
-                        showEditSheet = false
-                    },
-                    onCancel: {
-                        print("❌ [MoviesView] onCancel called")
-                        showEditSheet = false
+            ProductionMovieEditView(
+                movie: movie,
+                onSave: { updates in
+                    print("💾 [MoviesView] onSave called with \(updates.count) updates")
+                    Task {
+                        await updateMovieWithChanges(movie, updates: updates)
                     }
-                ))
-            } else {
-                print("⚠️ [MoviesView] editingMovie is nil - showing empty view")
-                return AnyView(EmptyView())
-            }
+                    editingMovie = nil
+                },
+                onCancel: {
+                    print("❌ [MoviesView] onCancel called")
+                    editingMovie = nil
+                }
+            )
         }
         .task {
             await loadMovies()
@@ -315,12 +308,9 @@ struct MoviesView: View {
                                 print("\n🖊️ [MoviesView] EDIT BUTTON CLICKED")
                                 print("🖊️ [MoviesView] Movie ID: \(movie.id)")
                                 print("🖊️ [MoviesView] Movie Title: \(movie.title)")
-                                print("🖊️ [MoviesView] Setting editingMovie...")
+                                print("🖊️ [MoviesView] Setting editingMovie to trigger sheet...")
                                 editingMovie = movie
-                                print("🖊️ [MoviesView] editingMovie set: \(editingMovie != nil)")
-                                print("🖊️ [MoviesView] Setting showEditSheet to true...")
-                                showEditSheet = true
-                                print("🖊️ [MoviesView] showEditSheet = \(showEditSheet)\n")
+                                print("🖊️ [MoviesView] editingMovie set: \(editingMovie != nil)\n")
                             }) {
                                 Label("Edit", systemImage: "pencil")
                             }
