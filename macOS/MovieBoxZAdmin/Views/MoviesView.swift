@@ -37,19 +37,29 @@ struct MoviesView: View {
             }
         }
         .sheet(isPresented: $showEditSheet) {
+            print("📋 [MoviesView] SHEET CONTENT BLOCK EXECUTING")
+            print("📋 [MoviesView] showEditSheet = \(showEditSheet)")
+            print("📋 [MoviesView] editingMovie is nil: \(editingMovie == nil)")
+
             if let movie = editingMovie {
-                ProductionMovieEditView(
+                print("📋 [MoviesView] Creating ProductionMovieEditView for: \(movie.title)")
+                return AnyView(ProductionMovieEditView(
                     movie: movie,
                     onSave: { updates in
+                        print("💾 [MoviesView] onSave called with \(updates.count) updates")
                         Task {
                             await updateMovieWithChanges(movie, updates: updates)
                         }
                         showEditSheet = false
                     },
                     onCancel: {
+                        print("❌ [MoviesView] onCancel called")
                         showEditSheet = false
                     }
-                )
+                ))
+            } else {
+                print("⚠️ [MoviesView] editingMovie is nil - showing empty view")
+                return AnyView(EmptyView())
             }
         }
         .task {
@@ -302,8 +312,15 @@ struct MoviesView: View {
                         // Action buttons
                         HStack(spacing: 12) {
                             Button(action: {
+                                print("\n🖊️ [MoviesView] EDIT BUTTON CLICKED")
+                                print("🖊️ [MoviesView] Movie ID: \(movie.id)")
+                                print("🖊️ [MoviesView] Movie Title: \(movie.title)")
+                                print("🖊️ [MoviesView] Setting editingMovie...")
                                 editingMovie = movie
+                                print("🖊️ [MoviesView] editingMovie set: \(editingMovie != nil)")
+                                print("🖊️ [MoviesView] Setting showEditSheet to true...")
                                 showEditSheet = true
+                                print("🖊️ [MoviesView] showEditSheet = \(showEditSheet)\n")
                             }) {
                                 Label("Edit", systemImage: "pencil")
                             }
@@ -557,6 +574,22 @@ struct ProductionMovieEditView: View {
     @State private var isKidsContent: Bool
 
     init(movie: Movie, onSave: @escaping ([String: Any]) -> Void, onCancel: @escaping () -> Void) {
+        print("\n" + String(repeating: "=", count: 80))
+        print("🎬 [ProductionMovieEditView] INITIALIZING EDIT VIEW")
+        print("🎬 [ProductionMovieEditView] Movie ID: \(movie.id)")
+        print("🎬 [ProductionMovieEditView] Movie Title: \(movie.title)")
+        print("🎬 [ProductionMovieEditView] Has Description: \(movie.description != nil)")
+        print("🎬 [ProductionMovieEditView] Has Poster: \(movie.posterPath != nil)")
+        print("🎬 [ProductionMovieEditView] Has Release Date: \(movie.releaseDate != nil)")
+        print("🎬 [ProductionMovieEditView] Has Director: \(movie.director != nil)")
+        print("🎬 [ProductionMovieEditView] Has Actors: \(movie.actors != nil)")
+        print("🎬 [ProductionMovieEditView] Runtime: \(movie.runtime?.description ?? "nil")")
+        print("🎬 [ProductionMovieEditView] IMDB Rating: \(movie.imdbRating?.description ?? "nil")")
+        print("🎬 [ProductionMovieEditView] IMDB Votes: \(movie.imdbVotes?.description ?? "nil")")
+        print("🎬 [ProductionMovieEditView] Is TV Series: \(movie.isTvSeries?.description ?? "nil")")
+        print("🎬 [ProductionMovieEditView] Is Kids Content: \(movie.isKidsContent?.description ?? "nil")")
+        print(String(repeating: "=", count: 80) + "\n")
+
         self.movie = movie
         self.onSave = onSave
         self.onCancel = onCancel
@@ -571,10 +604,21 @@ struct ProductionMovieEditView: View {
         _imdbVotes = State(initialValue: movie.imdbVotes.map { String($0) } ?? "")
         _isTvSeries = State(initialValue: movie.isTvSeries ?? false)
         _isKidsContent = State(initialValue: movie.isKidsContent ?? false)
+
+        print("🎬 [ProductionMovieEditView] State initialized:")
+        print("   Title: '\(movie.title)'")
+        print("   Description length: \(movie.description?.count ?? 0)")
+        print("   Release Date: '\(movie.releaseDate ?? "")'")
+        print("   Director: '\(movie.director ?? "")'")
+        print("   Actors: '\(movie.actors ?? "")'")
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        print("🎨 [ProductionMovieEditView] Body rendering...")
+        print("🎨 [ProductionMovieEditView] Current title: '\(title)'")
+        print("🎨 [ProductionMovieEditView] Current description length: \(description.count)")
+
+        return VStack(spacing: 0) {
             // Header
             HStack {
                 Text("Edit Movie")
@@ -582,6 +626,7 @@ struct ProductionMovieEditView: View {
                     .fontWeight(.bold)
                 Spacer()
                 Button("Cancel") {
+                    print("❌ [ProductionMovieEditView] Cancel button clicked")
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)

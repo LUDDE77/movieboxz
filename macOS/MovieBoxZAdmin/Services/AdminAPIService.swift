@@ -213,7 +213,7 @@ class AdminAPIService: ObservableObject {
     func getGenres(page: Int = 1, limit: Int = 100) async throws -> GenresData {
         print("🎭 [API] Fetching genres...")
 
-        guard let url = URL(string: "\(baseURL)/api/genres?page=\(page)&limit=\(limit)") else {
+        guard let url = URL(string: "\(baseURL)/api/browse/genres?page=\(page)&limit=\(limit)") else {
             print("❌ [API] Invalid URL for genres endpoint")
             throw APIError.invalidURL
         }
