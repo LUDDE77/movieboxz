@@ -528,6 +528,9 @@ struct ProductionMovieEditView: View {
     @State private var releaseDate: String
     @State private var director: String
     @State private var actors: String
+    @State private var runtime: String
+    @State private var imdbRating: String
+    @State private var imdbVotes: String
     @State private var isTvSeries: Bool
     @State private var isKidsContent: Bool
 
@@ -541,46 +544,197 @@ struct ProductionMovieEditView: View {
         _releaseDate = State(initialValue: movie.releaseDate ?? "")
         _director = State(initialValue: movie.director ?? "")
         _actors = State(initialValue: movie.actors ?? "")
+        _runtime = State(initialValue: movie.runtime != nil ? String(movie.runtime!) : "")
+        _imdbRating = State(initialValue: movie.imdbRating != nil ? String(format: "%.1f", movie.imdbRating!) : "")
+        _imdbVotes = State(initialValue: movie.imdbVotes ?? "")
         _isTvSeries = State(initialValue: movie.isTvSeries ?? false)
         _isKidsContent = State(initialValue: movie.isKidsContent ?? false)
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Edit Movie")
-                .font(.title)
-                .fontWeight(.bold)
-
-            Form {
-                Section("Basic Info") {
-                    TextField("Title", text: $title)
-                    TextField("Description", text: $description, axis: .vertical)
-                        .lineLimit(5...10)
-                    TextField("Release Date", text: $releaseDate)
-                        .help("Format: YYYY-MM-DD")
-                }
-
-                Section("Credits") {
-                    TextField("Director", text: $director)
-                    TextField("Actors", text: $actors)
-                        .help("Comma-separated list")
-                }
-
-                Section("Classification") {
-                    Toggle("TV Series", isOn: $isTvSeries)
-                    Toggle("Kids Content", isOn: $isKidsContent)
-                }
-            }
-            .formStyle(.grouped)
-
+        VStack(spacing: 0) {
+            // Header
             HStack {
+                Text("Edit Movie")
+                    .font(.title)
+                    .fontWeight(.bold)
+                Spacer()
                 Button("Cancel") {
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
+            }
+            .padding()
+            .background(Color(NSColor.windowBackgroundColor))
 
+            Divider()
+
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Poster preview
+                    if let posterPath = movie.posterPath {
+                        let posterURL: URL? = {
+                            if posterPath.hasPrefix("http") {
+                                return URL(string: posterPath)
+                            } else {
+                                return URL(string: "https://image.tmdb.org/t/p/w300\(posterPath)")
+                            }
+                        }()
+
+                        HStack {
+                            Spacer()
+                            AsyncImage(url: posterURL) { image in
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                            } placeholder: {
+                                ProgressView()
+                            }
+                            .frame(width: 150)
+                            .cornerRadius(8)
+                            Spacer()
+                        }
+                    }
+
+                    // Basic Information
+                    GroupBox("Basic Information") {
+                        VStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Title")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextField("Title", text: $title)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Description")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextEditor(text: $description)
+                                    .frame(height: 120)
+                                    .border(Color.gray.opacity(0.2))
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Release Date (YYYY-MM-DD)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextField("Release Date", text: $releaseDate)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                        }
+                        .padding(8)
+                    }
+
+                    // Credits
+                    GroupBox("Credits") {
+                        VStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Director")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextField("Director", text: $director)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Actors (comma-separated)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextField("Actors", text: $actors)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                        }
+                        .padding(8)
+                    }
+
+                    // Movie Details
+                    GroupBox("Movie Details") {
+                        VStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Runtime (minutes)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                TextField("Runtime", text: $runtime)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("IMDB Rating (0.0-10.0)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    TextField("Rating", text: $imdbRating)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("IMDB Votes")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    TextField("Votes", text: $imdbVotes)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+                            }
+                        }
+                        .padding(8)
+                    }
+
+                    // Classification
+                    GroupBox("Classification") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle(isOn: $isTvSeries) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("TV Series")
+                                        .font(.body)
+                                    Text("Mark this video as a TV series instead of a movie")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            Toggle(isOn: $isKidsContent) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Kids Content")
+                                        .font(.body)
+                                    Text("Mark this as appropriate for children")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(8)
+                    }
+
+                    // Read-only metadata
+                    GroupBox("Metadata (Read-only)") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if let youtubeId = movie.youtubeVideoId {
+                                InfoRow(label: "YouTube ID", value: youtubeId)
+                            }
+                            if let imdbId = movie.imdbId {
+                                InfoRow(label: "IMDB ID", value: imdbId)
+                            }
+                            if let tmdbId = movie.tmdbId {
+                                InfoRow(label: "TMDB ID", value: String(tmdbId))
+                            }
+                            if let channelTitle = movie.channelTitle {
+                                InfoRow(label: "Channel", value: channelTitle)
+                            }
+                        }
+                        .padding(8)
+                    }
+                }
+                .padding()
+            }
+
+            Divider()
+
+            // Footer with save button
+            HStack {
                 Spacer()
-
                 Button("Save Changes") {
                     var updates: [String: Any] = [:]
 
@@ -600,6 +754,15 @@ struct ProductionMovieEditView: View {
                     if actors != (movie.actors ?? "") {
                         updates["actors"] = actors
                     }
+                    if !runtime.isEmpty, let runtimeInt = Int(runtime), runtimeInt != (movie.runtime ?? 0) {
+                        updates["runtime"] = runtimeInt
+                    }
+                    if !imdbRating.isEmpty, let ratingDouble = Double(imdbRating), ratingDouble != (movie.imdbRating ?? 0) {
+                        updates["imdb_rating"] = ratingDouble
+                    }
+                    if imdbVotes != (movie.imdbVotes ?? "") {
+                        updates["imdb_votes"] = imdbVotes
+                    }
                     if isTvSeries != (movie.isTvSeries ?? false) {
                         updates["is_tv_series"] = isTvSeries
                     }
@@ -611,11 +774,29 @@ struct ProductionMovieEditView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
+                .disabled(title.isEmpty)
             }
             .padding()
+            .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 600, height: 600)
-        .padding()
+        .frame(width: 700, height: 800)
+    }
+}
+
+struct InfoRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.caption)
+                .textSelection(.enabled)
+        }
     }
 }
 
