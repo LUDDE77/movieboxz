@@ -544,8 +544,8 @@ struct ProductionMovieEditView: View {
         _releaseDate = State(initialValue: movie.releaseDate ?? "")
         _director = State(initialValue: movie.director ?? "")
         _actors = State(initialValue: movie.actors ?? "")
-        _runtime = State(initialValue: movie.runtime != nil ? String(movie.runtime!) : "")
-        _imdbRating = State(initialValue: movie.imdbRating != nil ? String(format: "%.1f", movie.imdbRating!) : "")
+        _runtime = State(initialValue: movie.runtime.map { String($0) } ?? "")
+        _imdbRating = State(initialValue: movie.imdbRating.map { String(format: "%.1f", $0) } ?? "")
         _imdbVotes = State(initialValue: movie.imdbVotes ?? "")
         _isTvSeries = State(initialValue: movie.isTvSeries ?? false)
         _isKidsContent = State(initialValue: movie.isKidsContent ?? false)
@@ -757,8 +757,10 @@ struct ProductionMovieEditView: View {
                     if !runtime.isEmpty, let runtimeInt = Int(runtime), runtimeInt != (movie.runtime ?? 0) {
                         updates["runtime"] = runtimeInt
                     }
-                    if !imdbRating.isEmpty, let ratingDouble = Double(imdbRating), ratingDouble != (movie.imdbRating ?? 0) {
-                        updates["imdb_rating"] = ratingDouble
+                    if !imdbRating.isEmpty, let ratingDouble = Double(imdbRating) {
+                        if movie.imdbRating == nil || abs(ratingDouble - movie.imdbRating!) > 0.01 {
+                            updates["imdb_rating"] = ratingDouble
+                        }
                     }
                     if imdbVotes != (movie.imdbVotes ?? "") {
                         updates["imdb_votes"] = imdbVotes
