@@ -546,7 +546,7 @@ struct ProductionMovieEditView: View {
         _actors = State(initialValue: movie.actors ?? "")
         _runtime = State(initialValue: movie.runtime.map { String($0) } ?? "")
         _imdbRating = State(initialValue: movie.imdbRating.map { String(format: "%.1f", $0) } ?? "")
-        _imdbVotes = State(initialValue: movie.imdbVotes ?? "")
+        _imdbVotes = State(initialValue: movie.imdbVotes.map { String($0) } ?? "")
         _isTvSeries = State(initialValue: movie.isTvSeries ?? false)
         _isKidsContent = State(initialValue: movie.isKidsContent ?? false)
     }
@@ -762,8 +762,10 @@ struct ProductionMovieEditView: View {
                             updates["imdb_rating"] = ratingDouble
                         }
                     }
-                    if imdbVotes != (movie.imdbVotes ?? "") {
-                        updates["imdb_votes"] = imdbVotes
+                    if !imdbVotes.isEmpty, let votesInt = Int(imdbVotes) {
+                        if movie.imdbVotes == nil || votesInt != movie.imdbVotes! {
+                            updates["imdb_votes"] = votesInt
+                        }
                     }
                     if isTvSeries != (movie.isTvSeries ?? false) {
                         updates["is_tv_series"] = isTvSeries
