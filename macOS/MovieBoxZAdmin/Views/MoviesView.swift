@@ -60,12 +60,25 @@ struct MoviesView: View {
     private var headerView: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Production Movies")
-                    .font(.title)
-                    .fontWeight(.bold)
+                HStack(spacing: 12) {
+                    Text("Production Movies")
+                        .font(.title)
+                        .fontWeight(.bold)
+
+                    if totalMovies > 0 {
+                        Text("\(totalMovies)")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                    }
+                }
 
                 if totalMovies > 0 {
-                    Text("\(totalMovies) movies")
+                    Text("Total movies in production")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -126,12 +139,12 @@ struct MoviesView: View {
         HSplitView {
             // Left: Movie list
             movieList
-                .frame(minWidth: 400, idealWidth: 500)
+                .frame(minWidth: 400, maxWidth: .infinity)
 
             // Right: Detail view
             if let movie = selectedMovie {
                 movieDetailView(movie)
-                    .frame(minWidth: 400, idealWidth: 600)
+                    .frame(minWidth: 400, maxWidth: .infinity)
             } else {
                 VStack {
                     Image(systemName: "film")
@@ -163,42 +176,51 @@ struct MoviesView: View {
             Divider()
 
             // Pagination
-            HStack {
+            HStack(spacing: 16) {
                 Text("Page \(currentPage) of \(totalPages)")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
                 Spacer()
 
-                Button("Previous") {
-                    if currentPage > 1 {
-                        currentPage -= 1
-                        Task { await loadMovies() }
-                    }
+                Button(action: {
+                    currentPage -= 1
+                    Task { await loadMovies() }
+                }) {
+                    Label("Previous", systemImage: "chevron.left")
                 }
                 .disabled(currentPage <= 1 || isLoading)
+                .buttonStyle(.bordered)
 
-                Button("Next") {
-                    if currentPage < totalPages {
-                        currentPage += 1
-                        Task { await loadMovies() }
-                    }
+                Button(action: {
+                    currentPage += 1
+                    Task { await loadMovies() }
+                }) {
+                    Label("Next", systemImage: "chevron.right")
+                        .labelStyle(.titleAndIcon)
                 }
                 .disabled(currentPage >= totalPages || isLoading)
+                .buttonStyle(.bordered)
 
                 Divider()
                     .frame(height: 20)
 
-                Picker("Items per page", selection: $itemsPerPage) {
+                Text("Per page:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Picker("", selection: $itemsPerPage) {
                     Text("25").tag(25)
                     Text("50").tag(50)
                     Text("100").tag(100)
                 }
-                .pickerStyle(.menu)
-                .frame(width: 140)
-                .onChange(of: itemsPerPage) { _, _ in
-                    currentPage = 1
-                    Task { await loadMovies() }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+                .onChange(of: itemsPerPage) { oldValue, newValue in
+                    if oldValue != newValue {
+                        currentPage = 1
+                        Task { await loadMovies() }
+                    }
                 }
             }
             .padding()
