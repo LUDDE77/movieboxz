@@ -72,7 +72,8 @@ const limiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     // Skip rate limiting for admin endpoints (already protected by API key auth)
-    skip: (req) => req.path.startsWith('/api/admin')
+    // Note: req.path is relative to the mount point ('/api'), so we check for '/admin' not '/api/admin'
+    skip: (req) => req.path.startsWith('/admin')
 })
 
 const speedLimiter = slowDown({
