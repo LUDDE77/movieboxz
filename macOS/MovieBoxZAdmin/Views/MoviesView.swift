@@ -36,9 +36,7 @@ struct MoviesView: View {
             }
         }
         .sheet(item: $editingMovie) { movie in
-            print("📋 [MoviesView] SHEET CONTENT BLOCK EXECUTING")
-            print("📋 [MoviesView] Movie: \(movie.title)")
-            print("📋 [MoviesView] Creating ProductionMovieEditView...")
+            let _ = print("📋 [MoviesView] SHEET PRESENTING: \(movie.title)")
 
             ProductionMovieEditView(
                 movie: movie,
@@ -604,9 +602,7 @@ struct ProductionMovieEditView: View {
     }
 
     var body: some View {
-        print("🎨 [ProductionMovieEditView] Body rendering...")
-        print("🎨 [ProductionMovieEditView] Current title: '\(title)'")
-        print("🎨 [ProductionMovieEditView] Current description length: \(description.count)")
+        let _ = print("🎨 [ProductionMovieEditView] Body rendering for: '\(title)'")
 
         return VStack(spacing: 0) {
             // Header
