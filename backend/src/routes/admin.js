@@ -2171,48 +2171,96 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
 
         // Update genres if enrichment returned any
         if (enriched.genres && enriched.genres.length > 0) {
-            logger.info(`[Production Movies] Updating ${enriched.genres.length} genres for movie ${id}`)
+            logger.info(`[Production Movies] Received ${enriched.genres.length} genre names from enrichment:`)
+            logger.info(`[Production Movies] Genre names: ${JSON.stringify(enriched.genres)}`)
 
-            // Delete existing genre associations
-            const { error: deleteError } = await supabase
-                .from('movie_genres')
-                .delete()
-                .eq('movie_id', id)
+            // Fetch all genres from database to map names to IDs
+            const { data: allGenres, error: genresError } = await supabase
+                .from('genres')
+                .select('id, name')
 
-            if (deleteError) {
-                logger.error('[Production Movies] Error deleting existing genres:', deleteError)
-            }
-
-            // Insert new genre associations
-            const genreAssociations = enriched.genres.map(genreId => ({
-                movie_id: id,
-                genre_id: genreId
-            }))
-
-            const { error: insertError } = await supabase
-                .from('movie_genres')
-                .insert(genreAssociations)
-
-            if (insertError) {
-                logger.error('[Production Movies] Error inserting new genres:', insertError)
+            if (genresError) {
+                logger.error('[Production Movies] Error fetching genres:', genresError)
             } else {
-                logger.info(`[Production Movies] Successfully updated genres for movie ${id}`)
-            }
+                logger.info(`[Production Movies] Fetched ${allGenres.length} genres from database`)
 
-            // Fetch movie again with updated genres
-            const { data: movieWithGenres, error: fetchGenresError } = await supabase
-                .from('movies')
-                .select(`
-                    *,
-                    genres:movie_genres(
-                        genre:genres(*)
-                    )
-                `)
-                .eq('id', id)
-                .single()
+                // Create case-insensitive name-to-ID mapping
+                const genreNameToId = {}
+                allGenres.forEach(genre => {
+                    genreNameToId[genre.name.toLowerCase()] = genre.id
+                })
 
-            if (!fetchGenresError && movieWithGenres) {
-                updatedMovie.genres = movieWithGenres.genres
+                // Map enrichment genre names to database genre IDs
+                const genreIds = []
+                const unmappedGenres = []
+
+                enriched.genres.forEach(genreName => {
+                    const normalizedName = genreName.toLowerCase().trim()
+                    const genreId = genreNameToId[normalizedName]
+
+                    if (genreId) {
+                        genreIds.push(genreId)
+                        logger.info(`[Production Movies] Mapped genre "${genreName}" -> ID ${genreId}`)
+                    } else {
+                        unmappedGenres.push(genreName)
+                        logger.warn(`[Production Movies] Could not map genre "${genreName}" to database ID`)
+                    }
+                })
+
+                if (unmappedGenres.length > 0) {
+                    logger.warn(`[Production Movies] ${unmappedGenres.length} genres could not be mapped: ${JSON.stringify(unmappedGenres)}`)
+                }
+
+                logger.info(`[Production Movies] Successfully mapped ${genreIds.length} of ${enriched.genres.length} genres`)
+
+                if (genreIds.length > 0) {
+                    // Delete existing genre associations
+                    const { error: deleteError } = await supabase
+                        .from('movie_genres')
+                        .delete()
+                        .eq('movie_id', id)
+
+                    if (deleteError) {
+                        logger.error('[Production Movies] Error deleting existing genres:', deleteError)
+                    }
+
+                    // Insert new genre associations with mapped IDs
+                    const genreAssociations = genreIds.map(genreId => ({
+                        movie_id: id,
+                        genre_id: genreId
+                    }))
+
+                    logger.info(`[Production Movies] Inserting ${genreAssociations.length} genre associations`)
+
+                    const { error: insertError } = await supabase
+                        .from('movie_genres')
+                        .insert(genreAssociations)
+
+                    if (insertError) {
+                        logger.error('[Production Movies] Error inserting new genres:', insertError)
+                    } else {
+                        logger.info(`[Production Movies] Successfully updated ${genreIds.length} genres for movie ${id}`)
+                    }
+
+                    // Fetch movie again with updated genres
+                    const { data: movieWithGenres, error: fetchGenresError } = await supabase
+                        .from('movies')
+                        .select(`
+                            *,
+                            genres:movie_genres(
+                                genre:genres(*)
+                            )
+                        `)
+                        .eq('id', id)
+                        .single()
+
+                    if (!fetchGenresError && movieWithGenres) {
+                        updatedMovie.genres = movieWithGenres.genres
+                        logger.info(`[Production Movies] Refetched movie with ${movieWithGenres.genres?.length || 0} genres`)
+                    }
+                } else {
+                    logger.warn(`[Production Movies] No valid genre IDs to insert`)
+                }
             }
         }
 
