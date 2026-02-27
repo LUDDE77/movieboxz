@@ -34,6 +34,7 @@ struct AdminStats: Codable {
 struct Movie: Codable, Identifiable {
     let id: String
     let youtubeVideoId: String
+    let youtubeVideoTitle: String
     let title: String
     let originalTitle: String?
     let channelTitle: String?
@@ -74,6 +75,7 @@ struct Movie: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case youtubeVideoId = "youtube_video_id"
+        case youtubeVideoTitle = "youtube_video_title"
         case title
         case originalTitle = "original_title"
         case channelTitle = "channel_title"
