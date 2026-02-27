@@ -23,7 +23,12 @@ router.get('/genres', async (req, res, next) => {
                     name: genre.name,
                     movieCount: parseInt(genre.movie_count) || 0
                 })),
-                total: genres.length
+                pagination: {
+                    page: 1,
+                    limit: genres.length,
+                    total: genres.length,
+                    pages: 1
+                }
             },
             message: `Retrieved ${genres.length} genres`
         })
