@@ -19,7 +19,7 @@ struct ProductionMovieEditView: View {
     @State private var imdbVotes: String
     @State private var isTvSeries: Bool
     @State private var isKidsContent: Bool
-    @State private var selectedGenreIds: Set<String>
+    @State private var selectedGenreIds: Set<Int>
 
     // Manual IMDB enrichment
     @State private var manualImdbId: String
@@ -426,7 +426,7 @@ struct ProductionMovieEditView: View {
             if selectedGenreIds != currentGenreIds {
                 updatedMovie = try await apiService.updateProductionMovieGenres(
                     movieId: movie.id,
-                    genreIds: Array(selectedGenreIds)
+                    genreIds: selectedGenreIds.map { String($0) }
                 )
             }
 
