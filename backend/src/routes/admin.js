@@ -2100,12 +2100,22 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         }
 
         // Enrich using the specific IMDB ID
+        logger.info(`[Production Movies] Enriching with IMDB ID: ${imdbId}`)
         const enriched = await enhancedEnrichment.enrichMovie({
             title: movie.title,
             youtube_video_title: movie.youtube_video_title,
             releaseDate: movie.release_date,
             imdbId: imdbId  // Force this specific IMDB ID
         }, 'full')
+
+        logger.info(`[Production Movies] Enrichment result:`)
+        logger.info(`  - Title: ${enriched.title || 'N/A'}`)
+        logger.info(`  - TMDB ID: ${enriched.tmdb_id || 'N/A'}`)
+        logger.info(`  - IMDB Rating: ${enriched.imdb_rating || 'N/A'}`)
+        logger.info(`  - Genres: ${enriched.genres ? enriched.genres.length : 0} genres`)
+        if (enriched.genres) {
+            logger.info(`  - Genre IDs: ${JSON.stringify(enriched.genres)}`)
+        }
 
         // Update movie with enrichment data
         const updateData = {
@@ -2159,6 +2169,53 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
 
         if (updateError) throw updateError
 
+        // Update genres if enrichment returned any
+        if (enriched.genres && enriched.genres.length > 0) {
+            logger.info(`[Production Movies] Updating ${enriched.genres.length} genres for movie ${id}`)
+
+            // Delete existing genre associations
+            const { error: deleteError } = await supabase
+                .from('movie_genres')
+                .delete()
+                .eq('movie_id', id)
+
+            if (deleteError) {
+                logger.error('[Production Movies] Error deleting existing genres:', deleteError)
+            }
+
+            // Insert new genre associations
+            const genreAssociations = enriched.genres.map(genreId => ({
+                movie_id: id,
+                genre_id: genreId
+            }))
+
+            const { error: insertError } = await supabase
+                .from('movie_genres')
+                .insert(genreAssociations)
+
+            if (insertError) {
+                logger.error('[Production Movies] Error inserting new genres:', insertError)
+            } else {
+                logger.info(`[Production Movies] Successfully updated genres for movie ${id}`)
+            }
+
+            // Fetch movie again with updated genres
+            const { data: movieWithGenres, error: fetchGenresError } = await supabase
+                .from('movies')
+                .select(`
+                    *,
+                    genres:movie_genres(
+                        genre:genres(*)
+                    )
+                `)
+                .eq('id', id)
+                .single()
+
+            if (!fetchGenresError && movieWithGenres) {
+                updatedMovie.genres = movieWithGenres.genres
+            }
+        }
+
         // Transform genres to match expected format
         const transformedMovie = {
             ...updatedMovie,
@@ -2166,6 +2223,7 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         }
 
         logger.info(`[Production Movies] Successfully enriched movie ${id} with manual IMDB ${imdbId}`)
+        logger.info(`[Production Movies] Final movie has ${transformedMovie.genres.length} genres`)
 
         res.json({
             success: true,

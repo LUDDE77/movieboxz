@@ -341,11 +341,14 @@ struct ProductionMovieEditView: View {
     }
 
     func loadGenres() async {
+        print("📚 [ProductionMovieEditView] Loading genres...")
         do {
             let genresData = try await apiService.getGenres()
             allGenres = genresData.genres
+            print("✅ [ProductionMovieEditView] Loaded \(allGenres.count) genres")
+            print("📚 [ProductionMovieEditView] Genres: \(allGenres.map { $0.name }.joined(separator: ", "))")
         } catch {
-            print("❌ Failed to load genres: \(error)")
+            print("❌ [ProductionMovieEditView] Failed to load genres: \(error)")
         }
     }
 
@@ -354,6 +357,10 @@ struct ProductionMovieEditView: View {
             errorMessage = "IMDB ID must start with 'tt'"
             return
         }
+
+        print("🎯 [ProductionMovieEditView] Starting manual IMDB enrichment")
+        print("🎯 [ProductionMovieEditView] Movie ID: \(movie.id)")
+        print("🎯 [ProductionMovieEditView] IMDB ID: \(manualImdbId)")
 
         isEnrichingWithIMDB = true
         errorMessage = nil
@@ -364,6 +371,11 @@ struct ProductionMovieEditView: View {
                 imdbId: manualImdbId
             )
 
+            print("✅ [ProductionMovieEditView] Enrichment successful")
+            print("📊 [ProductionMovieEditView] Updated movie title: \(updatedMovie.title)")
+            print("📊 [ProductionMovieEditView] Updated movie genres count: \(updatedMovie.genres.count)")
+            print("📊 [ProductionMovieEditView] Genres: \(updatedMovie.genres.map { $0.name }.joined(separator: ", "))")
+
             // Update local fields with enriched data
             title = updatedMovie.title
             description = updatedMovie.description ?? ""
@@ -373,12 +385,17 @@ struct ProductionMovieEditView: View {
             runtime = updatedMovie.runtime.map { String($0) } ?? ""
             imdbRating = updatedMovie.imdbRating.map { String(format: "%.1f", $0) } ?? ""
             imdbVotes = updatedMovie.imdbVotes.map { String($0) } ?? ""
+            selectedGenreIds = Set(updatedMovie.genres.map { $0.id })
+
+            print("✅ [ProductionMovieEditView] Local fields updated")
 
             // Call onSave with updated movie
             onSave(updatedMovie)
             onCancel()
 
         } catch {
+            print("❌ [ProductionMovieEditView] Enrichment failed: \(error)")
+            print("❌ [ProductionMovieEditView] Error details: \(error.localizedDescription)")
             errorMessage = "Failed to enrich: \(error.localizedDescription)"
         }
 
