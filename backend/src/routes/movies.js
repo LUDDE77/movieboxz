@@ -78,6 +78,7 @@ router.get('/', async (req, res, next) => {
             genre,
             channel,
             search,
+            needs_verification,
             sort = 'popular',
             page = 1,
             limit = 20
@@ -98,6 +99,10 @@ router.get('/', async (req, res, next) => {
 
         if (search) {
             filters.search = search
+        }
+
+        if (needs_verification === 'true') {
+            filters.needsVerification = true
         }
 
         // Map sort parameter to database fields

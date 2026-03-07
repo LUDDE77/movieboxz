@@ -1823,7 +1823,7 @@ router.patch('/movies/:id', async (req, res, next) => {
         // Allowed fields for update
         const allowedFields = [
             'title', 'description', 'release_date', 'director', 'actors',
-            'is_tv_series', 'is_kids_content', 'is_available'
+            'is_tv_series', 'is_kids_content', 'is_available', 'needs_verification'
         ]
 
         const cleanUpdates = {}

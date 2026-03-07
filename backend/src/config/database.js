@@ -86,6 +86,10 @@ export const dbOperations = {
             query = query.eq('channel_id', filters.channelId)
         }
 
+        if (filters.needsVerification) {
+            query = query.eq('needs_verification', true)
+        }
+
         if (filters.search) {
             // Sanitize search query for PostgreSQL full-text search
             // Convert "big stan" to "big & stan" (AND operator)
