@@ -7,6 +7,25 @@ import { logger } from '../utils/logger.js'
 
 const router = express.Router()
 
+// Strip emojis from text fields on import
+function stripEmojis(text) {
+    if (!text) return text
+    return text
+        .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+        .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
+        .replace(/[\u{1F680}-\u{1F6FF}]/gu, '')
+        .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '')
+        .replace(/[\u{2600}-\u{26FF}]/gu, '')
+        .replace(/[\u{2700}-\u{27BF}]/gu, '')
+        .replace(/[\u{1F900}-\u{1F9FF}]/gu, '')
+        .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '')
+        .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '')
+        .replace(/[\u{FE00}-\u{FE0F}]/gu, '')   // Variation selectors
+        .replace(/[\u{1F004}]/gu, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+}
+
 // =============================================================================
 // CHANNEL SETTINGS CRUD
 // =============================================================================
@@ -666,9 +685,9 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                 // Prepare movie data with extracted metadata
                 const movieData = {
                     youtube_video_id: video.id,
-                    youtube_video_title: video.title,
+                    youtube_video_title: stripEmojis(video.title),
                     title: parsed.title || video.title,
-                    description: video.description,
+                    description: video.description ? stripEmojis(video.description) : video.description,
                     channel_id: channelId,
                     runtime_minutes: Math.round(durationMinutes),
                     view_count: parseInt(video.viewCount) || 0,
