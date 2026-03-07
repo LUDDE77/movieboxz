@@ -12,6 +12,12 @@ struct MoviesView: View {
     @State private var totalMovies = 0
     @State private var itemsPerPage = 50
 
+    // Filter state
+    @State private var showNeedsVerification = false
+
+    // View mode
+    @State private var showOriginal = false
+
     // Edit state
     @State private var editingMovie: Movie?
 
@@ -67,23 +73,19 @@ struct MoviesView: View {
                         .font(.title)
                         .fontWeight(.bold)
 
-                    if totalMovies > 0 {
-                        Text("\(totalMovies)")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(Color.blue)
-                            .cornerRadius(8)
-                    }
+                    Text(totalMovies > 0 ? "\(totalMovies)" : "—")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                        .background(Color.blue)
+                        .cornerRadius(8)
                 }
 
-                if totalMovies > 0 {
-                    Text("Total movies in production")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text(totalMovies > 0 ? "\(totalMovies) movies in production" : "Loading...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Spacer()
@@ -98,6 +100,21 @@ struct MoviesView: View {
                             await loadMovies()
                         }
                     }
+
+                Button(action: {
+                    showNeedsVerification.toggle()
+                    Task { currentPage = 1; await loadMovies() }
+                }) {
+                    Label("Needs Verification", systemImage: "exclamationmark.magnifyingglass")
+                }
+                .buttonStyle(showNeedsVerification ? .borderedProminent : .bordered)
+                .tint(.orange)
+
+                Button(action: { showOriginal.toggle() }) {
+                    Label(showOriginal ? "Showing Original" : "Show Original", systemImage: "film.stack")
+                }
+                .buttonStyle(showOriginal ? .borderedProminent : .bordered)
+                .tint(.indigo)
 
                 Button(action: { Task { await loadMovies() } }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
@@ -168,6 +185,7 @@ struct MoviesView: View {
                         ProductionMovieRow(
                             movie: movie,
                             isSelected: selectedMovie?.id == movie.id,
+                            showOriginal: showOriginal,
                             onSelect: { selectedMovie = movie }
                         )
                     }
@@ -233,9 +251,76 @@ struct MoviesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 // Header with poster
+                if showOriginal {
+                    // Side-by-side comparison: original (left) vs enriched (right)
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Original YouTube")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.indigo)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.indigo.opacity(0.12))
+                                .cornerRadius(4)
+
+                            let thumbURL = URL(string: "https://img.youtube.com/vi/\(movie.youtubeVideoId)/mqdefault.jpg")
+                            AsyncImage(url: thumbURL) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Color.gray.opacity(0.2)
+                            }
+                            .frame(width: 180, height: 135)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Text(movie.youtubeVideoTitle.isEmpty ? "(no title)" : movie.youtubeVideoTitle)
+                                .font(.headline)
+                                .lineLimit(3)
+                                .frame(width: 180, alignment: .leading)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Enriched")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.blue)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.blue.opacity(0.12))
+                                .cornerRadius(4)
+
+                            if let posterPath = movie.posterPath {
+                                let posterURL: URL? = posterPath.hasPrefix("http")
+                                    ? URL(string: posterPath)
+                                    : URL(string: "https://image.tmdb.org/t/p/w185\(posterPath)")
+                                AsyncImage(url: posterURL) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color.gray.opacity(0.2)
+                                }
+                                .frame(width: 90, height: 135)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            } else {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.gray.opacity(0.15))
+                                    .frame(width: 90, height: 135)
+                                    .overlay(Image(systemName: "photo").foregroundColor(.secondary))
+                            }
+
+                            Text(movie.title)
+                                .font(.headline)
+                                .lineLimit(3)
+                                .frame(width: 180, alignment: .leading)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.bottom, 4)
+                }
+
                 HStack(alignment: .top, spacing: 16) {
-                    // Poster
-                    if let posterPath = movie.posterPath {
+                    // Poster (enriched only, hidden in original mode since shown above)
+                    if !showOriginal, let posterPath = movie.posterPath {
                         let posterURL: URL? = {
                             if posterPath.hasPrefix("http") {
                                 return URL(string: posterPath)
@@ -288,6 +373,22 @@ struct MoviesView: View {
 
                         // Content flags
                         HStack(spacing: 8) {
+                            // Needs Verification checkbox — toggle directly on the row
+                            Button(action: {
+                                Task {
+                                    await updateMovieWithChanges(movie, updates: ["needs_verification": !(movie.needsVerification ?? false)])
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: movie.needsVerification == true ? "checkmark.square.fill" : "square")
+                                        .foregroundColor(movie.needsVerification == true ? .orange : .secondary)
+                                    Text("Needs Verification")
+                                        .font(.caption)
+                                        .foregroundColor(movie.needsVerification == true ? .orange : .secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
                             if movie.isTvSeries == true {
                                 StatusBadge(text: "TV Series", color: .purple)
                             }
@@ -414,7 +515,8 @@ struct MoviesView: View {
             let data = try await apiService.getMovies(
                 page: currentPage,
                 limit: itemsPerPage,
-                search: searchText.isEmpty ? nil : searchText
+                search: searchText.isEmpty ? nil : searchText,
+                needsVerification: showNeedsVerification
             )
             movies = data.movies
             totalPages = data.pagination.pages ?? 1
@@ -452,13 +554,25 @@ struct MoviesView: View {
 struct ProductionMovieRow: View {
     let movie: Movie
     let isSelected: Bool
+    var showOriginal: Bool = false
     let onSelect: () -> Void
 
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                // Poster thumbnail
-                if let posterPath = movie.posterPath {
+                // Poster thumbnail or YouTube thumbnail
+                if showOriginal {
+                    let thumbURL = URL(string: "https://img.youtube.com/vi/\(movie.youtubeVideoId)/mqdefault.jpg")
+                    AsyncImage(url: thumbURL) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.gray.opacity(0.2)
+                    }
+                    .frame(width: 60, height: 45)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else if let posterPath = movie.posterPath {
                     let posterURL: URL? = {
                         if posterPath.hasPrefix("http") {
                             return URL(string: posterPath)
@@ -487,9 +601,22 @@ struct ProductionMovieRow: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(movie.title)
-                        .font(.headline)
-                        .lineLimit(2)
+                    if showOriginal {
+                        Text(movie.youtubeVideoTitle.isEmpty ? movie.title : movie.youtubeVideoTitle)
+                            .font(.headline)
+                            .lineLimit(2)
+                        if !movie.youtubeVideoTitle.isEmpty && movie.youtubeVideoTitle != movie.title {
+                            Text(movie.title)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Text(movie.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                    }
 
                     HStack(spacing: 8) {
                         if let year = movie.releaseYear {

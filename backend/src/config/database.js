@@ -66,7 +66,7 @@ export const dbOperations = {
                 *,
                 channels(id, title, thumbnail_url),
                 movie_genres(genres(id, name))
-            `)
+            `, { count: 'exact' })
             .eq('is_available', true)
 
         // Apply filters
