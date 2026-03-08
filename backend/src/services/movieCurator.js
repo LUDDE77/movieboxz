@@ -31,6 +31,11 @@ class MovieCurator {
                 id: 'UC6A_LC-A5NVJ2vw9A0OjCug',
                 name: 'The Midnight Screening',
                 description: 'Horror and classic movies'
+            },
+            {
+                id: 'UCHvnMsLnyQZscrq-fOckiiw',
+                name: 'BlackTree TV',
+                description: 'Movies and entertainment'
             }
         ]
 
