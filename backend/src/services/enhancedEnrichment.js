@@ -500,6 +500,12 @@ class EnhancedEnrichment {
                 published_at: movie.published_at
             })
 
+            // If a specific IMDB ID is forced, use it directly
+            if (movie.imdbId) {
+                logger.info(`🎬 [EnhancedEnrichment] Forced IMDB ID provided: ${movie.imdbId} — using enrichByIMDBId()`)
+                return await this.enrichByIMDBId(movie.imdbId)
+            }
+
             // Extract actor hints from channel pattern (now async)
             logger.info(`🎬 [EnhancedEnrichment] Step 1: Extracting actor hints from pattern...`)
             const actorHints = await this.extractActorHints(
