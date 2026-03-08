@@ -16,6 +16,13 @@ struct StagingView: View {
     @State private var showEditSheet = false
     @State private var showPublishAlert = false
 
+    // TV Series state
+    @State private var tvSeriesList: [TvSeries] = []
+    @State private var movieForSeriesAssignment: StagedMovie?
+    @State private var showSeriesSheet = false
+    @State private var newSeriesTitle = ""
+    @State private var isCreatingSeries = false
+
     // Import form
     @State private var importChannelId = ""
     @State private var importChannelTitle = ""
@@ -113,20 +120,29 @@ struct StagingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(stagedMovies, selection: $selectedMovie) { movie in
-                        MovieRow(movie: movie, isSelected: selectedMovieIds.contains(movie.id))
-                            .tag(movie)
-                            .contextMenu {
-                                Button("Approve") {
-                                    Task { await approveMovie(movie) }
-                                }
-                                Button("Reject") {
-                                    Task { await rejectMovie(movie, reason: "Manual rejection") }
-                                }
-                                Divider()
-                                Button("Delete", role: .destructive) {
-                                    Task { await deleteMovie(movie) }
-                                }
+                        MovieRow(
+                            movie: movie,
+                            isSelected: selectedMovieIds.contains(movie.id),
+                            tvSeriesList: tvSeriesList,
+                            onDelete: { Task { await deleteMovie(movie) } },
+                            onAssignSeries: {
+                                movieForSeriesAssignment = movie
+                                showSeriesSheet = true
                             }
+                        )
+                        .tag(movie)
+                        .contextMenu {
+                            Button("Approve") {
+                                Task { await approveMovie(movie) }
+                            }
+                            Button("Reject") {
+                                Task { await rejectMovie(movie, reason: "Manual rejection") }
+                            }
+                            Divider()
+                            Button("Delete", role: .destructive) {
+                                Task { await deleteMovie(movie) }
+                            }
+                        }
                     }
                 }
 
@@ -218,6 +234,28 @@ struct StagingView: View {
                 )
             }
         }
+        .sheet(isPresented: $showSeriesSheet) {
+            if let movie = movieForSeriesAssignment {
+                SeriesPickerSheet(
+                    movie: movie,
+                    seriesList: tvSeriesList,
+                    newSeriesTitle: $newSeriesTitle,
+                    isCreating: isCreatingSeries,
+                    onSelect: { series in
+                        Task { await assignSeries(movie: movie, series: series) }
+                        showSeriesSheet = false
+                    },
+                    onRemove: {
+                        Task { await assignSeries(movie: movie, series: nil) }
+                        showSeriesSheet = false
+                    },
+                    onCreate: {
+                        Task { await createAndAssignSeries(movie: movie) }
+                    },
+                    onCancel: { showSeriesSheet = false }
+                )
+            }
+        }
         .alert("Publish Movies", isPresented: $showPublishAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Publish All Approved") {
@@ -252,6 +290,15 @@ struct StagingView: View {
         await loadChannels()
         await loadStats()
         await loadMovies()
+        await loadTvSeries()
+    }
+
+    func loadTvSeries() async {
+        do {
+            tvSeriesList = try await apiService.getTvSeriesList()
+        } catch {
+            print("Failed to load TV series: \(error)")
+        }
     }
 
     func loadChannels() async {
@@ -426,6 +473,36 @@ struct StagingView: View {
         }
     }
 
+    func assignSeries(movie: StagedMovie, series: TvSeries?) async {
+        do {
+            let updated = try await apiService.assignTvSeriesToStagedMovie(
+                movieId: movie.id,
+                seriesId: series?.id
+            )
+            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
+                stagedMovies[index] = updated
+                if selectedMovie?.id == movie.id { selectedMovie = updated }
+            }
+        } catch {
+            errorMessage = "Failed to assign series: \(error.localizedDescription)"
+        }
+    }
+
+    func createAndAssignSeries(movie: StagedMovie) async {
+        guard !newSeriesTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isCreatingSeries = true
+        do {
+            let created = try await apiService.createTvSeries(title: newSeriesTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+            tvSeriesList.append(created)
+            newSeriesTitle = ""
+            await assignSeries(movie: movie, series: created)
+            showSeriesSheet = false
+        } catch {
+            errorMessage = "Failed to create series: \(error.localizedDescription)"
+        }
+        isCreatingSeries = false
+    }
+
     func deleteMovie(_ movie: StagedMovie) async {
         do {
             try await apiService.deleteStagedMovie(movieId: movie.id)
@@ -479,6 +556,14 @@ struct StatBadge: View {
 struct MovieRow: View {
     let movie: StagedMovie
     let isSelected: Bool
+    var tvSeriesList: [TvSeries] = []
+    var onDelete: (() -> Void)? = nil
+    var onAssignSeries: (() -> Void)? = nil
+
+    var assignedSeries: TvSeries? {
+        guard let id = movie.tvSeriesId else { return nil }
+        return tvSeriesList.first { $0.id == id }
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -535,10 +620,31 @@ struct MovieRow: View {
                     if movie.isTvSeries == true {
                         StatusBadge(text: "TV Series", color: .purple)
                     }
+                    // Assigned series name
+                    if let series = assignedSeries {
+                        StatusBadge(text: series.title, color: .indigo)
+                    }
                 }
             }
 
             Spacer()
+
+            // Trailing action buttons
+            HStack(spacing: 6) {
+                Button(action: { onAssignSeries?() }) {
+                    Image(systemName: assignedSeries != nil ? "tv.fill" : "tv")
+                        .foregroundColor(assignedSeries != nil ? .indigo : .secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(assignedSeries != nil ? "Change TV Series" : "Assign to TV Series")
+
+                Button(action: { onDelete?() }) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red.opacity(0.7))
+                }
+                .buttonStyle(.borderless)
+                .help("Delete")
+            }
         }
         .padding(.vertical, 4)
     }
@@ -903,5 +1009,99 @@ struct EditMovieSheet: View {
         }
         .padding()
         .frame(width: 500)
+    }
+}
+
+// MARK: - Series Picker Sheet
+
+struct SeriesPickerSheet: View {
+    let movie: StagedMovie
+    let seriesList: [TvSeries]
+    @Binding var newSeriesTitle: String
+    let isCreating: Bool
+    let onSelect: (TvSeries) -> Void
+    let onRemove: () -> Void
+    let onCreate: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Assign TV Series")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Button("Cancel", action: onCancel)
+            }
+            .padding()
+
+            Divider()
+
+            // Movie name
+            Text("Movie: \(movie.title)")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 8)
+
+            // Remove assignment option (if assigned)
+            if movie.tvSeriesId != nil {
+                Button(action: onRemove) {
+                    Label("Remove Series Assignment", systemImage: "xmark.circle")
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal)
+                }
+                .buttonStyle(.borderless)
+                Divider().padding(.horizontal)
+            }
+
+            // Existing series list
+            if seriesList.isEmpty {
+                Text("No TV series yet. Create one below.")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+                    .padding()
+            } else {
+                List(seriesList) { series in
+                    Button(action: { onSelect(series) }) {
+                        HStack {
+                            Image(systemName: movie.tvSeriesId == series.id ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(movie.tvSeriesId == series.id ? .indigo : .secondary)
+                            Text(series.title)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .frame(maxHeight: 250)
+            }
+
+            Divider()
+
+            // Create new series
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Create New Series")
+                    .font(.headline)
+                HStack {
+                    TextField("Series title", text: $newSeriesTitle)
+                        .textFieldStyle(.roundedBorder)
+                    Button(action: onCreate) {
+                        if isCreating {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Text("Create & Assign")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(newSeriesTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating)
+                }
+            }
+            .padding()
+        }
+        .frame(width: 450)
     }
 }

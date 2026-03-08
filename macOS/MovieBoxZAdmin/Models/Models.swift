@@ -71,6 +71,7 @@ struct Movie: Codable, Identifiable {
     let staffPick: Bool?
     let addedAt: String?
     let lastValidated: String?
+    let needsVerification: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -112,6 +113,7 @@ struct Movie: Codable, Identifiable {
         case staffPick = "staff_pick"
         case addedAt = "added_at"
         case lastValidated = "last_validated"
+        case needsVerification = "needs_verification"
     }
 
     // Computed properties for display
@@ -288,6 +290,28 @@ struct PatternTestData: Codable {
     let total: Int
 }
 
+// MARK: - TV Series
+struct TvSeries: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let description: String?
+    let posterPath: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case posterPath = "poster_path"
+        case createdAt = "created_at"
+    }
+}
+
+struct TvSeriesListData: Codable {
+    let series: [TvSeries]
+    let pagination: Pagination
+}
+
 // MARK: - Pagination
 struct Pagination: Codable {
     let page: Int
@@ -433,6 +457,7 @@ struct StagedMovie: Codable, Identifiable, Hashable {
     let importIndex: Int?
     let channelTag: String?
     var isTvSeries: Bool?
+    var tvSeriesId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -491,6 +516,7 @@ struct StagedMovie: Codable, Identifiable, Hashable {
         case importIndex = "import_index"
         case channelTag = "channel_tag"
         case isTvSeries = "is_tv_series"
+        case tvSeriesId = "tv_series_id"
     }
 
     // Computed properties

@@ -1042,6 +1042,45 @@ router.post('/enrich-enhanced', async (req, res, next) => {
 // =============================================================================
 
 // =============================================================================
+// POST /api/admin/series/create
+// Create a simple TV series with just a title (no TMDB required)
+// =============================================================================
+router.post('/series/create', async (req, res, next) => {
+    try {
+        const { title, description } = req.body
+
+        if (!title || !title.trim()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Bad Request',
+                message: 'title is required'
+            })
+        }
+
+        logger.info(`Admin creating simple TV series: ${title}`)
+
+        const { data, error } = await supabase
+            .from('tv_series')
+            .insert({ title: title.trim(), description: description || null })
+            .select()
+            .single()
+
+        if (error) {
+            throw new Error(`Failed to create series: ${error.message}`)
+        }
+
+        res.json({
+            success: true,
+            data: { series: data },
+            message: `TV series created: ${data.title}`
+        })
+
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
 // POST /api/admin/series/import-tmdb
 // Import a TV series from TMDB by ID or name
 // =============================================================================

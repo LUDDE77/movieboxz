@@ -106,10 +106,13 @@ class AdminAPIService: ObservableObject {
     }
 
     // MARK: - Movies
-    func getMovies(page: Int = 1, limit: Int = 50, search: String? = nil) async throws -> MoviesData {
+    func getMovies(page: Int = 1, limit: Int = 50, search: String? = nil, needsVerification: Bool = false) async throws -> MoviesData {
         var endpoint = "?page=\(page)&limit=\(limit)"
         if let search = search, !search.isEmpty {
             endpoint += "&search=\(search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search)"
+        }
+        if needsVerification {
+            endpoint += "&needs_verification=true"
         }
 
         guard let url = URL(string: "\(baseURL)/api/movies\(endpoint)") else {
@@ -492,6 +495,38 @@ class AdminAPIService: ObservableObject {
         }
 
         print("✅ [API] Movie deleted successfully")
+    }
+
+    // MARK: - TV Series
+
+    func getTvSeriesList(limit: Int = 100) async throws -> [TvSeries] {
+        struct SeriesData: Codable {
+            let series: [TvSeries]
+            let pagination: Pagination
+        }
+        let response: APIResponse<SeriesData> = try await request(endpoint: "/series?limit=\(limit)")
+        return response.data.series
+    }
+
+    func createTvSeries(title: String) async throws -> TvSeries {
+        struct Body: Codable { let title: String }
+        struct SeriesWrapper: Codable { let series: TvSeries }
+        let response: APIResponse<SeriesWrapper> = try await request(
+            endpoint: "/series/create",
+            method: "POST",
+            body: Body(title: title)
+        )
+        return response.data.series
+    }
+
+    func assignTvSeriesToStagedMovie(movieId: String, seriesId: String?) async throws -> StagedMovie {
+        var updates: [String: Any] = [:]
+        if let sid = seriesId {
+            updates["tv_series_id"] = sid
+        } else {
+            updates["tv_series_id"] = NSNull()
+        }
+        return try await updateStagedMovie(movieId: movieId, updates: updates)
     }
 
     // MARK: - Channel Management
