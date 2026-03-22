@@ -19,6 +19,7 @@ struct ProductionMovieEditView: View {
     @State private var imdbVotes: String
     @State private var isTvSeries: Bool
     @State private var isKidsContent: Bool
+    @State private var needsVerification: Bool
     @State private var selectedGenreIds: Set<Int>
 
     // Manual IMDB enrichment
@@ -44,6 +45,7 @@ struct ProductionMovieEditView: View {
         _imdbVotes = State(initialValue: movie.imdbVotes.map { String($0) } ?? "")
         _isTvSeries = State(initialValue: movie.isTvSeries ?? false)
         _isKidsContent = State(initialValue: movie.isKidsContent ?? false)
+        _needsVerification = State(initialValue: movie.needsVerification ?? false)
         _selectedGenreIds = State(initialValue: Set(movie.genres.map { $0.id }))
         _manualImdbId = State(initialValue: movie.imdbId ?? "")
     }
@@ -268,6 +270,25 @@ struct ProductionMovieEditView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
+
+                            Divider()
+
+                            Toggle(isOn: $needsVerification) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text("Needs Verification")
+                                            .font(.body)
+                                        if needsVerification {
+                                            Text("⚠️")
+                                                .font(.caption)
+                                        }
+                                    }
+                                    Text("Flag for agent to look up and enrich this movie")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .tint(.orange)
                         }
                         .padding(8)
                     }
@@ -430,6 +451,9 @@ struct ProductionMovieEditView: View {
             }
             if isKidsContent != (movie.isKidsContent ?? false) {
                 updates["is_kids_content"] = isKidsContent
+            }
+            if needsVerification != (movie.needsVerification ?? false) {
+                updates["needs_verification"] = needsVerification
             }
 
             var updatedMovie = movie

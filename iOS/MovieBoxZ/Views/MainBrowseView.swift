@@ -56,9 +56,8 @@ struct MainBrowseView: View {
                                 bodyTextSize: bodyTextSize,
                                 onPlayVideo: playVideo
                             )
-                            .frame(width: 1920, height: 650) // Fixed dimensions
-                            .clipped() // Hard clip at bounds - prevents overflow
-                            .layoutPriority(1) // Non-negotiable height
+                            .clipped()
+                            .layoutPriority(1)
                         }
 
                         // CATEGORY SECTION (continuous scroll)
@@ -340,22 +339,25 @@ struct MainBrowseView: View {
                 let genres = try await movieService.fetchAllGenres()
 
                 // Filter to only genres with movies
-                let genresWithMovies = genres.filter { $0.movieCount > 0 }
+                let genresWithMovies = genres.filter { ($0.movieCount ?? 0) > 0 }
 
-                // Fetch movies for each genre in parallel
+                // Fetch genre movies, allMovies, and uncategorized in parallel
+                async let allMoviesResult = movieService.fetchAllMovies(sort: "popularity", limit: 50)
+                async let uncategorizedResult = movieService.fetchUncategorizedMovies(limit: 10)
+
                 var genreResults: [(genre: Genre, movies: [Movie])] = []
-
-                for genre in genresWithMovies {
-                    async let movies = try await movieService.fetchMoviesByGenre(genreId: genre.id, limit: 10)
-                    let moviesResult = try await movies
-                    genreResults.append((genre: genre, movies: moviesResult))
+                await withTaskGroup(of: (Genre, [Movie]).self) { group in
+                    for genre in genresWithMovies {
+                        group.addTask {
+                            let movies = (try? await self.movieService.fetchMoviesByGenre(genreId: genre.id, limit: 10)) ?? []
+                            return (genre, movies)
+                        }
+                    }
+                    for await (genre, movies) in group {
+                        genreResults.append((genre: genre, movies: movies))
+                    }
                 }
-
-                // Fetch all movies (sorted by popularity)
-                async let allMoviesResult = try await movieService.fetchAllMovies(sort: "popularity", limit: 50)
-
-                // Fetch uncategorized movies
-                async let uncategorizedResult = try await movieService.fetchUncategorizedMovies(limit: 10)
+                genreResults.sort { $0.genre.name < $1.genre.name }
 
                 // Wait for all fetches to complete
                 let (allMoviesData, uncategorizedData) = try await (allMoviesResult, uncategorizedResult)
@@ -438,44 +440,48 @@ struct FeaturedMovieBanner: View {
     let bodyTextSize: CGFloat
     let onPlayVideo: (String) -> Void
 
-    var body: some View {
-        ZStack {
-            // Background Image - centered and fixed size
-            AsyncImage(url: movie.backdropURL) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .shimmer()
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 1920, height: 650)
-                        .clipped()
-                case .failure:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(width: 1920, height: 650)
-            .position(x: 1920/2, y: 650/2) // Center the backdrop
+    private let bannerHeight: CGFloat = 650
 
-            // Gradient Overlay (stronger fade in bottom 40%)
-            LinearGradient(
-                gradient: Gradient(stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .clear, location: 0.4),
-                    .init(color: Color.black.opacity(0.3), location: 0.6),
-                    .init(color: Color.black.opacity(0.7), location: 0.8),
-                    .init(color: Color.black, location: 1.0)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(width: 1920, height: 650)
+    var body: some View {
+        GeometryReader { geo in
+            let bannerWidth = geo.size.width
+            ZStack {
+                // Background Image - fills available width
+                AsyncImage(url: movie.backdropURL) { phase in
+                    switch phase {
+                    case .empty:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .shimmer()
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: bannerWidth, height: bannerHeight)
+                            .clipped()
+                    case .failure:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .frame(width: bannerWidth, height: bannerHeight)
+                .position(x: bannerWidth / 2, y: bannerHeight / 2)
+
+                // Gradient Overlay (stronger fade in bottom 40%)
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: .clear, location: 0.4),
+                        .init(color: Color.black.opacity(0.3), location: 0.6),
+                        .init(color: Color.black.opacity(0.7), location: 0.8),
+                        .init(color: Color.black, location: 1.0)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: bannerWidth, height: bannerHeight)
 
             // Content - absolute position at bottom (independent of backdrop)
             VStack {
@@ -572,10 +578,12 @@ struct FeaturedMovieBanner: View {
                 .padding(.bottom, 30)
                 #endif
             }
-            .frame(width: 1920, height: 650) // Fill entire hero area
+            .frame(width: bannerWidth, height: bannerHeight)
         }
         .clipped()
         .layoutPriority(1)
+        }
+        .frame(height: bannerHeight)
     }
 }
 

@@ -1,0 +1,90 @@
+# =============================================================================
+# MovieBoxZ — .gitignore
+# =============================================================================
+
+# -----------------------------------------------------------------------
+# CREDENTIALS & SECRETS — never commit these
+# -----------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# -----------------------------------------------------------------------
+# macOS
+# -----------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# -----------------------------------------------------------------------
+# Xcode
+# -----------------------------------------------------------------------
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+Pods/
+.build/
+
+# -----------------------------------------------------------------------
+# Node.js / Backend
+# -----------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# -----------------------------------------------------------------------
+# Root-level one-off utility scripts
+# (personal scripts with hardcoded credentials used during development)
+# -----------------------------------------------------------------------
+/*.js
+claude.md
+
+# Backup files created during development
+*-backup.js
+*-backup.swift
+*.bak
+/enrichment-agent/
+/package.json
+/package-lock.json
+
+# -----------------------------------------------------------------------
+# MCP server directories (local dev tools, not part of the project)
+# -----------------------------------------------------------------------
+/supabase-mcp/
+/railway-mcp/
+/github-mcp/
+/github-mcp-server/
+
+# -----------------------------------------------------------------------
+# Log and output files generated during development
+# -----------------------------------------------------------------------
+/*.txt
+/*.log
+/AppIcon.appiconset/
+
+# -----------------------------------------------------------------------
+# Local analysis and report files (generated, not source)
+# -----------------------------------------------------------------------
+/CHANNEL_MANAGEMENT_GUIDE.md
+/CHANNEL_PATTERN_ANALYSIS_REPORT.md
+/UNENRICHED_MOVIES_REPORT.md
+/channel_mapping_analysis.md
+/add_missing_channels*.js
+/add_views_to_xcode.sh
+/"logo and splash"/
+MovieBoxZ/

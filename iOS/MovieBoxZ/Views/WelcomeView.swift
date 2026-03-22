@@ -8,6 +8,16 @@ struct WelcomeView: View {
     @State private var showYouTubeAlert = false
     @FocusState private var buttonFocused: Bool  // Focus management for tvOS
 
+    #if os(tvOS)
+    private let appIconSize: CGFloat = 200
+    private let appNameFontSize: CGFloat = 80
+    private let taglineFontSize: CGFloat = 36
+    #else
+    private let appIconSize: CGFloat = 120
+    private let appNameFontSize: CGFloat = 48
+    private let taglineFontSize: CGFloat = 20
+    #endif
+
     var body: some View {
         ZStack {
             // Background gradient
@@ -37,10 +47,10 @@ struct WelcomeView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 120, height: 120)
+                            .frame(width: appIconSize, height: appIconSize)
 
                         Image(systemName: "play.rectangle.fill")
-                            .font(.system(size: 60))
+                            .font(.system(size: appIconSize * 0.5))
                             .foregroundColor(.white)
                     }
                     .shadow(radius: 20)
@@ -48,11 +58,11 @@ struct WelcomeView: View {
                     // App name and tagline
                     VStack(spacing: 8) {
                         Text("MovieBoxZ")
-                            .font(.system(size: 48, weight: .bold, design: .rounded))
+                            .font(.system(size: appNameFontSize, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
 
                         Text("Discover Movies from YouTube")
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: taglineFontSize, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
                             .multilineTextAlignment(.center)
                     }
@@ -210,20 +220,36 @@ struct FeatureRow: View {
             ZStack {
                 Circle()
                     .fill(iconColor.opacity(0.2))
+                    #if os(tvOS)
+                    .frame(width: 80, height: 80)
+                    #else
                     .frame(width: 48, height: 48)
+                    #endif
 
                 Image(systemName: icon)
+                    #if os(tvOS)
+                    .font(.system(size: 40))
+                    #else
                     .font(.title2)
+                    #endif
                     .foregroundColor(iconColor)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
+                    #if os(tvOS)
+                    .font(.system(size: 32, weight: .semibold))
+                    #else
                     .font(.headline)
+                    #endif
                     .foregroundColor(.white)
 
                 Text(description)
+                    #if os(tvOS)
+                    .font(.system(size: 26))
+                    #else
                     .font(.subheadline)
+                    #endif
                     .foregroundColor(.white.opacity(0.7))
                     .fixedSize(horizontal: false, vertical: true)
             }

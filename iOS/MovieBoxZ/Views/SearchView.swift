@@ -27,22 +27,38 @@ struct SearchView: View {
     var body: some View {
         NavigationView {
             VStack {
+                #if !os(tvOS)
                 searchBar
+                #endif
                 searchContent
             }
             .navigationTitle("Search")
             .background(Color.black)
-            .onChange(of: searchText) { newValue in
+            .onChange(of: searchText) { _, newValue in
                 if newValue.isEmpty {
                     searchResults = []
                 }
             }
+            #if os(tvOS)
+            .searchable(text: $searchText, placement: .automatic)
+            .onSubmit(of: .search) {
+                performSearch()
+            }
+            #endif
         }
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $showingVideoPlayer) {
+            if let movie = currentMovie {
+                MovieDetailView(movie: movie)
+            }
+        }
+        #else
         .sheet(isPresented: $showingVideoPlayer) {
             if let movie = currentMovie {
                 MovieDetailView(movie: movie)
             }
         }
+        #endif
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -157,6 +173,7 @@ struct SearchView: View {
                         )
                     }
                 }
+                .accessibilityIdentifier("search.grid.results")
                 #if os(tvOS)
                 .padding(.horizontal, 80)
                 .padding(.bottom, 100)

@@ -24,6 +24,31 @@ struct MovieDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                // Action buttons (Close and Favorite) - above header
+                #if os(tvOS)
+                HStack(spacing: 20) {
+                    // Close button
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+
+                    // Favorite button
+                    FavoriteButton(movieId: movie.id)
+                        .scaleEffect(1.1) // Match size with close button
+
+                    Spacer()
+                }
+                .padding(.top, 60)
+                .padding(.horizontal, 80)
+                .padding(.bottom, 20)
+                #endif
+
                 // Header with backdrop and poster
                 headerSection
 
@@ -60,35 +85,50 @@ struct MovieDetailView: View {
         }
         .background(Color.black)
         .ignoresSafeArea(edges: .top)
-        .overlay(alignment: .topLeading) {
-            // Close button
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundColor(.white.opacity(0.8))
+        #if !os(tvOS)
+        .overlay(alignment: .top) {
+            // Top bar: close (left) and favourite (right)
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(.white.opacity(0.9))
+                        .background(
+                            Circle()
+                                .fill(Color.black.opacity(0.4))
+                                .frame(width: 44, height: 44)
+                        )
+                }
+                .accessibilityLabel("Close")
+
+                Spacer()
+
+                FavoriteButton(movieId: movie.id)
+                    .scaleEffect(1.2)
                     .background(
                         Circle()
-                            .fill(Color.black.opacity(0.3))
+                            .fill(Color.black.opacity(0.4))
                             .frame(width: 44, height: 44)
                     )
             }
-            .accessibilityLabel("Close")
-            #if os(tvOS)
-            .padding(.top, 60)
-            .padding(.leading, 80)
-            #else
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 20)
             .padding(.top, 50)
-            .padding(.leading, 20)
-            #endif
+            .ignoresSafeArea(edges: .top)
         }
-        .sheet(isPresented: $showingVideoPlayer) {
+        #endif
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $showingVideoPlayer) {
             VideoPlayerView(movie: movie)
         }
-        #if os(tvOS)
         .onExitCommand {
             dismiss()
+        }
+        #else
+        .sheet(isPresented: $showingVideoPlayer) {
+            VideoPlayerView(movie: movie)
         }
         #endif
     }
@@ -97,6 +137,7 @@ struct MovieDetailView: View {
 
     private var headerSection: some View {
         ZStack(alignment: .bottomLeading) {
+            Color.clear  // forces ZStack to fill proposed width
             // Backdrop image with shimmer
             AsyncImage(url: movie.backdropURL) { phase in
                 switch phase {
@@ -115,6 +156,7 @@ struct MovieDetailView: View {
                     EmptyView()
                 }
             }
+            .frame(maxWidth: .infinity)
             #if os(tvOS)
             .frame(height: 500)
             #else
@@ -132,6 +174,7 @@ struct MovieDetailView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .frame(maxWidth: .infinity)
             #if os(tvOS)
             .frame(height: 500)
             #else
@@ -184,49 +227,17 @@ struct MovieDetailView: View {
                 .cornerRadius(12)
                 #endif
                 .shadow(color: .black.opacity(0.5), radius: 20)
-                .overlay(alignment: .topTrailing) {
-                    // Favorite button overlay
-                    FavoriteButton(movieId: movie.id)
-                        .padding(8)
-                }
 
-                // Title and rating
+                // Title (moved down with extra spacing)
                 VStack(alignment: .leading, spacing: 12) {
+                    Spacer()
+                        .frame(height: 40) // Extra spacing to move title down
+
                     Text(movie.displayTitle)
                         .font(.system(size: titleSize, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(3)
                         .shadow(radius: 10)
-
-                    // Rating badges
-                    HStack(spacing: 10) {
-                        // Display rating: prefer TMDB, fallback to IMDB
-                        if let rating = movie.voteAverage ?? movie.imdbRating {
-                            HStack(spacing: 6) {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
-                                    .fontWeight(.bold)
-                            }
-                            .font(.system(size: headlineSize))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(8)
-                        }
-
-                        if let year = movie.formattedReleaseYear {
-                            Text(year)
-                                .font(.system(size: headlineSize))
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.black.opacity(0.6))
-                                .cornerRadius(8)
-                        }
-                    }
-
-                    Spacer()
                 }
                 .padding(.bottom, 12)
 
@@ -240,6 +251,10 @@ struct MovieDetailView: View {
             .padding(.bottom, 30)
             #endif
         }
+        .frame(maxWidth: .infinity)
+        #if !os(tvOS)
+        .ignoresSafeArea(edges: .top)
+        #endif
     }
 
     // MARK: - Action Buttons
@@ -341,32 +356,50 @@ struct MovieDetailView: View {
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            if movie.runtimeMinutes != nil && movie.voteCount != nil {
-                Text("•")
-                    .foregroundColor(.white.opacity(0.5))
-            }
-
-            // Vote count
-            if let voteCount = movie.voteCount {
-                Text("\(voteCount) ratings")
-                    .font(.system(size: bodySize))
-                    .foregroundColor(.white.opacity(0.8))
-            }
-
-            if movie.voteCount != nil && movie.quality != nil {
-                Text("•")
-                    .foregroundColor(.white.opacity(0.5))
-            }
-
             // Quality
-            if let quality = movie.quality {
-                Text(quality)
+            if movie.quality != nil {
+                Text("•")
+                    .foregroundColor(.white.opacity(0.5))
+
+                Text(movie.quality!)
                     .font(.system(size: captionSize, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.green.opacity(0.3))
                     .cornerRadius(6)
+            }
+
+            // Rating badge
+            if let rating = movie.voteAverage ?? movie.imdbRating {
+                Text("•")
+                    .foregroundColor(.white.opacity(0.5))
+
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                        .foregroundColor(.yellow)
+                    Text(String(format: "%.1f", rating))
+                        .fontWeight(.bold)
+                }
+                .font(.system(size: bodySize))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(8)
+            }
+
+            // Year badge
+            if let year = movie.formattedReleaseYear {
+                Text("•")
+                    .foregroundColor(.white.opacity(0.5))
+
+                Text(year)
+                    .font(.system(size: bodySize))
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(8)
             }
 
             Spacer()

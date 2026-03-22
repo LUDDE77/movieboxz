@@ -212,7 +212,6 @@ struct VideoPlayerView: View {
             }
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
@@ -221,6 +220,7 @@ struct VideoPlayerView: View {
                     .foregroundColor(.white)
                 }
             }
+            #endif
         }
         .alert("YouTube App Required", isPresented: $showYouTubeAppPrompt) {
             #if os(iOS)

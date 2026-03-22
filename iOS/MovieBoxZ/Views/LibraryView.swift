@@ -13,6 +13,7 @@ struct LibraryView: View {
     @State private var favoriteMovies: [Movie] = []
     @State private var watchedMovies: [Movie] = []
     @State private var isLoading = true
+    @State private var hasLoaded = false
     @State private var selectedMovie: Movie?
 
     // Platform-specific sizes
@@ -57,6 +58,8 @@ struct LibraryView: View {
             MovieDetailView(movie: movie)
         }
         .onAppear {
+            guard !hasLoaded else { return }
+            hasLoaded = true
             loadLibraryData()
         }
     }
@@ -225,7 +228,6 @@ struct LibraryView: View {
             do {
                 // Get favorite and watched movie IDs from LibraryManager
                 let favoriteIds = libraryManager.favoriteMovieIds
-                let watchedIds = libraryManager.watchHistory.map { $0.movieId }
 
                 // Fetch all recent movies from backend
                 let allMovies = try await movieService.fetchRecentMovies(limit: 100)

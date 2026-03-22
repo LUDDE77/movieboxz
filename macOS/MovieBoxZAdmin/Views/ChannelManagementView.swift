@@ -291,7 +291,7 @@ struct ChannelManagementView: View {
         isAddingChannel = true
 
         do {
-            let newChannel = try await apiService.addChannel(channelId: newChannelId)
+            let newChannel = try await apiService.addChannel(channelId: newChannelId.trimmingCharacters(in: .whitespacesAndNewlines))
             channels.append(newChannel)
             newChannelId = ""
             showAddChannel = false
