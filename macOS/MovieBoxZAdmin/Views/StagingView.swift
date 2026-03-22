@@ -42,6 +42,15 @@ struct StagingView: View {
     // Selection
     @State private var selectedMovieIds: Set<String> = []
 
+    // Delete confirmation
+    @State private var movieToDelete: StagedMovie?
+    @State private var showDeleteConfirmation = false
+
+    // Reject sheet
+    @State private var movieForRejection: StagedMovie?
+    @State private var showRejectSheet = false
+    @State private var rejectReason = ""
+
     enum MovieFilter: String, CaseIterable {
         case pending = "Pending"
         case enriched = "Enriched"
@@ -124,7 +133,10 @@ struct StagingView: View {
                             movie: movie,
                             isSelected: selectedMovieIds.contains(movie.id),
                             tvSeriesList: tvSeriesList,
-                            onDelete: { Task { await deleteMovie(movie) } },
+                            onDelete: {
+                                movieToDelete = movie
+                                showDeleteConfirmation = true
+                            },
                             onAssignSeries: {
                                 movieForSeriesAssignment = movie
                                 showSeriesSheet = true
@@ -136,11 +148,14 @@ struct StagingView: View {
                                 Task { await approveMovie(movie) }
                             }
                             Button("Reject") {
-                                Task { await rejectMovie(movie, reason: "Manual rejection") }
+                                movieForRejection = movie
+                                rejectReason = ""
+                                showRejectSheet = true
                             }
                             Divider()
                             Button("Delete", role: .destructive) {
-                                Task { await deleteMovie(movie) }
+                                movieToDelete = movie
+                                showDeleteConfirmation = true
                             }
                         }
                     }
@@ -185,7 +200,9 @@ struct StagingView: View {
                         Task { await approveMovie(movie) }
                     },
                     onReject: {
-                        Task { await rejectMovie(movie, reason: "Manual rejection") }
+                        movieForRejection = movie
+                        rejectReason = ""
+                        showRejectSheet = true
                     },
                     onToggleTvSeries: { isTvSeries in
                         Task { await toggleTvSeries(movie: movie, isTvSeries: isTvSeries) }
@@ -264,6 +281,44 @@ struct StagingView: View {
         } message: {
             Text("Publish \(stats?.approved ?? 0) approved movies to production?")
         }
+        .confirmationDialog(
+            "Delete \"\(movieToDelete?.title ?? "this movie")\"?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let movie = movieToDelete {
+                    Task { await deleteMovie(movie) }
+                }
+                movieToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                movieToDelete = nil
+            }
+        } message: {
+            Text("This will permanently remove the staged movie. This action cannot be undone.")
+        }
+        .sheet(isPresented: $showRejectSheet) {
+            if let movie = movieForRejection {
+                RejectMovieSheet(
+                    movie: movie,
+                    reason: $rejectReason,
+                    onReject: {
+                        Task {
+                            await rejectMovie(movie, reason: rejectReason.isEmpty ? "Manual rejection" : rejectReason)
+                            showRejectSheet = false
+                            rejectReason = ""
+                            movieForRejection = nil
+                        }
+                    },
+                    onCancel: {
+                        showRejectSheet = false
+                        rejectReason = ""
+                        movieForRejection = nil
+                    }
+                )
+            }
+        }
         .task {
             await loadInitialData()
         }
@@ -297,7 +352,7 @@ struct StagingView: View {
         do {
             tvSeriesList = try await apiService.getTvSeriesList()
         } catch {
-            print("Failed to load TV series: \(error)")
+            errorMessage = "Failed to load TV series: \(error.localizedDescription)"
         }
     }
 
@@ -306,7 +361,7 @@ struct StagingView: View {
             let data = try await apiService.getChannels(limit: 100)
             channels = data.channels
         } catch {
-            print("Failed to load channels: \(error)")
+            errorMessage = "Failed to load channels: \(error.localizedDescription)"
         }
     }
 
@@ -314,7 +369,7 @@ struct StagingView: View {
         do {
             stats = try await apiService.getStagingStats()
         } catch {
-            print("Failed to load stats: \(error)")
+            errorMessage = "Failed to load stats: \(error.localizedDescription)"
         }
     }
 
@@ -521,7 +576,16 @@ struct StagingView: View {
 
         do {
             let result = try await apiService.publishStagedMovies()
-            print("Published \(result.published) movies, \(result.failed) failed")
+            var message = "Published \(result.published) movie\(result.published == 1 ? "" : "s")"
+            if result.failed > 0 {
+                message += ", \(result.failed) failed"
+                if let errors = result.errors, !errors.isEmpty {
+                    let titles = errors.compactMap { $0.movieTitle }.prefix(3).joined(separator: ", ")
+                    message += ": \(titles)"
+                    if errors.count > 3 { message += " and \(errors.count - 3) more" }
+                }
+                errorMessage = message
+            }
 
             await loadStats()
             await loadMovies()
@@ -1103,5 +1167,49 @@ struct SeriesPickerSheet: View {
             .padding()
         }
         .frame(width: 450)
+    }
+}
+
+// MARK: - Reject Movie Sheet
+
+struct RejectMovieSheet: View {
+    let movie: StagedMovie
+    @Binding var reason: String
+    let onReject: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Reject Movie")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Rejecting: \"\(movie.title)\"")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Form {
+                Section("Reason for rejection") {
+                    TextEditor(text: $reason)
+                        .frame(height: 100)
+                        .border(Color.gray.opacity(0.2))
+                }
+            }
+            .frame(height: 160)
+
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Reject Movie", action: onReject)
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+            }
+        }
+        .padding()
+        .frame(width: 480)
     }
 }

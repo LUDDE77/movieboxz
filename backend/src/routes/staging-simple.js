@@ -5,8 +5,12 @@ import { movieCurator } from '../services/movieCurator.js'
 import { youtubeService } from '../services/youtubeService.js'
 import omdbService from '../services/omdbService.js'
 import { logger } from '../utils/logger.js'
+import { adminAuth } from '../middleware/adminAuth.js'
 
 const router = express.Router()
+
+// Apply admin auth to all staging routes
+router.use(adminAuth)
 
 // In-memory store for batch enrichment progress
 const enrichmentProgress = new Map()
@@ -686,12 +690,27 @@ router.post('/movies/:id/clear-enrichment', async (req, res, next) => {
 })
 
 // PATCH /api/admin/staging/movies/:id - Manual edit
+// Only allow a safe allowlist of fields to prevent tampering with workflow state
+const STAGING_PATCH_ALLOWED_FIELDS = [
+    'title', 'description', 'release_date', 'runtime_minutes',
+    'imdb_id', 'tmdb_id', 'poster_path', 'backdrop_path',
+    'vote_average', 'vote_count', 'popularity',
+    'imdb_rating', 'imdb_votes', 'rated',
+    'director', 'actors', 'language', 'country',
+    'category', 'is_tv_show', 'is_tv_series', 'is_kids_content',
+    'notes', 'channel_tag', 'tv_series_id'
+]
+
 router.patch('/movies/:id', async (req, res, next) => {
     try {
         const { id } = req.params
-        const updates = {
-            ...req.body,
-            updated_at: new Date().toISOString()
+
+        // Build update object from allowlist only — never spread raw req.body
+        const updates = { updated_at: new Date().toISOString() }
+        for (const field of STAGING_PATCH_ALLOWED_FIELDS) {
+            if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+                updates[field] = req.body[field]
+            }
         }
 
         const { data, error } = await supabase
@@ -795,11 +814,24 @@ router.post('/publish', async (req, res, next) => {
                 .in('id', ids)
         }
 
-        // Get approved staged movies
+        // Atomically claim movies for publishing: transition approved -> publishing.
+        // This prevents concurrent Publish All requests from processing the same movies.
+        let claimQuery = supabase
+            .from('staged_movies')
+            .update({ approval_status: 'publishing', updated_at: new Date().toISOString() })
+            .eq('approval_status', 'approved')
+
+        if (ids && ids.length > 0) {
+            claimQuery = claimQuery.in('id', ids)
+        }
+
+        await claimQuery
+
+        // Get movies we just claimed (status is now 'publishing')
         let query = supabase
             .from('staged_movies')
             .select('*')
-            .eq('approval_status', 'approved')
+            .eq('approval_status', 'publishing')
 
         if (ids && ids.length > 0) {
             query = query.in('id', ids)
@@ -863,10 +895,11 @@ router.post('/publish', async (req, res, next) => {
                 const movieId = insertedMovie.id
                 movieIds.push(movieId)
 
-                // Update staged movie with published_movie_id
+                // Update staged movie: mark as published and record production movie ID
                 await supabase
                     .from('staged_movies')
                     .update({
+                        approval_status: 'published',
                         published_movie_id: movieId,
                         updated_at: new Date().toISOString()
                     })
@@ -882,6 +915,11 @@ router.post('/publish', async (req, res, next) => {
                     errorCode: error.code,
                     errorDetails: error.details || error.hint
                 })
+                // Roll back to 'approved' so the movie can be retried
+                await supabase
+                    .from('staged_movies')
+                    .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
+                    .eq('id', stagedMovie.id)
                 failed++
             }
         }

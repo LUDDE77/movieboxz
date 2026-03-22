@@ -9,23 +9,9 @@ import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import channelPatternManager from '../services/channelPatternManager.js'
 import manualEnrichmentQueue from '../services/manualEnrichmentQueue.js'
+import { adminAuth } from '../middleware/adminAuth.js'
 
 const router = express.Router()
-
-// Simple admin authentication middleware (enhance for production)
-const adminAuth = (req, res, next) => {
-    const apiKey = req.headers['x-admin-api-key']
-
-    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
-        return res.status(401).json({
-            success: false,
-            error: 'Unauthorized',
-            message: 'Valid admin API key required'
-        })
-    }
-
-    next()
-}
 
 // Apply admin auth to all routes
 router.use(adminAuth)
@@ -2042,27 +2028,15 @@ router.post('/movies/:id/genres', async (req, res, next) => {
             })
         }
 
-        // Delete existing genre associations
-        const { error: deleteError } = await supabase
-            .from('movie_genres')
-            .delete()
-            .eq('movie_id', id)
+        // Atomically replace genre associations via a stored procedure
+        // (avoids the race window between DELETE and INSERT)
+        const { error: rpcError } = await supabase
+            .rpc('update_movie_genres', {
+                p_movie_id: id,
+                p_genre_ids: genreIds
+            })
 
-        if (deleteError) throw deleteError
-
-        // Insert new genre associations if any
-        if (genreIds.length > 0) {
-            const genreAssociations = genreIds.map(genreId => ({
-                movie_id: id,
-                genre_id: genreId
-            }))
-
-            const { error: insertError } = await supabase
-                .from('movie_genres')
-                .insert(genreAssociations)
-
-            if (insertError) throw insertError
-        }
+        if (rpcError) throw rpcError
 
         // Fetch updated movie with genres
         const { data: movie, error: fetchError } = await supabase

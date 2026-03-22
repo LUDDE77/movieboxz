@@ -61,35 +61,12 @@ class YouTubeService {
     // =============================================================================
 
     async healthCheck() {
-        // Try each API key until one works
-        for (let i = 0; i < this.apiKeys.length; i++) {
-            try {
-                // Test with current key
-                await this.youtube.search.list({
-                    part: ['snippet'],
-                    q: 'test',
-                    maxResults: 1,
-                    type: 'video'
-                })
-
-                logger.info(`YouTube API health check passed (using key #${this.currentKeyIndex + 1}/${this.apiKeys.length})`)
-                return true
-            } catch (error) {
-                logger.warn(`YouTube API health check failed for key #${this.currentKeyIndex + 1}/${this.apiKeys.length}: ${error.message}`)
-
-                // If this is the last key, report failure
-                if (i === this.apiKeys.length - 1) {
-                    logger.error('All YouTube API keys failed health check')
-                    return false
-                }
-
-                // Try next key
-                logger.info(`Trying next API key...`)
-                this.switchToNextKey()
-            }
-        }
-
-        return false
+        // Key presence check only — no API call.
+        // search.list costs 100 quota units per call; calling it on every health ping
+        // exhausts the daily 10,000-unit quota within hours.
+        const hasKey = this.apiKeys.some(k => k && k.trim().length > 0)
+        logger.info(`YouTube API health check: key configured = ${hasKey}`)
+        return hasKey
     }
 
     async quotaCheck() {
@@ -239,67 +216,82 @@ class YouTubeService {
 
         try {
             const {
-                maxResults = 500,  // Increased default from 50 to 500
-                order = 'date',
+                maxResults = 500,
+                // order param kept for API compatibility but ignored — playlist API doesn't support it
                 publishedAfter = null,
                 publishedBefore = null
             } = options
 
-            logger.info(`Fetching up to ${maxResults} videos from channel: ${channelId}`)
+            logger.info(`Fetching up to ${maxResults} videos from channel: ${channelId} (via uploads playlist)`)
 
+            // Step 1: Get the channel's uploads playlist ID — costs 1 unit (was 100 with search.list)
+            const channelResponse = await this.youtube.channels.list({
+                part: ['contentDetails'],
+                id: [channelId]
+            })
+            this.updateQuotaUsage(1)
+
+            if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+                throw new Error(`Channel not found: ${channelId}`)
+            }
+
+            const uploadsPlaylistId = channelResponse.data.items[0].contentDetails.relatedPlaylists.uploads
+            logger.info(`Uploads playlist: ${uploadsPlaylistId}`)
+
+            // Step 2: Fetch playlist pages — costs 1 unit/page (was 100 units/page with search.list)
             let allVideos = []
             let nextPageToken = null
             let totalFetched = 0
             let pageCount = 0
-            let totalQuotaUsed = 0
+            let totalQuotaUsed = 1 // channels.list above
 
-            // Loop to fetch all pages until we reach maxResults or no more pages
             do {
                 pageCount++
-                const pageSize = Math.min(50, maxResults - totalFetched)  // API max is 50 per request
+                const pageSize = Math.min(50, maxResults - totalFetched)
 
-                // Search for videos in the channel
-                const searchParams = {
-                    part: ['snippet'],
-                    channelId: channelId,
-                    type: 'video',
-                    order: order,
+                const playlistResponse = await this.youtube.playlistItems.list({
+                    part: ['contentDetails', 'snippet'],
+                    playlistId: uploadsPlaylistId,
                     maxResults: pageSize,
-                    pageToken: nextPageToken  // Pagination support
-                }
+                    pageToken: nextPageToken
+                })
+                this.updateQuotaUsage(1) // playlistItems.list costs 1 unit
+                totalQuotaUsed += 1
 
-                if (publishedAfter) {
-                    searchParams.publishedAfter = publishedAfter
-                }
-
-                if (publishedBefore) {
-                    searchParams.publishedBefore = publishedBefore
-                }
-
-                logger.info(`Fetching page ${pageCount} (${pageSize} videos)...`)
-
-                const searchResponse = await this.youtube.search.list(searchParams)
-                this.updateQuotaUsage(100) // search.list costs 100 units
-                totalQuotaUsed += 100
-
-                if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
-                    logger.info('No more videos found')
+                if (!playlistResponse.data.items || playlistResponse.data.items.length === 0) {
                     break
                 }
 
-                // Get video IDs for detailed info
-                const videoIds = searchResponse.data.items.map(item => item.id.videoId)
+                // Filter by date if requested (playlist API has no date filter — filter client-side)
+                let items = playlistResponse.data.items
+                if (publishedAfter || publishedBefore) {
+                    const after = publishedAfter ? new Date(publishedAfter) : null
+                    const before = publishedBefore ? new Date(publishedBefore) : null
+                    items = items.filter(item => {
+                        const pub = new Date(item.snippet.publishedAt)
+                        if (after && pub < after) return false
+                        if (before && pub > before) return false
+                        return true
+                    })
+                }
 
-                // Get detailed video information
+                const videoIds = items
+                    .map(item => item.contentDetails?.videoId)
+                    .filter(Boolean)
+
+                if (videoIds.length === 0) {
+                    nextPageToken = playlistResponse.data.nextPageToken
+                    continue
+                }
+
+                // Step 3: Get full video details — costs 1 unit per page of 50
                 const videosResponse = await this.youtube.videos.list({
                     part: ['snippet', 'contentDetails', 'status', 'statistics'],
                     id: videoIds
                 })
-
-                this.updateQuotaUsage(1) // videos.list costs 1 unit
+                this.updateQuotaUsage(1)
                 totalQuotaUsed += 1
 
-                // Map video data
                 const videos = videosResponse.data.items.map(video => ({
                     id: video.id,
                     title: video.snippet.title,
@@ -320,23 +312,19 @@ class YouTubeService {
 
                 allVideos.push(...videos)
                 totalFetched += videos.length
+                nextPageToken = playlistResponse.data.nextPageToken
 
-                // Get next page token
-                nextPageToken = searchResponse.data.nextPageToken
+                logger.info(`Page ${pageCount}: ${videos.length} videos (total: ${totalFetched}, quota: ${totalQuotaUsed} units)`)
 
-                logger.info(`Fetched ${videos.length} videos (Total: ${totalFetched}/${maxResults}, Quota: ${totalQuotaUsed} units)`)
-
-                // Small delay to avoid rate limiting (100ms)
                 await new Promise(resolve => setTimeout(resolve, 100))
 
             } while (nextPageToken && totalFetched < maxResults)
 
-            logger.info(`✅ Completed fetching ${totalFetched} videos across ${pageCount} page(s), used ${totalQuotaUsed} quota units`)
+            logger.info(`✅ Fetched ${totalFetched} videos in ${pageCount} page(s) using ${totalQuotaUsed} quota units (was ~${pageCount * 101} with search.list)`)
 
-            // Log API usage
             await dbOperations.logApiUsage(
                 'youtube',
-                `search.list + videos.list (${pageCount} pages)`,
+                `playlistItems.list + videos.list (${pageCount} pages)`,
                 'GET',
                 totalQuotaUsed,
                 200,
@@ -350,7 +338,7 @@ class YouTubeService {
 
             await dbOperations.logApiUsage(
                 'youtube',
-                'search.list + videos.list',
+                'playlistItems.list + videos.list',
                 'GET',
                 0,
                 error.response?.status || 500,

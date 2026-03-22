@@ -15,6 +15,9 @@ struct MoviesView: View {
     // Filter state
     @State private var showNeedsVerification = false
 
+    // In-flight load task (cancelled on pagination to prevent races)
+    @State private var loadTask: Task<Void, Never>?
+
     // View mode
     @State private var showOriginal = false
 
@@ -101,20 +104,24 @@ struct MoviesView: View {
                         }
                     }
 
-                Button(action: {
+                toggleButton(
+                    label: "Needs Verification",
+                    icon: "exclamationmark.magnifyingglass",
+                    isOn: showNeedsVerification,
+                    color: .orange
+                ) {
                     showNeedsVerification.toggle()
                     Task { currentPage = 1; await loadMovies() }
-                }) {
-                    Label("Needs Verification", systemImage: "exclamationmark.magnifyingglass")
                 }
-                .buttonStyle(showNeedsVerification ? .borderedProminent : .bordered)
-                .tint(.orange)
 
-                Button(action: { showOriginal.toggle() }) {
-                    Label(showOriginal ? "Showing Original" : "Show Original", systemImage: "film.stack")
+                toggleButton(
+                    label: showOriginal ? "Showing Original" : "Show Original",
+                    icon: "film.stack",
+                    isOn: showOriginal,
+                    color: .indigo
+                ) {
+                    showOriginal.toggle()
                 }
-                .buttonStyle(showOriginal ? .borderedProminent : .bordered)
-                .tint(.indigo)
 
                 Button(action: { Task { await loadMovies() } }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
@@ -186,7 +193,12 @@ struct MoviesView: View {
                             movie: movie,
                             isSelected: selectedMovie?.id == movie.id,
                             showOriginal: showOriginal,
-                            onSelect: { selectedMovie = movie }
+                            onSelect: { selectedMovie = movie },
+                            onToggleVerification: {
+                                Task {
+                                    await updateMovieWithChanges(movie, updates: ["needs_verification": !(movie.needsVerification ?? false)])
+                                }
+                            }
                         )
                     }
                 }
@@ -250,37 +262,13 @@ struct MoviesView: View {
     private func movieDetailView(_ movie: Movie) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Header with poster
+                // Header
                 if showOriginal {
-                    // Side-by-side comparison: original (left) vs enriched (right)
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Original YouTube")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.indigo)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color.indigo.opacity(0.12))
-                                .cornerRadius(4)
-
-                            let thumbURL = URL(string: "https://img.youtube.com/vi/\(movie.youtubeVideoId)/mqdefault.jpg")
-                            AsyncImage(url: thumbURL) { image in
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            } placeholder: {
-                                Color.gray.opacity(0.2)
-                            }
-                            .frame(width: 180, height: 135)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                            Text(movie.youtubeVideoTitle.isEmpty ? "(no title)" : movie.youtubeVideoTitle)
-                                .font(.headline)
-                                .lineLimit(3)
-                                .frame(width: 180, alignment: .leading)
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Enriched")
+                    // Side-by-side: Production (left) vs Original YouTube (right)
+                    HStack(alignment: .top, spacing: 20) {
+                        // Production / Enriched
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Production", systemImage: "sparkles")
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundColor(.blue)
@@ -294,153 +282,115 @@ struct MoviesView: View {
                                     ? URL(string: posterPath)
                                     : URL(string: "https://image.tmdb.org/t/p/w185\(posterPath)")
                                 AsyncImage(url: posterURL) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Color.gray.opacity(0.2)
-                                }
-                                .frame(width: 90, height: 135)
+                                    image.resizable().aspectRatio(contentMode: .fit)
+                                } placeholder: { Color.gray.opacity(0.2) }
+                                .frame(width: 120, height: 180)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             } else {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(Color.gray.opacity(0.15))
-                                    .frame(width: 90, height: 135)
+                                    .frame(width: 120, height: 180)
                                     .overlay(Image(systemName: "photo").foregroundColor(.secondary))
                             }
 
                             Text(movie.title)
                                 .font(.headline)
                                 .lineLimit(3)
-                                .frame(width: 180, alignment: .leading)
+                                .frame(width: 160, alignment: .leading)
+                        }
+
+                        // Original YouTube
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Original YouTube", systemImage: "film")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.indigo)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.indigo.opacity(0.12))
+                                .cornerRadius(4)
+
+                            let thumbURL = URL(string: "https://img.youtube.com/vi/\(movie.youtubeVideoId)/mqdefault.jpg")
+                            AsyncImage(url: thumbURL) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: { Color.gray.opacity(0.2) }
+                            .frame(width: 160, height: 120)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Text(movie.youtubeVideoTitle.isEmpty ? "(no title)" : movie.youtubeVideoTitle)
+                                .font(.headline)
+                                .lineLimit(3)
+                                .frame(width: 160, alignment: .leading)
                         }
 
                         Spacer()
                     }
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 8)
                 }
 
-                HStack(alignment: .top, spacing: 16) {
-                    // Poster (enriched only, hidden in original mode since shown above)
-                    if !showOriginal, let posterPath = movie.posterPath {
-                        let posterURL: URL? = {
-                            if posterPath.hasPrefix("http") {
-                                return URL(string: posterPath)
-                            } else {
-                                return URL(string: "https://image.tmdb.org/t/p/w500\(posterPath)")
-                            }
-                        }()
-
-                        AsyncImage(url: posterURL) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } placeholder: {
-                            Color.gray.opacity(0.2)
-                        }
-                        .frame(width: 200, height: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(movie.title)
-                            .font(.title)
-                            .fontWeight(.bold)
-
-                        if let releaseYear = movie.releaseYear {
-                            Text("\(releaseYear)")
-                                .font(.title3)
-                                .foregroundColor(.secondary)
-                        }
-
-                        if let rating = movie.imdbRating {
-                            HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
-                                    .font(.headline)
-                                if let votes = movie.imdbVotes {
-                                    Text("(\(votes) votes)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-
-                        if !movie.genres.isEmpty {
-                            Text(movie.genres.map { $0.name }.joined(separator: ", "))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-
-                        // Content flags
-                        HStack(spacing: 8) {
-                            // Needs Verification checkbox — toggle directly on the row
-                            Button(action: {
-                                Task {
-                                    await updateMovieWithChanges(movie, updates: ["needs_verification": !(movie.needsVerification ?? false)])
-                                }
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: movie.needsVerification == true ? "checkmark.square.fill" : "square")
-                                        .foregroundColor(movie.needsVerification == true ? .orange : .secondary)
-                                    Text("Needs Verification")
-                                        .font(.caption)
-                                        .foregroundColor(movie.needsVerification == true ? .orange : .secondary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-
-                            if movie.isTvSeries == true {
-                                StatusBadge(text: "TV Series", color: .purple)
-                            }
-                            if movie.isKidsContent == true {
-                                StatusBadge(text: "Kids", color: .green)
-                            }
-                            if movie.isTvShow == true && movie.isTvSeries != true {
-                                StatusBadge(text: "TV Show", color: .blue)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Action buttons
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                print("\n🖊️ [MoviesView] EDIT BUTTON CLICKED")
-                                print("🖊️ [MoviesView] Movie ID: \(movie.id)")
-                                print("🖊️ [MoviesView] Movie Title: \(movie.title)")
-                                print("🖊️ [MoviesView] Setting editingMovie to trigger sheet...")
-                                editingMovie = movie
-                                print("🖊️ [MoviesView] editingMovie set: \(editingMovie != nil)\n")
-                            }) {
-                                Label("Edit", systemImage: "pencil")
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button(action: {
-                                Task {
-                                    await enrichMovie(movie, priority: enrichmentPriority)
-                                }
-                            }) {
-                                if isEnriching {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
+                // Normal header — only shown when NOT in original mode
+                if !showOriginal {
+                    HStack(alignment: .top, spacing: 16) {
+                        if let posterPath = movie.posterPath {
+                            let posterURL: URL? = {
+                                if posterPath.hasPrefix("http") {
+                                    return URL(string: posterPath)
                                 } else {
-                                    Label("Enrich", systemImage: "sparkles")
+                                    return URL(string: "https://image.tmdb.org/t/p/w500\(posterPath)")
                                 }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isEnriching)
+                            }()
 
-                            if let url = movie.youtubeURL {
-                                Button(action: {
-                                    NSWorkspace.shared.open(url)
-                                }) {
-                                    Label("YouTube", systemImage: "play.circle")
-                                }
-                                .buttonStyle(.bordered)
+                            AsyncImage(url: posterURL) { image in
+                                image.resizable().aspectRatio(contentMode: .fit)
+                            } placeholder: {
+                                Color.gray.opacity(0.2)
                             }
+                            .frame(width: 200, height: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(movie.title)
+                                .font(.title)
+                                .fontWeight(.bold)
+
+                            if let releaseYear = movie.releaseYear {
+                                Text("\(releaseYear)")
+                                    .font(.title3)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            if let rating = movie.imdbRating {
+                                HStack {
+                                    Image(systemName: "star.fill").foregroundColor(.yellow)
+                                    Text(String(format: "%.1f", rating)).font(.headline)
+                                    if let votes = movie.imdbVotes {
+                                        Text("(\(votes) votes)").font(.caption).foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+
+                            if !movie.genres.isEmpty {
+                                Text(movie.genres.map { $0.name }.joined(separator: ", "))
+                                    .font(.subheadline).foregroundColor(.secondary)
+                            }
+
+                            HStack(spacing: 8) {
+                                if movie.needsVerification == true {
+                                    StatusBadge(text: "Needs Verification", color: .orange)
+                                }
+                                if movie.isTvSeries == true { StatusBadge(text: "TV Series", color: .purple) }
+                                if movie.isKidsContent == true { StatusBadge(text: "Kids", color: .green) }
+                                if movie.isTvShow == true && movie.isTvSeries != true { StatusBadge(text: "TV Show", color: .blue) }
+                            }
+
+                            Spacer()
+                            actionButtons(movie)
                         }
                     }
+                } else {
+                    // In original mode: show action buttons below the comparison
+                    actionButtons(movie)
                 }
 
                 Divider()
@@ -505,27 +455,83 @@ struct MoviesView: View {
         }
     }
 
+    // MARK: - Helper Views
+
+    @ViewBuilder
+    private func actionButtons(_ movie: Movie) -> some View {
+        HStack(spacing: 12) {
+            Button(action: { editingMovie = movie }) {
+                Label("Edit", systemImage: "pencil")
+            }
+            .buttonStyle(.bordered)
+
+            Button(action: { Task { await enrichMovie(movie, priority: enrichmentPriority) } }) {
+                if isEnriching {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Label("Enrich", systemImage: "sparkles")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(isEnriching)
+
+            if let url = movie.youtubeURL {
+                Button(action: { NSWorkspace.shared.open(url) }) {
+                    Label("YouTube", systemImage: "play.circle")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func toggleButton(label: String, icon: String, isOn: Bool, color: Color, action: @escaping () -> Void) -> some View {
+        if isOn {
+            Button(action: action) { Label(label, systemImage: icon) }
+                .buttonStyle(.borderedProminent)
+                .tint(color)
+        } else {
+            Button(action: action) { Label(label, systemImage: icon) }
+                .buttonStyle(.bordered)
+                .tint(color)
+        }
+    }
+
     // MARK: - Actions
 
     func loadMovies() async {
-        isLoading = true
-        errorMessage = nil
+        // Cancel any previous in-flight request to prevent pagination races
+        loadTask?.cancel()
 
-        do {
-            let data = try await apiService.getMovies(
-                page: currentPage,
-                limit: itemsPerPage,
-                search: searchText.isEmpty ? nil : searchText,
-                needsVerification: showNeedsVerification
-            )
-            movies = data.movies
-            totalPages = data.pagination.pages ?? 1
-            totalMovies = data.pagination.total ?? 0
-        } catch {
-            errorMessage = "Failed to load movies: \(error.localizedDescription)"
+        let task = Task {
+            isLoading = true
+            errorMessage = nil
+
+            do {
+                let data = try await apiService.getMovies(
+                    page: currentPage,
+                    limit: itemsPerPage,
+                    search: searchText.isEmpty ? nil : searchText,
+                    needsVerification: showNeedsVerification
+                )
+                if !Task.isCancelled {
+                    movies = data.movies
+                    totalPages = data.pagination.pages ?? 1
+                    totalMovies = data.pagination.total ?? 0
+                }
+            } catch {
+                if !Task.isCancelled {
+                    errorMessage = "Failed to load movies: \(error.localizedDescription)"
+                }
+            }
+
+            if !Task.isCancelled {
+                isLoading = false
+            }
         }
 
-        isLoading = false
+        loadTask = task
+        await task.value
     }
 
     func updateMovieWithChanges(_ movie: Movie, updates: [String: Any]) async {
@@ -556,118 +562,125 @@ struct ProductionMovieRow: View {
     let isSelected: Bool
     var showOriginal: Bool = false
     let onSelect: () -> Void
+    var onToggleVerification: (() -> Void)? = nil
+
+    private var metaBadges: some View {
+        HStack(spacing: 6) {
+            if let year = movie.releaseYear {
+                Text("\(year)").font(.caption).foregroundColor(.secondary)
+            }
+            if movie.isTvSeries == true { StatusBadge(text: "TV Series", color: .purple) }
+            if movie.isKidsContent == true { StatusBadge(text: "Kids", color: .green) }
+            if let rating = movie.imdbRating {
+                HStack(spacing: 2) {
+                    Image(systemName: "star.fill").font(.caption2).foregroundColor(.yellow)
+                    Text(String(format: "%.1f", rating)).font(.caption)
+                }
+            }
+            if movie.tmdbId != nil || movie.imdbId != nil {
+                Image(systemName: "sparkles").font(.caption).foregroundColor(.blue)
+            }
+        }
+    }
 
     var body: some View {
-        Button(action: onSelect) {
+        HStack(spacing: 0) {
+            // Main selectable area
             HStack(spacing: 12) {
-                // Poster thumbnail or YouTube thumbnail
                 if showOriginal {
-                    let thumbURL = URL(string: "https://img.youtube.com/vi/\(movie.youtubeVideoId)/mqdefault.jpg")
-                    AsyncImage(url: thumbURL) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.gray.opacity(0.2)
-                    }
-                    .frame(width: 60, height: 45)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                } else if let posterPath = movie.posterPath {
-                    let posterURL: URL? = {
-                        if posterPath.hasPrefix("http") {
-                            return URL(string: posterPath)
-                        } else {
-                            return URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")
-                        }
-                    }()
-
-                    AsyncImage(url: posterURL) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Color.gray.opacity(0.2)
-                    }
-                    .frame(width: 60, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 60, height: 90)
-                        .overlay(
-                            Image(systemName: "film")
-                                .foregroundColor(.secondary)
-                        )
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    if showOriginal {
-                        Text(movie.youtubeVideoTitle.isEmpty ? movie.title : movie.youtubeVideoTitle)
-                            .font(.headline)
-                            .lineLimit(2)
-                        if !movie.youtubeVideoTitle.isEmpty && movie.youtubeVideoTitle != movie.title {
-                            Text(movie.title)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .italic()
-                                .lineLimit(1)
-                        }
-                    } else {
-                        Text(movie.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                    }
-
-                    HStack(spacing: 8) {
-                        if let year = movie.releaseYear {
-                            Text("\(year)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        if movie.isTvSeries == true {
-                            StatusBadge(text: "TV Series", color: .purple)
-                        }
-                        if movie.isKidsContent == true {
-                            StatusBadge(text: "Kids", color: .green)
-                        }
-
-                        if let rating = movie.imdbRating {
-                            HStack(spacing: 2) {
-                                Image(systemName: "star.fill")
-                                    .font(.caption2)
-                                    .foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
-                                    .font(.caption)
+                    // Split: production poster (left) + YouTube thumb (right)
+                    HStack(spacing: 6) {
+                        // Production poster
+                        Group {
+                            if let posterPath = movie.posterPath {
+                                let posterURL: URL? = posterPath.hasPrefix("http")
+                                    ? URL(string: posterPath)
+                                    : URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")
+                                AsyncImage(url: posterURL) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: { Color.blue.opacity(0.1) }
+                            } else {
+                                Color.blue.opacity(0.1)
+                                    .overlay(Image(systemName: "sparkles").font(.caption).foregroundColor(.blue))
                             }
                         }
+                        .frame(width: 45, height: 67)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.blue.opacity(0.3), lineWidth: 1))
 
-                        if movie.tmdbId != nil || movie.imdbId != nil {
-                            Image(systemName: "sparkles")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
+                        // YouTube thumbnail
+                        let thumbURL = URL(string: "https://img.youtube.com/vi/\(movie.youtubeVideoId)/mqdefault.jpg")
+                        AsyncImage(url: thumbURL) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: { Color.indigo.opacity(0.1) }
+                        .frame(width: 60, height: 45)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.indigo.opacity(0.3), lineWidth: 1))
                     }
 
-                    if let channel = movie.channelTitle {
-                        Text(channel)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                    // Titles: enriched on top, YouTube below
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles").font(.caption2).foregroundColor(.blue)
+                            Text(movie.title).font(.headline).lineLimit(1)
+                        }
+                        HStack(spacing: 4) {
+                            Image(systemName: "film").font(.caption2).foregroundColor(.indigo)
+                            Text(movie.youtubeVideoTitle.isEmpty ? "(no title)" : movie.youtubeVideoTitle)
+                                .font(.subheadline).foregroundColor(.secondary).lineLimit(1)
+                        }
+                        metaBadges
+                    }
+                } else {
+                    // Normal: single poster + title
+                    if let posterPath = movie.posterPath {
+                        let posterURL: URL? = posterPath.hasPrefix("http")
+                            ? URL(string: posterPath)
+                            : URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")
+                        AsyncImage(url: posterURL) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: { Color.gray.opacity(0.2) }
+                        .frame(width: 60, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 60, height: 90)
+                            .overlay(Image(systemName: "film").foregroundColor(.secondary))
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(movie.title).font(.headline).lineLimit(2)
+                        metaBadges
+                        if let channel = movie.channelTitle {
+                            Text(channel).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                        }
                     }
                 }
 
                 Spacer()
             }
             .padding(8)
-            .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-            )
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect() }
+
+            // Verification toggle — separate from select tap
+            Button(action: { onToggleVerification?() }) {
+                Image(systemName: movie.needsVerification == true ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundColor(movie.needsVerification == true ? .orange : Color.secondary.opacity(0.4))
+                    .padding(.trailing, 10)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .help(movie.needsVerification == true ? "Unmark needs verification" : "Mark as needs verification")
         }
-        .buttonStyle(.plain)
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.blue : (movie.needsVerification == true ? Color.orange.opacity(0.4) : Color.clear), lineWidth: 2)
+        )
     }
 }
 

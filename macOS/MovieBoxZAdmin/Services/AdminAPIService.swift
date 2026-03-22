@@ -642,12 +642,7 @@ class AdminAPIService: ObservableObject {
     }
 
     func deleteChannel(channelId: String) async throws {
-        print("\n" + String(repeating: "=", count: 80))
-        print("🗑️ [DeleteChannel] STARTING CHANNEL DELETE")
-        print("🗑️ [DeleteChannel] Step 1: Input channel ID")
-        print("🗑️ [DeleteChannel]   Original ID: \(channelId)")
-        print("🗑️ [DeleteChannel]   ID length: \(channelId.count)")
-        print("🗑️ [DeleteChannel]   First char: \(channelId.first ?? Character(" "))")
+        print("🗑️ [DeleteChannel] Deleting channel: \(channelId)")
 
         // URL-encode the channel ID - create custom character set that excludes @ symbol
         var allowedCharacters = CharacterSet.urlPathAllowed
@@ -658,32 +653,16 @@ class AdminAPIService: ObservableObject {
             throw APIError.invalidURL
         }
 
-        print("🗑️ [DeleteChannel] Step 2: URL encoding")
-        print("🗑️ [DeleteChannel]   Encoded ID: \(encodedId)")
-        print("🗑️ [DeleteChannel]   Changed: \(channelId != encodedId ? "YES" : "NO")")
-        print("🗑️ [DeleteChannel]   @ encoded as: %40")
-
         let endpoint = "/api/admin/channels/\(encodedId)"
-        print("🗑️ [DeleteChannel] Step 3: Build endpoint")
-        print("🗑️ [DeleteChannel]   Endpoint: \(endpoint)")
 
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
-            print("🗑️ [DeleteChannel] ❌ Failed to create URL")
-            print("🗑️ [DeleteChannel]   Base URL: \(baseURL)")
-            print("🗑️ [DeleteChannel]   Full URL: \(baseURL)\(endpoint)")
+            print("🗑️ [DeleteChannel] ❌ Failed to create URL: \(baseURL)\(endpoint)")
             throw APIError.invalidURL
         }
-
-        print("🗑️ [DeleteChannel] Step 4: Final URL constructed")
-        print("🗑️ [DeleteChannel]   Full URL: \(url.absoluteString)")
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
-
-        print("🗑️ [DeleteChannel] Step 5: Sending DELETE request")
-        print("🗑️ [DeleteChannel]   Method: DELETE")
-        print("🗑️ [DeleteChannel]   Headers: x-admin-api-key = \(adminAPIKey.prefix(10))...")
 
         let (data, httpResponse) = try await URLSession.shared.data(for: request)
 
@@ -692,22 +671,14 @@ class AdminAPIService: ObservableObject {
             throw APIError.invalidResponse
         }
 
-        print("🗑️ [DeleteChannel] Step 6: Response received")
-        print("🗑️ [DeleteChannel]   Status code: \(httpResponse.statusCode)")
-        print("🗑️ [DeleteChannel]   Status: \((200...299).contains(httpResponse.statusCode) ? "SUCCESS" : "FAILURE")")
-
-        if let responseBody = String(data: data, encoding: .utf8), !responseBody.isEmpty {
-            print("🗑️ [DeleteChannel]   Response body: \(responseBody)")
-        }
-
         guard (200...299).contains(httpResponse.statusCode) else {
-            print("🗑️ [DeleteChannel] ❌ HTTP ERROR: \(httpResponse.statusCode)")
-            print(String(repeating: "=", count: 80) + "\n")
+            if let responseBody = String(data: data, encoding: .utf8), !responseBody.isEmpty {
+                print("🗑️ [DeleteChannel] ❌ HTTP \(httpResponse.statusCode): \(responseBody)")
+            }
             throw APIError.httpError(httpResponse.statusCode)
         }
 
         print("🗑️ [DeleteChannel] ✅ Channel deleted successfully")
-        print(String(repeating: "=", count: 80) + "\n")
     }
 
     /// Update channel classification (content type and pattern source)

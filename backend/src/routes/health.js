@@ -17,8 +17,8 @@ router.get('/', async (req, res) => {
         // Check database connection
         const dbHealthy = await testConnection()
 
-        // Check external APIs (light check)
-        const youtubeHealthy = await youtubeService.healthCheck()
+        // Check external APIs — key presence only, NO API calls (healthCheck() costs 100 quota units)
+        const youtubeHealthy = !!process.env.YOUTUBE_API_KEY
         const tmdbHealthy = await tmdbService.healthCheck()
 
         const responseTime = Date.now() - startTime

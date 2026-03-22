@@ -3,8 +3,12 @@ import { supabase } from '../config/database.js'
 import { youtubeService } from '../services/youtubeService.js'
 import channelPatternManager from '../services/channelPatternManager.js'
 import { logger } from '../utils/logger.js'
+import { adminAuth } from '../middleware/adminAuth.js'
 
 const router = express.Router()
+
+// Apply admin auth to all channel admin routes
+router.use(adminAuth)
 
 // GET /api/admin/channels - List all channels with patterns
 router.get('/', async (req, res, next) => {

@@ -4,8 +4,12 @@ import { youtubeService } from '../services/youtubeService.js'
 import { movieCurator } from '../services/movieCurator.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { logger } from '../utils/logger.js'
+import { adminAuth } from '../middleware/adminAuth.js'
 
 const router = express.Router()
+
+// Apply admin auth to all channel management routes
+router.use(adminAuth)
 
 // Strip emojis from text fields on import
 function stripEmojis(text) {

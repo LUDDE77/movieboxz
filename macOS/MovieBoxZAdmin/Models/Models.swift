@@ -797,16 +797,27 @@ struct PublishRequest: Codable {
     let ids: [String]?
 }
 
+// Publish error detail
+struct PublishErrorDetail: Codable {
+    let movieId: String
+    let movieTitle: String?
+    let error: String?
+    let errorCode: String?
+    let errorDetails: String?
+}
+
 // Publish response
 struct PublishResponse: Codable {
     let published: Int
     let failed: Int
     let movieIds: [String]?
+    let errors: [PublishErrorDetail]?
 
     enum CodingKeys: String, CodingKey {
         case published
         case failed
         case movieIds = "movieIds"
+        case errors
     }
 }
 
