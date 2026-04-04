@@ -10,6 +10,8 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import open from 'open'
 import { applyImdbFix, approveMovie } from './autoFixer.js'
+import { scrapeImdbWithPlaywright } from './imdbSearcher.js'
+import { scoreCandidate } from './scorer.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TEMPLATE_PATH = join(__dirname, '../templates/review.html')
@@ -112,6 +114,39 @@ export async function startReviewServer({ queue, backendUrl, adminApiKey, port =
             res.json({ success: true, nextId })
         } catch (err) {
             console.error(`   ❌ Decision error for ${item.title}:`, err.message)
+            res.status(500).json({ error: err.message })
+        }
+    })
+
+    // GET /api/lookup?imdbId=tt1234567 — scrape IMDB and return candidate data
+    app.get('/api/lookup', async (req, res) => {
+        const { imdbId, movieId } = req.query
+        const m = String(imdbId || '').match(/tt\d+/)
+        if (!m) return res.status(400).json({ error: 'Invalid IMDB ID' })
+
+        try {
+            const data = await scrapeImdbWithPlaywright(m[0])
+            const candidate = {
+                imdbId: m[0],
+                title: data.title,
+                year: data.year,
+                directors: data.directors,
+                actors: data.actors,
+                type: data.type || 'Movie',
+                posterUrl: data.posterUrl,
+                description: data.description || '',
+                genres: data.genres || [],
+                imdbRating: data.imdbRating
+            }
+
+            // Score if we have the movie context
+            if (movieId) {
+                const item = queue.movies.find(q => q.id === movieId)
+                if (item) candidate.score = scoreCandidate(item, candidate)
+            }
+
+            res.json({ success: true, candidate })
+        } catch (err) {
             res.status(500).json({ error: err.message })
         }
     })
