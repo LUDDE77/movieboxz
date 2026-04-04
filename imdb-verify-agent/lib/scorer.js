@@ -66,7 +66,12 @@ export function scoreCandidate(storedMovie, candidate) {
     let total = 0
 
     // ── 1. Title (30 pts) ──────────────────────────────────────────────────
-    const titleSim = titleSimilarity(storedMovie.title, candidate.title)
+    // Also try the extracted clean title if the stored title is a YouTube editorial wrapper
+    const extractedTitle = storedMovie.extracted_title || null
+    const titleSim = Math.max(
+        titleSimilarity(storedMovie.title, candidate.title),
+        extractedTitle ? titleSimilarity(extractedTitle, candidate.title) : 0
+    )
     let titlePts = 0
     if (titleSim >= 1.0)       titlePts = 30
     else if (titleSim >= 0.90) titlePts = 25
@@ -77,6 +82,7 @@ export function scoreCandidate(storedMovie, candidate) {
 
     // ── 2. Year (25 pts) ───────────────────────────────────────────────────
     const storedYear = extractYear(storedMovie.release_date) ?? extractYear(storedMovie.year)
+                    ?? extractYear(storedMovie.extracted_year)
     const candYear   = extractYear(candidate.year)
     let yearPts = 0
     if (storedYear && candYear) {

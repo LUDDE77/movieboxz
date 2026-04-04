@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { fetchAllMovies, fetchStagingMovies } from './lib/fetcher.js'
-import { initBrowser, closeBrowser, searchIMDB } from './lib/imdbSearcher.js'
+import { initBrowser, closeBrowser, searchIMDB, extractTitleFromYouTube } from './lib/imdbSearcher.js'
 import { scoreCandidate, pickBestCandidate } from './lib/scorer.js'
 import { applyImdbFix } from './lib/autoFixer.js'
 import { startReviewServer } from './lib/reviewServer.js'
@@ -88,6 +88,10 @@ function createQueue(movies, mode = 'production') {
             country: m.country || null,
             vote_average: m.vote_average || null,
             genres: (m.genres || []).map(g => g?.genre?.name || g?.name || g).filter(Boolean),
+            ...(() => {
+                const ex = extractTitleFromYouTube(m.youtube_video_title) || extractTitleFromYouTube(m.title)
+                return ex ? { extracted_title: ex.title, extracted_year: ex.year } : {}
+            })(),
             status: 'pending',
             candidates: [],
             confidence: null,

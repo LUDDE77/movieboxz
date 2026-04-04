@@ -41,13 +41,17 @@ export async function searchIMDB(movie) {
     const ytTitle = movie.youtube_video_title || ''
     const cleanedTitle = buildQuery(movie)
 
-    // Try the YouTube title first (keeps year/subtitle info that helps matching)
-    let rawIds = await fetchImdbSuggestions(ytTitle)
+    // Try extracting the real movie title from editorial YouTube wrappers first
+    const extracted = extractTitleFromYouTube(ytTitle) || extractTitleFromYouTube(movie.title)
+    const extractedQuery = extracted
+        ? (extracted.year ? `${extracted.title} ${extracted.year}` : extracted.title)
+        : null
 
-    // If YouTube title gives nothing, try the cleaned title
-    if (!rawIds.length) {
-        rawIds = await fetchImdbSuggestions(cleanedTitle)
-    }
+    // Try in order: extracted title → YouTube title → stored movie title
+    let rawIds = []
+    if (extractedQuery) rawIds = await callSuggestionApi(extractedQuery)
+    if (!rawIds.length && ytTitle) rawIds = await callSuggestionApi(ytTitle)
+    if (!rawIds.length) rawIds = await callSuggestionApi(cleanedTitle)
 
     // ── Step 2: enrich top 3 candidates by visiting their IMDB pages ──────────
     const page = await context.newPage()
@@ -70,19 +74,25 @@ export async function searchIMDB(movie) {
 
 /**
  * Call the IMDB suggestion/autocomplete JSON API.
- * This is the same endpoint the IMDB search box uses — no auth, no CAPTCHA.
- * Returns up to 5 candidate objects: { imdbId, title, year, posterUrl }
+ * Tries multiple query variants (extracted title, stored title, YouTube title)
+ * and merges unique results.
  */
 async function fetchImdbSuggestions(query) {
     if (!query || query.length < 2) return []
 
-    // Clean up YouTube noise words that confuse the API
+    const results = await callSuggestionApi(query)
+    return results
+}
+
+async function callSuggestionApi(query) {
+    // Strip YouTube noise words and emojis
     const cleaned = query
+        .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
         .replace(/\b(full movie|full episode|hd|4k|1080p|720p|free|official|trailer)\b/gi, '')
         .replace(/\s+/g, ' ')
         .trim()
 
-    if (!cleaned) return []
+    if (!cleaned || cleaned.length < 2) return []
 
     try {
         const encoded = encodeURIComponent(cleaned)
@@ -106,6 +116,93 @@ async function fetchImdbSuggestions(query) {
     } catch {
         return []
     }
+}
+
+/**
+ * Extract the real movie title + year from an editorial YouTube title.
+ *
+ * BlackTree TV and similar channels wrap titles in descriptions like:
+ *   "🎬 Black Cobra (1987) – Fred Williamson Takes on Crime!"
+ *   "Calvin Lockhart Fights for Justice in Halls of Anger (2025)"
+ *   "Saturday Morning Feature: Mayday at 40,000 Feet (2025)"
+ *   "🎥 Watch Rio Conchos (1964) Now!"
+ *   "Billy Dee Williams & Richard Pryor Star in Black Brigade"
+ *
+ * Returns { title, year } where year is null if it looks like an upload year.
+ */
+export function extractTitleFromYouTube(raw) {
+    if (!raw) return null
+
+    // Strip emojis and leading/trailing whitespace
+    let t = raw
+        .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+        .trim()
+
+    // Helper: year is a "movie year" if < 2020
+    const isMovieYear = y => y && parseInt(y) < 2020
+
+    // Pattern 1: "Title (year) – description"  e.g. "Black Cobra (1987) – Fred Williamson..."
+    {
+        const m = t.match(/^(.+?)\s+\((\d{4})\)\s*[–\-—]/)
+        if (m) {
+            const title = m[1].trim()
+            const year = isMovieYear(m[2]) ? m[2] : null
+            if (title.length > 2 && !/\b(watch|feature|cinema|classic|double|morning|night|celebration)\b/i.test(title)) {
+                return { title, year }
+            }
+        }
+    }
+
+    // Pattern 2: "Watch Title (year) Now"
+    {
+        const m = t.match(/\bWatch\s+(.+?)\s+\((\d{4})\)\s*Now/i)
+        if (m) return { title: m[1].trim(), year: isMovieYear(m[2]) ? m[2] : null }
+    }
+
+    // Pattern 3: "[Actors] Star[s] in Title (year?)"
+    {
+        const m = t.match(/\bStars?\s+in\s+(.+?)(?:\s+\((\d{4})\))?(?:\s*[–\-—!]|$)/i)
+        if (m) return { title: m[1].trim(), year: isMovieYear(m[2]) ? m[2] : null }
+    }
+
+    // Pattern 4: "[Actor/description] in "Title"" (quoted title after "in")
+    {
+        const m = t.match(/\bin\s+["""](.+?)["""]/i)
+        if (m) return { title: m[1].trim(), year: null }
+    }
+
+    // Pattern 5: "[Actor/description] in Title (year?)" — "in" followed by capitalised words
+    {
+        const m = t.match(/\bin\s+([A-Z][^–\-—!]+?)(?:\s+\((\d{4})\))?(?:\s*[–\-—!]|$)/)
+        if (m) {
+            const title = m[1].trim()
+            if (title.length > 2 && title.split(' ').length <= 8) {
+                return { title, year: isMovieYear(m[2]) ? m[2] : null }
+            }
+        }
+    }
+
+    // Pattern 6: "Prefix: Title (year?)"  e.g. "Saturday Morning Feature: Anna Lucasta (2024)"
+    {
+        const m = t.match(/^[^:]+:\s+(.+?)(?:\s+\((\d{4})\))?(?:\s*[–\-—!]|$)/)
+        if (m) {
+            const title = m[1].trim()
+            if (title.length > 2) return { title, year: isMovieYear(m[2]) ? m[2] : null }
+        }
+    }
+
+    // Pattern 7: "Name's / Multi Word Name's Title (year?)" — possessive before title
+    {
+        const m = t.match(/^(?:[A-Z][a-zA-Z]+ )*[A-Z][a-zA-Z]+(?:'s|s')\s+(.+?)(?:\s+\((\d{4})\))?(?:\s*[–\-—!]|$)/)
+        if (m) {
+            const title = m[1].trim()
+            if (title.length > 2 && title.split(' ').length <= 8) {
+                return { title, year: isMovieYear(m[2]) ? m[2] : null }
+            }
+        }
+    }
+
+    return null
 }
 
 async function enrichCandidate(page, raw) {

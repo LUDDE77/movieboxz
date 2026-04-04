@@ -506,12 +506,19 @@ function renderOurMovie() {
     wrap.innerHTML = `<div class="poster-placeholder">🎬</div>`;
   }
 
-  // YouTube thumbnail
+  // YouTube thumbnail + extracted title hint
   if (movie.youtube_video_id) {
     const thumb = document.getElementById('ourYtThumb');
     thumb.src = `https://img.youtube.com/vi/${esc(movie.youtube_video_id)}/hqdefault.jpg`;
     thumb.style.display = 'block';
-    document.getElementById('ourYtTitle').textContent = movie.youtube_video_title || movie.youtube_video_id;
+    const ytLabel = document.getElementById('ourYtTitle');
+    ytLabel.textContent = movie.youtube_video_title || movie.youtube_video_id;
+    if (movie.extracted_title) {
+      ytLabel.insertAdjacentHTML('afterend',
+        `<div style="margin-top:4px;font-size:11px;color:var(--accent)">
+           🔍 Searched as: <strong>${esc(movie.extracted_title)}${movie.extracted_year ? ' ' + esc(movie.extracted_year) : ''}</strong>
+         </div>`);
+    }
   }
 }
 
