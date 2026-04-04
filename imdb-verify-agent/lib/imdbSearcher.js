@@ -162,6 +162,120 @@ async function enrichCandidate(page, raw) {
     }
 }
 
+/**
+ * Scrape a single IMDB title page by ID using Playwright.
+ * Used as a fallback enrichment source when the server's axios scraper is blocked.
+ * Reuses the shared browser if available; opens a temporary one otherwise.
+ * @param {string} imdbId - e.g. "tt1234567"
+ * @returns {{ title, year, directors, actors, description, posterUrl, genres, imdbRating, type }}
+ */
+export async function scrapeImdbWithPlaywright(imdbId) {
+    let ownBrowser = false
+    let page = null
+
+    // If the shared browser context isn't running, open a temporary one
+    if (!context) {
+        const { chromium } = await import('playwright')
+        const tempBrowser = await chromium.launch({ headless: true })
+        const tempContext = await tempBrowser.newContext({
+            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            locale: 'en-US',
+            extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+        })
+        page = await tempContext.newPage()
+        ownBrowser = true
+
+        try {
+            const data = await _scrapeOnePage(page, imdbId)
+            return data
+        } finally {
+            await page.close()
+            await tempContext.close()
+            await tempBrowser.close()
+        }
+    } else {
+        page = await context.newPage()
+        try {
+            return await _scrapeOnePage(page, imdbId)
+        } finally {
+            await page.close()
+        }
+    }
+}
+
+async function _scrapeOnePage(page, imdbId) {
+    const titleUrl = `https://www.imdb.com/title/${imdbId}/`
+    await page.goto(titleUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    await page.waitForTimeout(1500)
+
+    // Handle cookie consent
+    try {
+        const btn = page.locator('button:has-text("Accept"), button:has-text("Godkänn")')
+        if (await btn.first().isVisible({ timeout: 1000 })) {
+            await btn.first().click()
+            await page.waitForTimeout(800)
+        }
+    } catch {}
+
+    // Try JSON-LD first
+    const jsonLd = await page.evaluate(() => {
+        const scripts = document.querySelectorAll('script[type="application/ld+json"]')
+        for (const s of scripts) {
+            try {
+                const data = JSON.parse(s.textContent)
+                if (data['@type'] === 'Movie' || data['@type'] === 'TVSeries') return data
+            } catch {}
+        }
+        return null
+    })
+
+    if (jsonLd) {
+        // Extract IMDB user rating from aggregateRating
+        const imdbRating = jsonLd.aggregateRating?.ratingValue
+            ? String(jsonLd.aggregateRating.ratingValue)
+            : null
+
+        // Extract genre array
+        const genres = jsonLd.genre
+            ? (Array.isArray(jsonLd.genre) ? jsonLd.genre : [jsonLd.genre])
+            : []
+
+        return {
+            title: jsonLd.name || '',
+            year: extractYearFromDate(jsonLd.datePublished) || '',
+            directors: extractNames(jsonLd.director),
+            actors: extractNames(jsonLd.actor),
+            description: jsonLd.description?.slice(0, 300) || '',
+            posterUrl: typeof jsonLd.image === 'string' ? jsonLd.image : (jsonLd.image?.url || ''),
+            genres,
+            imdbRating,
+            type: jsonLd['@type'] || 'Movie'
+        }
+    }
+
+    // DOM fallback
+    const dom = await page.evaluate(() => {
+        const titleEl = document.querySelector('[data-testid="hero__pageTitle"] span, h1[data-testid="hero-title-block__title"]')
+        const posterEl = document.querySelector('[data-testid="hero-media__poster"] img, .ipc-image')
+        return {
+            title: titleEl?.textContent?.trim() || '',
+            posterUrl: posterEl?.src || ''
+        }
+    })
+
+    return {
+        title: dom.title,
+        year: '',
+        directors: [],
+        actors: [],
+        description: '',
+        posterUrl: dom.posterUrl,
+        genres: [],
+        imdbRating: null,
+        type: 'Movie'
+    }
+}
+
 function buildQuery(movie) {
     let q = movie.title || ''
     const year = extractYearFromDate(movie.release_date) || movie.year

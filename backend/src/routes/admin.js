@@ -2298,4 +2298,105 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
     }
 })
 
+/**
+ * POST /api/admin/movies/:id/enrich-from-data
+ * Update a production movie with pre-scraped enrichment data (e.g. from local Playwright).
+ * Used as a fallback when the server-side IMDB scraper is blocked.
+ * Accepts: { imdbId, title, year, directors, actors, description, posterUrl, genres, imdbRating, type }
+ */
+router.post('/movies/:id/enrich-from-data', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const {
+            imdbId,
+            title,
+            year,
+            directors,
+            actors,
+            description,
+            posterUrl,
+            genres,
+            imdbRating,
+            type
+        } = req.body
+
+        if (!imdbId || !imdbId.startsWith('tt')) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid IMDB ID required (must start with "tt")'
+            })
+        }
+
+        logger.info(`[Production Movies] enrich-from-data for movie ${id} with IMDB ${imdbId}`)
+
+        // Check movie exists
+        const { data: movie, error: fetchError } = await supabase
+            .from('movies')
+            .select('id, description, release_date, runtime_minutes')
+            .eq('id', id)
+            .single()
+
+        if (fetchError) throw fetchError
+        if (!movie) return res.status(404).json({ success: false, error: 'Movie not found' })
+
+        const updateData = {
+            imdb_id: imdbId,
+            enrichment_source: 'playwright_local',
+            enrichment_confidence: 1.0,
+            updated_at: new Date().toISOString()
+        }
+
+        if (title) updateData.title = title
+        if (posterUrl) updateData.poster_path = posterUrl
+        if (imdbRating) updateData.imdb_rating = parseFloat(imdbRating)
+        if (directors && directors.length) updateData.director = directors.join(', ')
+        if (actors && actors.length) updateData.actors = actors.join(', ')
+        if (description && !movie.description) updateData.description = description
+        if (year && !movie.release_date) updateData.release_date = `${year}-01-01`
+        if (type) updateData.is_tv_show = type === 'TVSeries'
+
+        const { data: updatedMovie, error: updateError } = await supabase
+            .from('movies')
+            .update(updateData)
+            .eq('id', id)
+            .select('*, genres:movie_genres(genre:genres(*))')
+            .single()
+
+        if (updateError) throw updateError
+
+        // Update genres if provided
+        if (genres && genres.length > 0) {
+            const { data: allGenres } = await supabase.from('genres').select('id, name')
+            if (allGenres) {
+                const nameToId = {}
+                allGenres.forEach(g => { nameToId[g.name.toLowerCase()] = g.id })
+                const genreIds = genres
+                    .map(name => nameToId[name.toLowerCase().trim()])
+                    .filter(Boolean)
+
+                if (genreIds.length > 0) {
+                    await supabase.from('movie_genres').delete().eq('movie_id', id)
+                    await supabase.from('movie_genres').insert(
+                        genreIds.map(genre_id => ({ movie_id: id, genre_id }))
+                    )
+                    logger.info(`[Production Movies] enrich-from-data: set ${genreIds.length} genres for movie ${id}`)
+                }
+            }
+        }
+
+        logger.info(`[Production Movies] enrich-from-data done for movie ${id}`)
+        res.json({
+            success: true,
+            data: {
+                ...updatedMovie,
+                genres: updatedMovie.genres?.map(mg => mg.genre) || []
+            }
+        })
+
+    } catch (error) {
+        logger.error('[Production Movies] enrich-from-data error:', error)
+        next(error)
+    }
+})
+
 export default router
