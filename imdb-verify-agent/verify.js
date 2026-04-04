@@ -3,9 +3,10 @@
  * verify.js — MovieBoxZ IMDB Verification Agent
  *
  * Usage:
- *   node verify.js [--staging] [--limit N] [--auto-only] [--review-only] [--skip-verified] [--resume]
+ *   node verify.js [--staging] [--channel "Name"] [--limit N] [--auto-only] [--review-only] [--skip-verified] [--resume]
  *
- *   --staging       Process staged movies (pending approval) instead of production movies
+ *   --staging          Process staged movies (pending approval) instead of production movies
+ *   --channel "Name"   (staging only) Filter to a specific channel by title or YouTube channel ID
  *
  * Env vars (in .env):
  *   BACKEND_URL    — Railway URL or http://localhost:3000
@@ -44,6 +45,7 @@ if (!config.backendUrl || !config.adminApiKey) {
 const args = process.argv.slice(2)
 const opts = {
     limit:         args.includes('--limit') ? parseInt(args[args.indexOf('--limit') + 1]) : null,
+    channel:       args.includes('--channel') ? args[args.indexOf('--channel') + 1] : null,
     autoOnly:      args.includes('--auto-only'),
     reviewOnly:    args.includes('--review-only'),
     skipVerified:  args.includes('--skip-verified'),
@@ -184,6 +186,7 @@ async function main() {
     console.log('────────────────────────────────────')
     console.log(`   Backend: ${config.backendUrl}`)
     if (opts.staging)      console.log(`   Source:  staged movies (pending approval)`)
+    if (opts.channel)      console.log(`   Channel: ${opts.channel}`)
     if (opts.limit)        console.log(`   Limit:   ${opts.limit} movies`)
     if (opts.autoOnly)     console.log(`   Mode:    auto-fix only`)
     if (opts.reviewOnly)   console.log(`   Mode:    review only (no auto-fix)`)
@@ -204,7 +207,8 @@ async function main() {
             backendUrl:   config.backendUrl,
             adminApiKey:  config.adminApiKey,
             limit:        opts.limit,
-            skipVerified: opts.skipVerified
+            skipVerified: opts.skipVerified,
+            channel:      opts.channel
         })
         queue = createQueue(movies, opts.staging ? 'staging' : 'production')
         queue.save = () => saveQueue(queue)

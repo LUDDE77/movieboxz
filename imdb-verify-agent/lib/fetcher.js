@@ -38,16 +38,30 @@ export async function fetchAllMovies({ backendUrl, adminApiKey, limit = null, sk
     return movies
 }
 
-export async function fetchStagingMovies({ backendUrl, adminApiKey, limit = null, skipVerified = false }) {
+export async function fetchStagingMovies({ backendUrl, adminApiKey, limit = null, skipVerified = false, channel = null }) {
     const movies = []
     const pageSize = 100
     let page = 1
     let total = null
 
-    console.log('📥 Fetching staged movies from backend...')
+    // Resolve channel name → channel ID if needed
+    let channelId = null
+    if (channel) {
+        channelId = await resolveChannelId({ backendUrl, adminApiKey, channel })
+        if (!channelId) {
+            console.error(`   ❌ Channel not found: "${channel}"`)
+            console.error(`   Run without --channel to see all channels, or check the spelling.`)
+            process.exit(1)
+        }
+        console.log(`📥 Fetching staged movies for channel: ${channel}`)
+    } else {
+        console.log('📥 Fetching staged movies from backend...')
+    }
 
     while (true) {
-        const url = `${backendUrl}/api/admin/staging/movies?status=pending&page=${page}&limit=${pageSize}`
+        let url = `${backendUrl}/api/admin/staging/movies?status=pending&page=${page}&limit=${pageSize}`
+        if (channelId) url += `&channel_id=${encodeURIComponent(channelId)}`
+
         const res = await fetch(url, { headers: { 'x-admin-api-key': adminApiKey } })
         if (!res.ok) throw new Error(`Failed to fetch staging movies (page ${page}): HTTP ${res.status}`)
 
@@ -72,4 +86,30 @@ export async function fetchStagingMovies({ backendUrl, adminApiKey, limit = null
 
     console.log(`   ✅ Fetched ${movies.length} of ${total} total staged movies`)
     return movies
+}
+
+async function resolveChannelId({ backendUrl, adminApiKey, channel }) {
+    // If it looks like a YouTube channel ID already (starts with UC), use it directly
+    if (channel.startsWith('UC')) return channel
+
+    // Otherwise search channels by title (case-insensitive partial match)
+    const res = await fetch(`${backendUrl}/api/admin/channels?limit=200`, {
+        headers: { 'x-admin-api-key': adminApiKey }
+    })
+    if (!res.ok) throw new Error(`Failed to fetch channels: HTTP ${res.status}`)
+
+    const json = await res.json()
+    const channels = json.data?.channels || json.channels || []
+
+    const needle = channel.toLowerCase()
+    const match = channels.find(c => c.title?.toLowerCase().includes(needle))
+    if (match) {
+        console.log(`   ✅ Matched channel: "${match.title}" (${match.id})`)
+        return match.id
+    }
+
+    // Print available channels to help the user
+    console.error(`\n   Available channels:`)
+    channels.forEach(c => console.error(`     ${c.title}`))
+    return null
 }

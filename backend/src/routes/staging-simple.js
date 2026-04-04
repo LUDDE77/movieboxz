@@ -294,6 +294,7 @@ router.get('/movies', async (req, res, next) => {
         const offset = (page - 1) * limit
         const status = req.query.status
         const filter = req.query.filter
+        const channelId = req.query.channel_id
 
         let query = supabase
             .from('staged_movies')
@@ -305,6 +306,10 @@ router.get('/movies', async (req, res, next) => {
         // Apply filters
         if (status) {
             query = query.eq('approval_status', status)
+        }
+
+        if (channelId) {
+            query = query.eq('channel_id', channelId)
         }
 
         if (filter === 'enriched') {
