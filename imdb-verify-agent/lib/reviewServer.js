@@ -9,12 +9,12 @@ import { readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import open from 'open'
-import { applyImdbFix } from './autoFixer.js'
+import { applyImdbFix, approveMovie } from './autoFixer.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TEMPLATE_PATH = join(__dirname, '../templates/review.html')
 
-export async function startReviewServer({ queue, backendUrl, adminApiKey, port = 7788 }) {
+export async function startReviewServer({ queue, backendUrl, adminApiKey, port = 7788, mode = 'production' }) {
     const reviewItems = queue.movies.filter(m => m.status === 'review-needed')
     if (!reviewItems.length) {
         console.log('   No items need manual review.')
@@ -46,7 +46,8 @@ export async function startReviewServer({ queue, backendUrl, adminApiKey, port =
         const html = template.replace('__REVIEW_DATA__', JSON.stringify({
             movie: item,
             progress,
-            backendUrl
+            backendUrl,
+            mode
         }))
         res.send(html)
     })
@@ -65,27 +66,34 @@ export async function startReviewServer({ queue, backendUrl, adminApiKey, port =
         if (!item) return res.status(404).json({ error: 'Movie not found' })
 
         try {
-            if (action === 'use-original') {
-                // User confirmed the stored IMDB ID is correct
-                await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: candidateImdbId })
-                item.status = 'confirmed-original'
-                item.decision = 'use-original'
-                item.applied_imdb_id = candidateImdbId
-                item.confirmedAt = new Date().toISOString()
-                console.log(`   ✅ Original confirmed by user: ${item.title} → ${candidateImdbId}`)
-            } else if (action === 'use-found' || action === 'use-custom') {
-                // User chose the IMDB-found candidate or typed a custom ID
-                await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: candidateImdbId })
-                const label = action === 'use-custom' ? 'custom' : 'found'
-                item.status = `confirmed-${label}`
+            const approve = action.includes('+approve')
+            const baseAction = action.replace('+approve', '')
+
+            if (baseAction === 'use-original') {
+                await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: candidateImdbId, mode })
+                item.status = approve ? 'approved' : 'confirmed-original'
                 item.decision = action
                 item.applied_imdb_id = candidateImdbId
                 item.confirmedAt = new Date().toISOString()
-                console.log(`   ✅ ${label === 'custom' ? 'Custom' : 'Found'} ID confirmed by user: ${item.title} → ${candidateImdbId}`)
-            } else if (action === 'skip') {
+                console.log(`   ✅ Original confirmed: ${item.title} → ${candidateImdbId}${approve ? ' + approved' : ''}`)
+            } else if (baseAction === 'use-found' || baseAction === 'use-custom') {
+                await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: candidateImdbId, mode })
+                const label = baseAction === 'use-custom' ? 'custom' : 'found'
+                item.status = approve ? 'approved' : `confirmed-${label}`
+                item.decision = action
+                item.applied_imdb_id = candidateImdbId
+                item.confirmedAt = new Date().toISOString()
+                console.log(`   ✅ ${label === 'custom' ? 'Custom' : 'Found'} ID confirmed: ${item.title} → ${candidateImdbId}${approve ? ' + approved' : ''}`)
+            } else if (baseAction === 'skip') {
                 item.status = 'skipped'
                 item.decision = 'skip'
                 console.log(`   ⏭️  Skipped: ${item.title}`)
+            }
+
+            // Approve in staging if requested
+            if (approve && mode === 'staging' && baseAction !== 'skip') {
+                await approveMovie({ backendUrl, adminApiKey, movieId })
+                console.log(`   ✅ Approved for publishing: ${item.title}`)
             }
 
             // Save queue state

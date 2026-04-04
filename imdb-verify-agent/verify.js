@@ -3,7 +3,9 @@
  * verify.js — MovieBoxZ IMDB Verification Agent
  *
  * Usage:
- *   node verify.js [--limit N] [--auto-only] [--review-only] [--skip-verified] [--resume]
+ *   node verify.js [--staging] [--limit N] [--auto-only] [--review-only] [--skip-verified] [--resume]
+ *
+ *   --staging       Process staged movies (pending approval) instead of production movies
  *
  * Env vars (in .env):
  *   BACKEND_URL    — Railway URL or http://localhost:3000
@@ -15,7 +17,7 @@ import 'dotenv/config'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { fetchAllMovies } from './lib/fetcher.js'
+import { fetchAllMovies, fetchStagingMovies } from './lib/fetcher.js'
 import { initBrowser, closeBrowser, searchIMDB } from './lib/imdbSearcher.js'
 import { scoreCandidate, pickBestCandidate } from './lib/scorer.js'
 import { applyImdbFix } from './lib/autoFixer.js'
@@ -45,7 +47,8 @@ const opts = {
     autoOnly:      args.includes('--auto-only'),
     reviewOnly:    args.includes('--review-only'),
     skipVerified:  args.includes('--skip-verified'),
-    resume:        args.includes('--resume')
+    resume:        args.includes('--resume'),
+    staging:       args.includes('--staging')
 }
 
 // ── Queue helpers ─────────────────────────────────────────────────────────────
@@ -57,9 +60,10 @@ function loadQueue() {
     return null
 }
 
-function createQueue(movies) {
+function createQueue(movies, mode = 'production') {
     return {
         runStarted: new Date().toISOString(),
+        mode,
         total: movies.length,
         movies: movies.map(m => ({
             id: m.id,
@@ -134,7 +138,8 @@ async function processMovie(item, queue) {
                     backendUrl: config.backendUrl,
                     adminApiKey: config.adminApiKey,
                     movieId: item.id,
-                    imdbId: best.imdbId
+                    imdbId: best.imdbId,
+                    mode: queue.mode
                 })
                 item.status = 'auto-fixed'
                 item.applied_imdb_id = best.imdbId
@@ -178,6 +183,7 @@ async function main() {
     console.log('\n🎬 MovieBoxZ IMDB Verification Agent')
     console.log('────────────────────────────────────')
     console.log(`   Backend: ${config.backendUrl}`)
+    if (opts.staging)      console.log(`   Source:  staged movies (pending approval)`)
     if (opts.limit)        console.log(`   Limit:   ${opts.limit} movies`)
     if (opts.autoOnly)     console.log(`   Mode:    auto-fix only`)
     if (opts.reviewOnly)   console.log(`   Mode:    review only (no auto-fix)`)
@@ -193,13 +199,14 @@ async function main() {
         const pending = queue.movies.filter(m => m.status === 'pending').length
         if (opts.resume) console.log(`♻️  Resuming — ${pending} movies still pending\n`)
     } else {
-        const movies = await fetchAllMovies({
+        const fetcher = opts.staging ? fetchStagingMovies : fetchAllMovies
+        const movies = await fetcher({
             backendUrl:   config.backendUrl,
             adminApiKey:  config.adminApiKey,
             limit:        opts.limit,
             skipVerified: opts.skipVerified
         })
-        queue = createQueue(movies)
+        queue = createQueue(movies, opts.staging ? 'staging' : 'production')
         queue.save = () => saveQueue(queue)
         saveQueue(queue)
         console.log()
@@ -255,7 +262,8 @@ async function main() {
             queue,
             backendUrl:  config.backendUrl,
             adminApiKey: config.adminApiKey,
-            port:        config.reviewPort
+            port:        config.reviewPort,
+            mode:        queue.mode || 'production'
         })
     } else if (!reviewItems.length) {
         printFinalSummary(queue)

@@ -1145,4 +1145,64 @@ router.get('/batch-enrich/:batchId/status', async (req, res, next) => {
     }
 })
 
+/**
+ * POST /api/admin/staging/movies/:id/enrich-from-data
+ * Update a staged movie with pre-scraped enrichment data (e.g. from local Playwright).
+ * Used as fallback when the OMDB/axios scraper is blocked.
+ */
+router.post('/movies/:id/enrich-from-data', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { imdbId, title, year, directors, actors, description, posterUrl, genres, imdbRating, type } = req.body
+
+        if (!imdbId || !imdbId.match(/^tt\d+$/)) {
+            return res.status(400).json({ success: false, error: 'Valid IMDB ID required (tt...)' })
+        }
+
+        const { data: movie, error: fetchError } = await supabase
+            .from('staged_movies')
+            .select('id, description, release_date')
+            .eq('id', id)
+            .single()
+
+        if (fetchError) throw fetchError
+        if (!movie) return res.status(404).json({ success: false, error: 'Staged movie not found' })
+
+        const updateData = {
+            imdb_id: imdbId,
+            manual_imdb_id: imdbId,
+            manually_verified: true,
+            verified_by: 'imdb-verify-agent',
+            verified_at: new Date().toISOString(),
+            enrichment_source: 'playwright_local',
+            enrichment_confidence: 1.0,
+            updated_at: new Date().toISOString()
+        }
+
+        if (title) updateData.title = title
+        if (posterUrl) updateData.poster_path = posterUrl
+        if (imdbRating) updateData.imdb_rating = parseFloat(imdbRating)
+        if (directors?.length) updateData.director = directors.join(', ')
+        if (actors?.length) updateData.actors = actors.join(', ')
+        if (description && !movie.description) updateData.description = description
+        if (year && !movie.release_date) updateData.release_date = `${year}-01-01`
+        if (type) updateData.is_tv_show = type === 'TVSeries'
+
+        const { data: updated, error: updateError } = await supabase
+            .from('staged_movies')
+            .update(updateData)
+            .eq('id', id)
+            .select('*')
+            .single()
+
+        if (updateError) throw updateError
+
+        logger.info(`[Staging] enrich-from-data done for staged movie ${id} → ${imdbId}`)
+        res.json({ success: true, data: updated })
+    } catch (error) {
+        logger.error('[Staging] enrich-from-data error:', error)
+        next(error)
+    }
+})
+
 export default router

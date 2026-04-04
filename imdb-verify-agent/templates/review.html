@@ -402,25 +402,8 @@
 </div>
 
 <!-- Footer -->
-<div class="footer">
-  <button class="btn btn-original" id="btnOriginal" onclick="decide('use-original')">
-    ✓ Use Original <kbd>C</kbd>
-  </button>
-  <button class="btn btn-use" id="btnUse" onclick="decide('use-found')">
-    ↑ Use Found <kbd>U</kbd>
-  </button>
-  <div style="display:flex;gap:6px;align-items:center">
-    <input id="customImdbId" type="text" placeholder="tt1234567 — search new" style="
-      background:var(--surface2);border:1px solid var(--border);color:var(--text);
-      padding:8px 12px;border-radius:6px;font-size:13px;width:180px;outline:none;" />
-    <button class="btn btn-imdb" onclick="decide('use-custom')">Apply <kbd>A</kbd></button>
-  </div>
-  <button class="btn btn-skip" onclick="decide('skip')">
-    → Skip <kbd>S</kbd>
-  </button>
-  <button class="btn btn-imdb" id="btnOpenImdb" onclick="openImdb()">
-    Open IMDB ↗ <kbd>O</kbd>
-  </button>
+<div class="footer" id="footerBtns">
+  <!-- buttons rendered by JS based on mode -->
 </div>
 
 <!-- Status overlay -->
@@ -433,6 +416,7 @@
 const DATA = __REVIEW_DATA__;
 const movie = DATA.movie;
 const progress = DATA.progress;
+const mode = DATA.mode || 'production';
 let activeCandidateIndex = 0;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -628,13 +612,21 @@ function renderCandidateCard(idx) {
 
   // Use Original — only enabled when there's a stored IMDB ID
   const origBtn = document.getElementById('btnOriginal');
-  origBtn.disabled = !movie.stored_imdb_id;
-  origBtn.title = movie.stored_imdb_id ? `Confirm stored ID: ${movie.stored_imdb_id}` : 'No stored IMDB ID';
+  if (origBtn) {
+    origBtn.disabled = !movie.stored_imdb_id;
+    origBtn.title = movie.stored_imdb_id
+      ? (mode === 'staging' ? `Confirm ${movie.stored_imdb_id} + approve` : `Confirm stored ID: ${movie.stored_imdb_id}`)
+      : 'No stored IMDB ID';
+  }
 
-  // Use Found — always enabled when there's a candidate
-  document.getElementById('btnUse').disabled = false;
+  // Use Found / Enrich Only — always enabled when there's a candidate
+  const useBtn = document.getElementById('btnUse');
+  if (useBtn) useBtn.disabled = false;
+  const enrichBtn = document.getElementById('btnEnrichOnly');
+  if (enrichBtn) enrichBtn.disabled = false;
 
-  document.getElementById('btnOpenImdb').dataset.imdbId = cand.imdbId;
+  const openBtn = document.getElementById('btnOpenImdb');
+  if (openBtn) openBtn.dataset.imdbId = cand.imdbId;
 }
 
 function renderScoreBar(label, pts, max) {
@@ -648,6 +640,51 @@ function renderScoreBar(label, pts, max) {
       </div>
       <span class="score-pts">${pts}/${max}</span>
     </div>`;
+}
+
+// ── Footer buttons ────────────────────────────────────────────────────────────
+function renderFooter() {
+  const footer = document.getElementById('footerBtns')
+  const isStaging = mode === 'staging'
+
+  if (isStaging) {
+    footer.innerHTML = `
+      <button class="btn btn-original" id="btnOriginal" onclick="decide('use-original+approve')" title="Confirm stored IMDB ID, enrich, and approve for publishing">
+        ✓ Original + Approve <kbd>C</kbd>
+      </button>
+      <button class="btn btn-use" id="btnUse" onclick="decide('use-found+approve')" title="Apply found IMDB ID, enrich, and approve for publishing">
+        ↑ Found + Approve <kbd>U</kbd>
+      </button>
+      <button class="btn" style="background:var(--indigo);color:#fff" id="btnEnrichOnly" onclick="decide('use-found')" title="Apply found IMDB ID and enrich — do not approve yet">
+        ↑ Enrich Only <kbd>E</kbd>
+      </button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="customImdbId" type="text" placeholder="tt1234567" style="
+          background:var(--surface2);border:1px solid var(--border);color:var(--text);
+          padding:8px 12px;border-radius:6px;font-size:13px;width:150px;outline:none;" />
+        <button class="btn btn-imdb" onclick="decide('use-custom+approve')">+ Approve <kbd>A</kbd></button>
+      </div>
+      <button class="btn btn-skip" onclick="decide('skip')">→ Skip <kbd>S</kbd></button>
+      <button class="btn btn-imdb" id="btnOpenImdb" onclick="openImdb()">Open IMDB ↗ <kbd>O</kbd></button>
+    `
+  } else {
+    footer.innerHTML = `
+      <button class="btn btn-original" id="btnOriginal" onclick="decide('use-original')">
+        ✓ Use Original <kbd>C</kbd>
+      </button>
+      <button class="btn btn-use" id="btnUse" onclick="decide('use-found')">
+        ↑ Use Found <kbd>U</kbd>
+      </button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="customImdbId" type="text" placeholder="tt1234567 — search new" style="
+          background:var(--surface2);border:1px solid var(--border);color:var(--text);
+          padding:8px 12px;border-radius:6px;font-size:13px;width:180px;outline:none;" />
+        <button class="btn btn-imdb" onclick="decide('use-custom')">Apply <kbd>A</kbd></button>
+      </div>
+      <button class="btn btn-skip" onclick="decide('skip')">→ Skip <kbd>S</kbd></button>
+      <button class="btn btn-imdb" id="btnOpenImdb" onclick="openImdb()">Open IMDB ↗ <kbd>O</kbd></button>
+    `
+  }
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
@@ -683,15 +720,16 @@ function hideStatus() {
 
 async function decide(action) {
   const cand = getActiveCandidate();
+  const baseAction = action.replace('+approve', '');
   let imdbIdToApply = null;
 
-  if (action === 'use-original') {
+  if (baseAction === 'use-original') {
     if (!movie.stored_imdb_id) { alert('No stored IMDB ID to confirm.'); return; }
     imdbIdToApply = movie.stored_imdb_id;
-  } else if (action === 'use-found') {
-    if (!cand?.imdbId) { alert('No candidate found. Use Search New to enter an ID manually.'); return; }
+  } else if (baseAction === 'use-found') {
+    if (!cand?.imdbId) { alert('No candidate found. Use the ID field to enter one manually.'); return; }
     imdbIdToApply = cand.imdbId;
-  } else if (action === 'use-custom') {
+  } else if (baseAction === 'use-custom') {
     const val = document.getElementById('customImdbId').value.trim();
     const m = val.match(/tt\d+/);
     if (!m) { alert('Enter a valid IMDB ID, e.g. tt0129167'); return; }
@@ -729,9 +767,11 @@ async function decide(action) {
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === 'c' || e.key === 'C') decide('use-original');
-  if (e.key === 'u' || e.key === 'U') decide('use-found');
-  if (e.key === 'a' || e.key === 'A') decide('use-custom');
+  const sfx = mode === 'staging' ? '+approve' : '';
+  if (e.key === 'c' || e.key === 'C') decide('use-original' + sfx);
+  if (e.key === 'u' || e.key === 'U') decide('use-found' + sfx);
+  if (e.key === 'e' || e.key === 'E') decide('use-found');   // enrich only, no approve
+  if (e.key === 'a' || e.key === 'A') decide('use-custom' + sfx);
   if (e.key === 's' || e.key === 'S') decide('skip');
   if (e.key === 'o' || e.key === 'O') openImdb();
   if (e.key === '1') selectCandidate(0);
@@ -740,6 +780,7 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+renderFooter();
 renderHeader();
 renderOurMovie();
 renderCandidateTabs();

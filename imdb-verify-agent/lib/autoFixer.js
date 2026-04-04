@@ -1,67 +1,75 @@
 /**
  * autoFixer.js
- * Applies a verified IMDB ID to a production movie.
+ * Applies a verified IMDB ID to a movie (production or staging).
  * Primary: calls enrich-manual-imdb (server does axios scraping)
  * Fallback: scrapes IMDB locally with Playwright and calls enrich-from-data
  */
 
 import { scrapeImdbWithPlaywright } from './imdbSearcher.js'
 
-export async function applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId }) {
-    // Try the server-side enrichment first
+export async function applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId, mode = 'production' }) {
     try {
-        const result = await callEnrichManualImdb({ backendUrl, adminApiKey, movieId, imdbId })
-        return result
+        return await callEnrichManualImdb({ backendUrl, adminApiKey, movieId, imdbId, mode })
     } catch (err) {
-        // 500 means the server's axios scraper was blocked — fall back to local Playwright
         if (err.message.includes('500')) {
             console.log(`   ⚠️  Server enrichment failed for ${imdbId} — using local Playwright fallback`)
-            return await applyWithPlaywrightFallback({ backendUrl, adminApiKey, movieId, imdbId })
+            return await applyWithPlaywrightFallback({ backendUrl, adminApiKey, movieId, imdbId, mode })
         }
         throw err
     }
 }
 
-async function callEnrichManualImdb({ backendUrl, adminApiKey, movieId, imdbId }) {
-    const url = `${backendUrl}/api/admin/movies/${movieId}/enrich-manual-imdb`
+export async function approveMovie({ backendUrl, adminApiKey, movieId }) {
+    const url = `${backendUrl}/api/admin/staging/movies/${movieId}/approve`
     const res = await fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-admin-api-key': adminApiKey
-        },
+        headers: { 'Content-Type': 'application/json', 'x-admin-api-key': adminApiKey },
+        body: JSON.stringify({ approvedBy: 'imdb-verify-agent' })
+    })
+    if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`Approve error ${res.status}: ${text.slice(0, 200)}`)
+    }
+    return (await res.json()).data
+}
+
+function enrichUrl(backendUrl, movieId, mode) {
+    return mode === 'staging'
+        ? `${backendUrl}/api/admin/staging/movies/${movieId}/enrich-manual-imdb`
+        : `${backendUrl}/api/admin/movies/${movieId}/enrich-manual-imdb`
+}
+
+function enrichFromDataUrl(backendUrl, movieId, mode) {
+    return mode === 'staging'
+        ? `${backendUrl}/api/admin/staging/movies/${movieId}/enrich-from-data`
+        : `${backendUrl}/api/admin/movies/${movieId}/enrich-from-data`
+}
+
+async function callEnrichManualImdb({ backendUrl, adminApiKey, movieId, imdbId, mode }) {
+    const url = enrichUrl(backendUrl, movieId, mode)
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-api-key': adminApiKey },
         body: JSON.stringify({ imdbId, verifiedBy: 'imdb-verify-agent' })
     })
-
     if (!res.ok) {
         const text = await res.text()
         throw new Error(`API error ${res.status}: ${text.slice(0, 200)}`)
     }
-
-    const json = await res.json()
-    return json.data
+    return (await res.json()).data
 }
 
-async function applyWithPlaywrightFallback({ backendUrl, adminApiKey, movieId, imdbId }) {
-    // Scrape the IMDB title page locally with Playwright
+async function applyWithPlaywrightFallback({ backendUrl, adminApiKey, movieId, imdbId, mode }) {
     const imdbData = await scrapeImdbWithPlaywright(imdbId)
-
-    // Send scraped data directly to the backend
-    const url = `${backendUrl}/api/admin/movies/${movieId}/enrich-from-data`
+    const url = enrichFromDataUrl(backendUrl, movieId, mode)
     const res = await fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-admin-api-key': adminApiKey
-        },
+        headers: { 'Content-Type': 'application/json', 'x-admin-api-key': adminApiKey },
         body: JSON.stringify({ imdbId, ...imdbData })
     })
-
     if (!res.ok) {
         const text = await res.text()
         throw new Error(`enrich-from-data error ${res.status}: ${text.slice(0, 200)}`)
     }
-
-    const json = await res.json()
-    return json.data
+    return (await res.json()).data
 }
