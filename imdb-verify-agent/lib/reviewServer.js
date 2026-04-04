@@ -65,19 +65,23 @@ export async function startReviewServer({ queue, backendUrl, adminApiKey, port =
         if (!item) return res.status(404).json({ error: 'Movie not found' })
 
         try {
-            if (action === 'confirm') {
-                if (item.stored_imdb_id) {
-                    await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: item.stored_imdb_id })
-                }
-                item.status = 'confirmed'
-                item.decision = 'confirm'
-                console.log(`   ✅ Confirmed: ${item.title} → ${item.stored_imdb_id}`)
-            } else if (action === 'use-candidate') {
+            if (action === 'use-original') {
+                // User confirmed the stored IMDB ID is correct
                 await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: candidateImdbId })
-                item.status = 'updated'
-                item.decision = 'use-candidate'
+                item.status = 'confirmed-original'
+                item.decision = 'use-original'
                 item.applied_imdb_id = candidateImdbId
-                console.log(`   🔄 Updated: ${item.title} → ${candidateImdbId}`)
+                item.confirmedAt = new Date().toISOString()
+                console.log(`   ✅ Original confirmed by user: ${item.title} → ${candidateImdbId}`)
+            } else if (action === 'use-found' || action === 'use-custom') {
+                // User chose the IMDB-found candidate or typed a custom ID
+                await applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId: candidateImdbId })
+                const label = action === 'use-custom' ? 'custom' : 'found'
+                item.status = `confirmed-${label}`
+                item.decision = action
+                item.applied_imdb_id = candidateImdbId
+                item.confirmedAt = new Date().toISOString()
+                console.log(`   ✅ ${label === 'custom' ? 'Custom' : 'Found'} ID confirmed by user: ${item.title} → ${candidateImdbId}`)
             } else if (action === 'skip') {
                 item.status = 'skipped'
                 item.decision = 'skip'

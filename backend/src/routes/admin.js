@@ -2121,33 +2121,34 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             imdbId: imdbId  // Force this specific IMDB ID
         }, 'full')
 
-        logger.info(`[Production Movies] Enrichment result:`)
-        logger.info(`  - Title: ${enriched.title || 'N/A'}`)
-        logger.info(`  - TMDB ID: ${enriched.tmdb_id || 'N/A'}`)
-        logger.info(`  - IMDB Rating: ${enriched.imdb_rating || 'N/A'}`)
-        logger.info(`  - Genres: ${enriched.genres ? enriched.genres.length : 0} genres`)
-        if (enriched.genres) {
-            logger.info(`  - Genre IDs: ${JSON.stringify(enriched.genres)}`)
+        if (!enriched) {
+            logger.warn(`[Production Movies] Enrichment returned null for ${imdbId} — saving IMDB ID only`)
+        } else {
+            logger.info(`[Production Movies] Enrichment result:`)
+            logger.info(`  - Title: ${enriched.title || 'N/A'}`)
+            logger.info(`  - TMDB ID: ${enriched.tmdb_id || 'N/A'}`)
+            logger.info(`  - IMDB Rating: ${enriched.imdb_rating || 'N/A'}`)
+            logger.info(`  - Genres: ${enriched.genres ? enriched.genres.length : 0} genres`)
         }
 
-        // Update movie with enrichment data
+        // Update movie with enrichment data (fall back to IMDB-ID-only if enrichment failed)
         const updateData = {
-            imdb_id: imdbId,  // Force the IMDB ID the user specified
-            tmdb_id: enriched.tmdb_id,
-            poster_path: enriched.poster_path,
-            backdrop_path: enriched.backdrop_path,
-            vote_average: enriched.vote_average,
-            vote_count: enriched.vote_count,
-            popularity: enriched.popularity,
-            imdb_rating: enriched.imdb_rating,
-            imdb_votes: enriched.imdb_votes,
-            rated: enriched.rated,
-            director: enriched.director,
-            actors: enriched.actors,
-            language: enriched.language,
-            country: enriched.country,
-            is_tv_show: enriched.is_tv_show,
-            category: enriched.category,
+            imdb_id: imdbId,  // Always save the user-specified IMDB ID
+            tmdb_id: enriched?.tmdb_id,
+            poster_path: enriched?.poster_path,
+            backdrop_path: enriched?.backdrop_path,
+            vote_average: enriched?.vote_average,
+            vote_count: enriched?.vote_count,
+            popularity: enriched?.popularity,
+            imdb_rating: enriched?.imdb_rating,
+            imdb_votes: enriched?.imdb_votes,
+            rated: enriched?.rated,
+            director: enriched?.director,
+            actors: enriched?.actors,
+            language: enriched?.language,
+            country: enriched?.country,
+            is_tv_show: enriched?.is_tv_show,
+            category: enriched?.category,
             enrichment_source: 'manual_imdb',
             enrichment_confidence: 1.0,  // User verified
             updated_at: new Date().toISOString()

@@ -277,7 +277,8 @@
     padding: 1px 5px;
   }
   .btn-confirm  { background: var(--green); color: #000; }
-  .btn-use      { background: var(--accent); color: #000; }
+  .btn-original { background: var(--blue); color: #fff; }
+  .btn-use      { background: var(--green); color: #000; }
   .btn-skip     { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
   .btn-imdb     { background: var(--surface2); color: var(--accent); border: 1px solid var(--accent); }
   .btn:hover    { opacity: 0.85; transform: translateY(-1px); }
@@ -381,12 +382,18 @@
 
 <!-- Footer -->
 <div class="footer">
-  <button class="btn btn-confirm" id="btnConfirm" onclick="decide('confirm')">
-    ✓ Confirm Match <kbd>C</kbd>
+  <button class="btn btn-original" id="btnOriginal" onclick="decide('use-original')">
+    ✓ Use Original <kbd>C</kbd>
   </button>
-  <button class="btn btn-use" id="btnUse" onclick="decide('use-candidate')">
-    ↑ Use Candidate <kbd>U</kbd>
+  <button class="btn btn-use" id="btnUse" onclick="decide('use-found')">
+    ↑ Use Found <kbd>U</kbd>
   </button>
+  <div style="display:flex;gap:6px;align-items:center">
+    <input id="customImdbId" type="text" placeholder="tt1234567 — search new" style="
+      background:var(--surface2);border:1px solid var(--border);color:var(--text);
+      padding:8px 12px;border-radius:6px;font-size:13px;width:180px;outline:none;" />
+    <button class="btn btn-imdb" onclick="decide('use-custom')">Apply <kbd>A</kbd></button>
+  </div>
   <button class="btn btn-skip" onclick="decide('skip')">
     → Skip <kbd>S</kbd>
   </button>
@@ -482,7 +489,6 @@ function renderCandidateTabs() {
         <div>No IMDB candidates found for this movie.</div>
         <div style="margin-top:8px;font-size:12px">Search manually on IMDB and use the ID below.</div>
       </div>`;
-    document.getElementById('btnConfirm').disabled = true;
     document.getElementById('btnUse').disabled = true;
     return;
   }
@@ -565,9 +571,14 @@ function renderCandidateCard(idx) {
     </div>
   `;
 
-  // Update button states
-  document.getElementById('btnConfirm').disabled = !isSameId;
+  // Use Original — only enabled when there's a stored IMDB ID
+  const origBtn = document.getElementById('btnOriginal');
+  origBtn.disabled = !movie.stored_imdb_id;
+  origBtn.title = movie.stored_imdb_id ? `Confirm stored ID: ${movie.stored_imdb_id}` : 'No stored IMDB ID';
+
+  // Use Found — always enabled when there's a candidate
   document.getElementById('btnUse').disabled = false;
+
   document.getElementById('btnOpenImdb').dataset.imdbId = cand.imdbId;
 }
 
@@ -617,20 +628,29 @@ function hideStatus() {
 
 async function decide(action) {
   const cand = getActiveCandidate();
-  const candidateImdbId = cand?.imdbId || null;
+  let imdbIdToApply = null;
 
-  if (action === 'confirm' && (!movie.stored_imdb_id || !cand || cand.imdbId !== movie.stored_imdb_id)) {
-    alert('Confirm is only available when the candidate IMDB ID matches the stored one.\nUse "Use Candidate" to apply a different ID.');
-    return;
+  if (action === 'use-original') {
+    if (!movie.stored_imdb_id) { alert('No stored IMDB ID to confirm.'); return; }
+    imdbIdToApply = movie.stored_imdb_id;
+  } else if (action === 'use-found') {
+    if (!cand?.imdbId) { alert('No candidate found. Use Search New to enter an ID manually.'); return; }
+    imdbIdToApply = cand.imdbId;
+  } else if (action === 'use-custom') {
+    const val = document.getElementById('customImdbId').value.trim();
+    const m = val.match(/tt\d+/);
+    if (!m) { alert('Enter a valid IMDB ID, e.g. tt0129167'); return; }
+    imdbIdToApply = m[0];
   }
 
-  showStatus(action === 'confirm' ? 'Confirming...' : action === 'use-candidate' ? 'Applying...' : 'Skipping...');
+  const statusMsg = action === 'skip' ? 'Skipping...' : `Applying ${imdbIdToApply}...`;
+  showStatus(statusMsg);
 
   try {
     const res = await fetch('/decision', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ movieId: movie.id, action, candidateImdbId })
+      body: JSON.stringify({ movieId: movie.id, action, candidateImdbId: imdbIdToApply })
     });
     const json = await res.json();
     hideStatus();
@@ -654,8 +674,9 @@ async function decide(action) {
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.key === 'c' || e.key === 'C') decide('confirm');
-  if (e.key === 'u' || e.key === 'U') decide('use-candidate');
+  if (e.key === 'c' || e.key === 'C') decide('use-original');
+  if (e.key === 'u' || e.key === 'U') decide('use-found');
+  if (e.key === 'a' || e.key === 'A') decide('use-custom');
   if (e.key === 's' || e.key === 'S') decide('skip');
   if (e.key === 'o' || e.key === 'O') openImdb();
   if (e.key === '1') selectCandidate(0);
