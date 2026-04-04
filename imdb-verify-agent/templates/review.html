@@ -362,8 +362,29 @@
             <span class="meta-label">IMDB</span>
             <span class="meta-value" id="ourImdb">—</span>
           </div>
+          <div class="meta-item">
+            <span class="meta-label">Rating</span>
+            <span class="meta-value" id="ourRating">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Rated</span>
+            <span class="meta-value" id="ourRated">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Country</span>
+            <span class="meta-value" id="ourCountry">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Genres</span>
+            <span class="meta-value" id="ourGenres">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Source</span>
+            <span class="meta-value" id="ourSource">—</span>
+          </div>
         </div>
-        <div class="yt-thumb">
+        <div id="ourDescription" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;display:none"></div>
+        <div class="yt-thumb" style="margin-top:10px">
           <img id="ourYtThumb" src="" alt="YouTube thumbnail" style="display:none">
           <span class="yt-label" id="ourYtTitle"></span>
         </div>
@@ -457,6 +478,40 @@ function renderOurMovie() {
     imdbWrap.innerHTML = `<a href="https://www.imdb.com/title/${esc(movie.stored_imdb_id)}/" target="_blank" class="imdb-badge">IMDB ${esc(movie.stored_imdb_id)}</a>`;
   } else {
     imdbWrap.innerHTML = `<span class="imdb-badge missing">No IMDB ID</span>`;
+  }
+
+  // Rating
+  const ratingEl = document.getElementById('ourRating');
+  if (movie.imdb_rating) {
+    const votes = movie.imdb_votes ? ` (${Number(movie.imdb_votes).toLocaleString()} votes)` : '';
+    ratingEl.textContent = `⭐ ${movie.imdb_rating}/10${votes}`;
+  } else if (movie.vote_average) {
+    ratingEl.textContent = `TMDB ${movie.vote_average.toFixed(1)}/10`;
+  } else {
+    ratingEl.textContent = '—';
+  }
+
+  // Rated / genres / country / source
+  document.getElementById('ourRated').textContent = movie.rated || '—';
+  document.getElementById('ourCountry').textContent = movie.country || '—';
+  document.getElementById('ourGenres').textContent =
+    movie.genres?.length ? movie.genres.join(', ') : '—';
+
+  const sourceMap = {
+    'manual_imdb': '✅ manual IMDB',
+    'playwright_local': '✅ Playwright local',
+    'tmdb': 'TMDB',
+    'omdb': 'OMDB',
+    'enhanced': 'enhanced'
+  };
+  document.getElementById('ourSource').textContent =
+    sourceMap[movie.enrichment_source] || movie.enrichment_source || '— not enriched';
+
+  // Description
+  if (movie.description) {
+    const descEl = document.getElementById('ourDescription');
+    descEl.textContent = movie.description.slice(0, 220) + (movie.description.length > 220 ? '…' : '');
+    descEl.style.display = 'block';
   }
 
   // Poster
