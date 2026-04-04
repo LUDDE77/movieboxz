@@ -28,70 +28,32 @@ export async function closeBrowser() {
 }
 
 /**
- * Search IMDB for a movie title and return top candidates.
- * @param {object} movie - { title, release_date, year, director, actors }
+ * Search for a movie on IMDB.
+ * Strategy 1: IMDB suggestion API (fast JSON, no browser needed) using the
+ *             YouTube video title — same API as the IMDB search box
+ * Strategy 2: Fallback to the cleaned movie title if YouTube title gives nothing
+ * Then: visit each candidate's IMDB page with Playwright to get full JSON-LD data.
+ * @param {object} movie - { title, youtube_video_title, release_date, director, actors }
  * @returns {Array} candidates with { imdbId, title, year, directors, actors, type, posterUrl }
  */
 export async function searchIMDB(movie) {
+    // ── Step 1: get tt-IDs from IMDB suggestion API (no browser) ──────────────
+    const ytTitle = movie.youtube_video_title || ''
+    const cleanedTitle = buildQuery(movie)
+
+    // Try the YouTube title first (keeps year/subtitle info that helps matching)
+    let rawIds = await fetchImdbSuggestions(ytTitle)
+
+    // If YouTube title gives nothing, try the cleaned title
+    if (!rawIds.length) {
+        rawIds = await fetchImdbSuggestions(cleanedTitle)
+    }
+
+    // ── Step 2: enrich top 3 candidates by visiting their IMDB pages ──────────
     const page = await context.newPage()
     try {
-        const query = buildQuery(movie)
-        const searchUrl = `https://www.imdb.com/find/?q=${encodeURIComponent(query)}&s=tt&ttype=ft`
-
-        await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
-        await page.waitForTimeout(1800)
-
-        // Handle cookie consent if shown (EU/Swedish region)
-        try {
-            const consentBtn = page.locator('button:has-text("Accept"), button:has-text("Godkänn")')
-            if (await consentBtn.first().isVisible({ timeout: 1000 })) {
-                await consentBtn.first().click()
-                await page.waitForTimeout(800)
-            }
-        } catch {}
-
-        // Extract search results — IMDB 2024/2025 structure
-        // Title links use ref_=fn_t_N pattern; image links use fn_i_N
-        const rawResults = await page.evaluate(() => {
-            const seen = new Set()
-            const results = []
-
-            // Strategy 1: find title text links (fn_t_ pattern)
-            for (const a of document.querySelectorAll('a[href*="fn_t_"], a[href*="fn_al_tt"]')) {
-                const m = a.href.match(/\/title\/(tt\d+)/)
-                if (!m || seen.has(m[1])) continue
-                const title = a.textContent?.trim()
-                if (!title || title.length < 2) continue
-                seen.add(m[1])
-
-                // Walk up to the list item to find year and poster
-                const item = a.closest('li, [class*="summary-item"], [class*="result"]')
-                const yearEl = item?.querySelector('[class*="__li"], [class*="year"], span')
-                const year = yearEl?.textContent?.replace(/[()I]/g, '').trim() || ''
-                const imgEl = item?.querySelector('img')
-                results.push({ imdbId: m[1], title, year, posterUrl: imgEl?.src || '' })
-                if (results.length >= 5) break
-            }
-
-            // Strategy 2 fallback — any tt link with non-empty text
-            if (!results.length) {
-                for (const a of document.querySelectorAll('a[href*="/title/tt"]')) {
-                    const m = a.href.match(/\/title\/(tt\d+)/)
-                    if (!m || seen.has(m[1])) continue
-                    const title = a.textContent?.trim()
-                    if (!title || title.length < 2) continue
-                    seen.add(m[1])
-                    results.push({ imdbId: m[1], title, year: '', posterUrl: '' })
-                    if (results.length >= 5) break
-                }
-            }
-
-            return results
-        })
-
-        // Enrich top candidates with full data from their title pages
         const candidates = []
-        for (const raw of rawResults.slice(0, 3)) {
+        for (const raw of rawIds.slice(0, 3)) {
             try {
                 const enriched = await enrichCandidate(page, raw)
                 candidates.push(enriched)
@@ -100,10 +62,49 @@ export async function searchIMDB(movie) {
             }
             await page.waitForTimeout(300)
         }
-
         return candidates
     } finally {
         await page.close()
+    }
+}
+
+/**
+ * Call the IMDB suggestion/autocomplete JSON API.
+ * This is the same endpoint the IMDB search box uses — no auth, no CAPTCHA.
+ * Returns up to 5 candidate objects: { imdbId, title, year, posterUrl }
+ */
+async function fetchImdbSuggestions(query) {
+    if (!query || query.length < 2) return []
+
+    // Clean up YouTube noise words that confuse the API
+    const cleaned = query
+        .replace(/\b(full movie|full episode|hd|4k|1080p|720p|free|official|trailer)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    if (!cleaned) return []
+
+    try {
+        const encoded = encodeURIComponent(cleaned)
+        const url = `https://v2.sg.media-imdb.com/suggestion/x/${encoded}.json`
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'Accept-Language': 'en-US,en;q=0.9' },
+            signal: AbortSignal.timeout(8000)
+        })
+        if (!res.ok) return []
+        const data = await res.json()
+
+        return (data.d || [])
+            .filter(r => r.id && r.id.startsWith('tt'))
+            .map(r => ({
+                imdbId: r.id,
+                title: r.l || '',
+                year: r.y ? String(r.y) : '',
+                posterUrl: r.i?.imageUrl || ''
+            }))
+            .slice(0, 5)
+    } catch {
+        return []
     }
 }
 
