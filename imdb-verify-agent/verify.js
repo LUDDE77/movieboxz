@@ -144,6 +144,14 @@ async function processMovie(item, queue) {
             return 'review-needed'
         }
 
+        // If the movie already has a stored IMDB ID, queue it for review even if
+        // confidence is low — the user can confirm the original or pick a new one
+        if (item.stored_imdb_id) {
+            item.status = 'review-needed'
+            item.notes = `Low confidence (${confidence}%) but has stored IMDB ID ${item.imdb_id}`
+            return 'review-needed'
+        }
+
         item.status = 'low-confidence'
         return 'low-confidence'
 
@@ -172,11 +180,11 @@ async function main() {
 
     // Load or create queue
     let queue
-    if (opts.resume && existsSync(QUEUE_PATH)) {
+    if ((opts.resume || opts.reviewOnly) && existsSync(QUEUE_PATH)) {
         queue = loadQueue()
         queue.save = () => saveQueue(queue)
         const pending = queue.movies.filter(m => m.status === 'pending').length
-        console.log(`♻️  Resuming — ${pending} movies still pending\n`)
+        if (opts.resume) console.log(`♻️  Resuming — ${pending} movies still pending\n`)
     } else {
         const movies = await fetchAllMovies({
             backendUrl:   config.backendUrl,

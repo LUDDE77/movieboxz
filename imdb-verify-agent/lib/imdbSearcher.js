@@ -22,6 +22,8 @@ export async function initBrowser() {
 export async function closeBrowser() {
     await context?.close()
     await browser?.close()
+    context = null
+    browser = null
     console.log('🎭 Playwright browser closed')
 }
 
