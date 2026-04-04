@@ -1,0 +1,20 @@
+{
+  "name": "movieboxz-imdb-verify-agent",
+  "version": "1.0.0",
+  "description": "Standalone IMDB verification agent for MovieBoxZ production movies",
+  "type": "module",
+  "main": "verify.js",
+  "scripts": {
+    "start": "node verify.js",
+    "verify": "node verify.js",
+    "verify:auto": "node verify.js --auto-only",
+    "verify:review": "node verify.js --review-only",
+    "verify:resume": "node verify.js --resume"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "open": "^10.0.0",
+    "playwright": "^1.40.0"
+  }
+}

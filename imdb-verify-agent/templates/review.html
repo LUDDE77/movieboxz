@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IMDB Verification — MovieBoxZ</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #333;
+    --text: #e8e8e8;
+    --text2: #999;
+    --accent: #f5c518; /* IMDB yellow */
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --indigo: #6366f1;
+    --orange: #f97316;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .header-title span { color: var(--text2); font-weight: 400; font-size: 13px; }
+  .progress-bar {
+    flex: 1;
+    max-width: 400px;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--orange));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .progress-label {
+    font-size: 12px;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+
+  /* ── Main layout ─────────────────────────────────────────── */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    min-height: calc(100vh - 114px);
+  }
+  .panel {
+    padding: 24px;
+    border-right: 1px solid var(--border);
+  }
+  .panel:last-child { border-right: none; }
+  .panel-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 16px;
+  }
+
+  /* ── Movie card ──────────────────────────────────────────── */
+  .movie-card {
+    display: flex;
+    gap: 16px;
+  }
+  .poster {
+    width: 110px;
+    height: 163px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+  .poster-placeholder {
+    width: 110px;
+    height: 163px;
+    background: var(--surface2);
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text2);
+    font-size: 32px;
+    border: 1px solid var(--border);
+  }
+  .movie-info { flex: 1; min-width: 0; }
+  .movie-title {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 4px;
+    word-break: break-word;
+  }
+  .movie-year {
+    font-size: 15px;
+    color: var(--text2);
+    margin-bottom: 12px;
+  }
+  .meta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .meta-item {
+    display: flex;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .meta-label {
+    color: var(--text2);
+    white-space: nowrap;
+    min-width: 60px;
+    flex-shrink: 0;
+  }
+  .meta-value { color: var(--text); word-break: break-word; }
+
+  /* ── IMDB badge ──────────────────────────────────────────── */
+  .imdb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .imdb-badge:hover { opacity: 0.85; }
+  .imdb-badge.missing {
+    background: var(--surface2);
+    color: var(--text2);
+    border: 1px solid var(--border);
+  }
+
+  /* ── YouTube thumbnail ───────────────────────────────────── */
+  .yt-thumb {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .yt-thumb img {
+    width: 96px;
+    height: 54px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .yt-label { font-size: 11px; color: var(--text2); word-break: break-all; }
+
+  /* ── Confidence panel ────────────────────────────────────── */
+  .confidence-badge {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .confidence-desc {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 16px;
+  }
+  .score-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .score-row { display: flex; align-items: center; gap: 8px; }
+  .score-name { width: 80px; font-size: 12px; color: var(--text2); flex-shrink: 0; }
+  .score-track {
+    flex: 1;
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .score-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s cubic-bezier(.4,0,.2,1);
+  }
+  .score-pts { font-size: 12px; color: var(--text2); width: 40px; text-align: right; flex-shrink: 0; }
+
+  .cand-detail-row {
+    display: flex;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 5px;
+    align-items: flex-start;
+  }
+  .cand-detail-label { color: var(--text2); min-width: 62px; flex-shrink: 0; }
+  .cand-detail-val { color: var(--text); word-break: break-word; }
+
+  /* ── Candidates tabs ─────────────────────────────────────── */
+  .cand-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .cand-tab {
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .cand-tab.active {
+    background: var(--surface);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ── Footer actions ──────────────────────────────────────── */
+  .footer {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+  }
+  .btn kbd {
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(0,0,0,0.25);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+  .btn-confirm  { background: var(--green); color: #000; }
+  .btn-use      { background: var(--accent); color: #000; }
+  .btn-skip     { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-imdb     { background: var(--surface2); color: var(--accent); border: 1px solid var(--accent); }
+  .btn:hover    { opacity: 0.85; transform: translateY(-1px); }
+  .btn:active   { transform: translateY(0); }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+
+  /* ── No candidate state ──────────────────────────────────── */
+  .no-candidate {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text2);
+  }
+  .no-candidate .icon { font-size: 40px; margin-bottom: 12px; }
+
+  /* ── Status overlay ──────────────────────────────────────── */
+  .status-overlay {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    z-index: 100;
+  }
+  .status-overlay.show { display: flex; }
+
+  /* ── Spinner ─────────────────────────────────────────────── */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">
+    🎬 IMDB Verification
+    <span id="headerSub">Loading...</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+  <div class="progress-label" id="progressLabel">— / —</div>
+</div>
+
+<!-- Main panels -->
+<div class="main">
+
+  <!-- LEFT: Our movie -->
+  <div class="panel">
+    <div class="panel-label">Our Movie (Database)</div>
+    <div class="movie-card">
+      <div id="ourPosterWrap"></div>
+      <div class="movie-info">
+        <div class="movie-title" id="ourTitle">—</div>
+        <div class="movie-year" id="ourYear">—</div>
+        <div class="meta-row">
+          <div class="meta-item">
+            <span class="meta-label">Director</span>
+            <span class="meta-value" id="ourDirector">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Actors</span>
+            <span class="meta-value" id="ourActors">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">IMDB</span>
+            <span class="meta-value" id="ourImdb">—</span>
+          </div>
+        </div>
+        <div class="yt-thumb">
+          <img id="ourYtThumb" src="" alt="YouTube thumbnail" style="display:none">
+          <span class="yt-label" id="ourYtTitle"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: IMDB candidates -->
+  <div class="panel">
+    <div class="panel-label">IMDB Candidates</div>
+    <div class="cand-tabs" id="candTabs"></div>
+    <div id="candContent"></div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <button class="btn btn-confirm" id="btnConfirm" onclick="decide('confirm')">
+    ✓ Confirm Match <kbd>C</kbd>
+  </button>
+  <button class="btn btn-use" id="btnUse" onclick="decide('use-candidate')">
+    ↑ Use Candidate <kbd>U</kbd>
+  </button>
+  <button class="btn btn-skip" onclick="decide('skip')">
+    → Skip <kbd>S</kbd>
+  </button>
+  <button class="btn btn-imdb" id="btnOpenImdb" onclick="openImdb()">
+    Open IMDB ↗ <kbd>O</kbd>
+  </button>
+</div>
+
+<!-- Status overlay -->
+<div class="status-overlay" id="statusOverlay">
+  <div class="spinner"></div>
+  <span id="statusText">Saving...</span>
+</div>
+
+<script>
+const DATA = __REVIEW_DATA__;
+const movie = DATA.movie;
+const progress = DATA.progress;
+let activeCandidateIndex = 0;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'—').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function confidenceColor(c) {
+  if (c >= 85) return '#22c55e';
+  if (c >= 65) return '#f97316';
+  return '#ef4444';
+}
+function confidenceLabel(c) {
+  if (c >= 85) return 'High confidence';
+  if (c >= 65) return 'Moderate confidence';
+  if (c >= 50) return 'Low confidence — review carefully';
+  return 'Very low confidence';
+}
+function scoreColor(pts, max) {
+  const r = pts / max;
+  if (r >= 0.8) return '#22c55e';
+  if (r >= 0.5) return '#f97316';
+  return '#ef4444';
+}
+function extractYear(str) {
+  if (!str) return null;
+  const m = String(str).match(/\b(19|20)\d{2}\b/);
+  return m ? m[0] : null;
+}
+
+// ── Render "our movie" panel ──────────────────────────────────────────────────
+function renderOurMovie() {
+  document.getElementById('ourTitle').textContent = movie.title || '—';
+  const year = extractYear(movie.release_date) || extractYear(movie.year) || '—';
+  document.getElementById('ourYear').textContent = year;
+  document.getElementById('ourDirector').textContent = movie.director || '—';
+  document.getElementById('ourActors').textContent = movie.actors
+    ? movie.actors.split(',').slice(0,3).join(', ')
+    : '—';
+
+  // IMDB badge
+  const imdbWrap = document.getElementById('ourImdb');
+  if (movie.stored_imdb_id) {
+    imdbWrap.innerHTML = `<a href="https://www.imdb.com/title/${esc(movie.stored_imdb_id)}/" target="_blank" class="imdb-badge">IMDB ${esc(movie.stored_imdb_id)}</a>`;
+  } else {
+    imdbWrap.innerHTML = `<span class="imdb-badge missing">No IMDB ID</span>`;
+  }
+
+  // Poster
+  const wrap = document.getElementById('ourPosterWrap');
+  if (movie.poster_url) {
+    wrap.innerHTML = `<img class="poster" src="${esc(movie.poster_url)}" alt="poster" onerror="this.style.display='none'">`;
+  } else {
+    wrap.innerHTML = `<div class="poster-placeholder">🎬</div>`;
+  }
+
+  // YouTube thumbnail
+  if (movie.youtube_video_id) {
+    const thumb = document.getElementById('ourYtThumb');
+    thumb.src = `https://img.youtube.com/vi/${esc(movie.youtube_video_id)}/hqdefault.jpg`;
+    thumb.style.display = 'block';
+    document.getElementById('ourYtTitle').textContent = movie.youtube_video_title || movie.youtube_video_id;
+  }
+}
+
+// ── Render candidate tabs ─────────────────────────────────────────────────────
+function renderCandidateTabs() {
+  const tabs = document.getElementById('candTabs');
+  const candidates = movie.candidates || [];
+
+  if (!candidates.length) {
+    tabs.innerHTML = '';
+    document.getElementById('candContent').innerHTML = `
+      <div class="no-candidate">
+        <div class="icon">🔍</div>
+        <div>No IMDB candidates found for this movie.</div>
+        <div style="margin-top:8px;font-size:12px">Search manually on IMDB and use the ID below.</div>
+      </div>`;
+    document.getElementById('btnConfirm').disabled = true;
+    document.getElementById('btnUse').disabled = true;
+    return;
+  }
+
+  tabs.innerHTML = candidates.map((c, i) => `
+    <button class="cand-tab ${i === 0 ? 'active' : ''}" onclick="selectCandidate(${i})" id="tab-${i}">
+      ${esc(c.imdbId)} · ${Math.round(c.score?.confidence || 0)}%
+    </button>
+  `).join('');
+
+  renderCandidateCard(0);
+}
+
+function selectCandidate(idx) {
+  activeCandidateIndex = idx;
+  document.querySelectorAll('.cand-tab').forEach((t, i) =>
+    t.classList.toggle('active', i === idx)
+  );
+  renderCandidateCard(idx);
+}
+
+function renderCandidateCard(idx) {
+  const candidates = movie.candidates || [];
+  const cand = candidates[idx];
+  if (!cand) return;
+
+  const score = cand.score || {};
+  const conf = score.confidence || 0;
+  const bd = score.breakdown || {};
+  const content = document.getElementById('candContent');
+
+  const isSameId = cand.imdbId === movie.stored_imdb_id;
+
+  content.innerHTML = `
+    <div class="movie-card" style="margin-bottom:16px">
+      ${cand.posterUrl
+        ? `<img class="poster" src="${esc(cand.posterUrl)}" alt="IMDB poster" onerror="this.parentElement.querySelector('.poster').remove()">`
+        : `<div class="poster-placeholder">🎬</div>`}
+      <div class="movie-info">
+        <div class="movie-title">${esc(cand.title)}</div>
+        <div class="movie-year">${esc(cand.year || '—')}</div>
+        <div class="cand-detail-row">
+          <span class="cand-detail-label">Director</span>
+          <span class="cand-detail-val">${esc((cand.directors||[]).join(', ') || '—')}</span>
+        </div>
+        <div class="cand-detail-row">
+          <span class="cand-detail-label">Actors</span>
+          <span class="cand-detail-val">${esc((cand.actors||[]).slice(0,4).join(', ') || '—')}</span>
+        </div>
+        <div class="cand-detail-row">
+          <span class="cand-detail-label">Type</span>
+          <span class="cand-detail-val">${esc(cand.type||'—')}</span>
+        </div>
+        <div class="cand-detail-row">
+          <span class="cand-detail-label">IMDB ID</span>
+          <span class="cand-detail-val">
+            <a href="https://www.imdb.com/title/${esc(cand.imdbId)}/" target="_blank" class="imdb-badge">
+              ${esc(cand.imdbId)}
+              ${isSameId ? ' ✓ matches stored' : ''}
+            </a>
+          </span>
+        </div>
+        ${cand.description ? `<div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5">${esc(cand.description)}</div>` : ''}
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border-radius:8px;padding:14px">
+      <div class="confidence-badge" style="color:${confidenceColor(conf)}">${conf}%</div>
+      <div class="confidence-desc">${confidenceLabel(conf)}</div>
+      <div class="score-bars">
+        ${renderScoreBar('Title', bd.title?.pts||0, 30)}
+        ${renderScoreBar('Year', bd.year?.pts||0, 25)}
+        ${renderScoreBar('Director', bd.director?.pts||0, 20)}
+        ${renderScoreBar('Actors', bd.actors?.pts||0, 15)}
+        ${renderScoreBar('Type', bd.type?.pts||0, 10)}
+      </div>
+      <div style="font-size:11px;color:var(--text2)">
+        Year stored: ${bd.year?.stored||'?'} · Candidate: ${bd.year?.candidate||'?'}
+      </div>
+    </div>
+  `;
+
+  // Update button states
+  document.getElementById('btnConfirm').disabled = !isSameId;
+  document.getElementById('btnUse').disabled = false;
+  document.getElementById('btnOpenImdb').dataset.imdbId = cand.imdbId;
+}
+
+function renderScoreBar(label, pts, max) {
+  const pct = Math.round((pts / max) * 100);
+  const color = scoreColor(pts, max);
+  return `
+    <div class="score-row">
+      <span class="score-name">${label}</span>
+      <div class="score-track">
+        <div class="score-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <span class="score-pts">${pts}/${max}</span>
+    </div>`;
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+function renderHeader() {
+  document.getElementById('headerSub').textContent =
+    `Movie ${progress.current} of ${progress.total}`;
+  const pct = Math.round((progress.current / progress.total) * 100);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent =
+    `${progress.current} / ${progress.total}`;
+}
+
+// ── Decision ──────────────────────────────────────────────────────────────────
+function getActiveCandidate() {
+  const candidates = movie.candidates || [];
+  return candidates[activeCandidateIndex] || null;
+}
+
+function openImdb() {
+  const cand = getActiveCandidate();
+  const id = cand?.imdbId || movie.stored_imdb_id;
+  if (id) window.open(`https://www.imdb.com/title/${id}/`, '_blank');
+}
+
+function showStatus(text) {
+  const el = document.getElementById('statusOverlay');
+  document.getElementById('statusText').textContent = text;
+  el.classList.add('show');
+}
+function hideStatus() {
+  document.getElementById('statusOverlay').classList.remove('show');
+}
+
+async function decide(action) {
+  const cand = getActiveCandidate();
+  const candidateImdbId = cand?.imdbId || null;
+
+  if (action === 'confirm' && (!movie.stored_imdb_id || !cand || cand.imdbId !== movie.stored_imdb_id)) {
+    alert('Confirm is only available when the candidate IMDB ID matches the stored one.\nUse "Use Candidate" to apply a different ID.');
+    return;
+  }
+
+  showStatus(action === 'confirm' ? 'Confirming...' : action === 'use-candidate' ? 'Applying...' : 'Skipping...');
+
+  try {
+    const res = await fetch('/decision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ movieId: movie.id, action, candidateImdbId })
+    });
+    const json = await res.json();
+    hideStatus();
+    if (!json.success) throw new Error(json.error || 'Unknown error');
+    if (json.nextId) {
+      window.location.href = `/review/${json.nextId}`;
+    } else {
+      document.body.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px;color:var(--text)">
+          <div style="font-size:48px">🎉</div>
+          <div style="font-size:24px;font-weight:700">All reviews complete!</div>
+          <div style="color:var(--text2)">You can close this window.</div>
+        </div>`;
+    }
+  } catch (err) {
+    hideStatus();
+    alert('Error: ' + err.message);
+  }
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'c' || e.key === 'C') decide('confirm');
+  if (e.key === 'u' || e.key === 'U') decide('use-candidate');
+  if (e.key === 's' || e.key === 'S') decide('skip');
+  if (e.key === 'o' || e.key === 'O') openImdb();
+  if (e.key === '1') selectCandidate(0);
+  if (e.key === '2') selectCandidate(1);
+  if (e.key === '3') selectCandidate(2);
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderHeader();
+renderOurMovie();
+renderCandidateTabs();
+</script>
+</body>
+</html>
