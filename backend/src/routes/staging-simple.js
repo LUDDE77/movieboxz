@@ -802,6 +802,23 @@ router.post('/movies/:id/reject', async (req, res, next) => {
     }
 })
 
+// Maps a free-text category string (e.g. "Crime, Drama") to the first matching content_category enum value
+const CATEGORY_MAP = {
+    action: 'action', adventure: 'adventure', animation: 'animation', comedy: 'comedy',
+    crime: 'crime', documentary: 'documentary', drama: 'drama', family: 'family',
+    fantasy: 'fantasy', history: 'history', horror: 'horror', music: 'music',
+    mystery: 'mystery', romance: 'romance', 'science fiction': 'science_fiction',
+    'sci-fi': 'science_fiction', thriller: 'thriller', war: 'war', western: 'western', classic: 'classic'
+}
+function mapToContentCategory(category) {
+    if (!category) return null
+    const lower = String(category).toLowerCase()
+    for (const [key, val] of Object.entries(CATEGORY_MAP)) {
+        if (lower.includes(key)) return val
+    }
+    return null
+}
+
 // POST /api/admin/staging/publish - Publish approved movies
 router.post('/publish', async (req, res, next) => {
     try {
@@ -887,7 +904,7 @@ router.post('/publish', async (req, res, next) => {
                         is_tv_show: stagedMovie.is_tv_show,
                         is_tv_series: stagedMovie.is_tv_series,
                         is_kids_content: stagedMovie.is_kids_content,
-                        category: stagedMovie.category,
+                        category: mapToContentCategory(stagedMovie.category),
                         enrichment_source: stagedMovie.enrichment_source,
                         enrichment_confidence: enrichmentConfidence,
                         is_available: true
