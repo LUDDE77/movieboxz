@@ -895,7 +895,30 @@ router.post('/publish', async (req, res, next) => {
                     .select('id')
                     .single()
 
-                if (insertError) throw insertError
+                if (insertError) {
+                    // If duplicate youtube_video_id, find existing movie and mark as published
+                    if (insertError.code === '23505' && insertError.message?.includes('youtube_video_id')) {
+                        const { data: existing } = await supabase
+                            .from('movies')
+                            .select('id')
+                            .eq('youtube_video_id', stagedMovie.youtube_video_id)
+                            .single()
+                        if (existing) {
+                            await supabase
+                                .from('staged_movies')
+                                .update({
+                                    approval_status: 'published',
+                                    published_movie_id: existing.id,
+                                    updated_at: new Date().toISOString()
+                                })
+                                .eq('id', stagedMovie.id)
+                            movieIds.push(existing.id)
+                            published++
+                            continue
+                        }
+                    }
+                    throw insertError
+                }
 
                 const movieId = insertedMovie.id
                 movieIds.push(movieId)
