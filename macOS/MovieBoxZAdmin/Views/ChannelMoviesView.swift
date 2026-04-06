@@ -942,9 +942,11 @@ struct ChannelMovieRow: View {
 
     func statusColor(_ status: String) -> Color {
         switch status.lowercased() {
-        case "approved": return .green
+        case "published": return .green
+        case "approved": return .blue
         case "rejected": return .red
         case "pending": return .orange
+        case "publishing": return .cyan
         default: return .gray
         }
     }

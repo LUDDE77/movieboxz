@@ -7,7 +7,7 @@ struct StagingView: View {
     @State private var channels: [Channel] = []
 
     // UI State
-    @State private var selectedFilter: MovieFilter = .pending
+    @State private var selectedFilter: MovieFilter = .unenriched
     @State private var selectedMovie: StagedMovie?
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -52,22 +52,22 @@ struct StagingView: View {
     @State private var rejectReason = ""
 
     enum MovieFilter: String, CaseIterable {
-        case pending = "Pending"
-        case enriched = "Enriched"
         case unenriched = "Unenriched"
+        case enriched = "Ready"
+        case approved = "Approved"
 
         var approvalStatus: ApprovalStatus? {
             switch self {
-            case .pending: return .pending
-            case .enriched, .unenriched: return nil
+            case .unenriched, .enriched: return .pending
+            case .approved: return .approved
             }
         }
 
         var filterParam: String? {
             switch self {
-            case .pending: return nil
-            case .enriched: return "enriched"
             case .unenriched: return "unenriched"
+            case .enriched: return "enriched"
+            case .approved: return nil
             }
         }
     }
@@ -381,7 +381,7 @@ struct StagingView: View {
             let data = try await apiService.getStagedMovies(
                 status: selectedFilter.approvalStatus,
                 filter: selectedFilter.filterParam,
-                limit: 100
+                limit: 400
             )
             stagedMovies = data.movies
         } catch {
@@ -718,6 +718,8 @@ struct MovieRow: View {
         case .pending: return .orange
         case .approved: return .green
         case .rejected: return .red
+        case .publishing: return .blue
+        case .published: return .gray
         }
     }
 }
@@ -955,6 +957,8 @@ struct MovieDetailView: View {
         case .pending: return .orange
         case .approved: return .green
         case .rejected: return .red
+        case .publishing: return .blue
+        case .published: return .gray
         }
     }
 

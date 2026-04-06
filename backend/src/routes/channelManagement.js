@@ -460,12 +460,13 @@ router.get('/:channelId/movies', async (req, res, next) => {
         const offset = (page - 1) * limit
         const results = {}
 
-        // Get staging movies
+        // Get staging movies (exclude published — those are already in production)
         if (sources.includes('staging')) {
             const { data: stagedMovies, count } = await supabase
                 .from('staged_movies')
                 .select('*', { count: 'exact' })
                 .eq('channel_id', channelId)
+                .neq('approval_status', 'published')
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1)
 
@@ -487,7 +488,7 @@ router.get('/:channelId/movies', async (req, res, next) => {
             // Add approval_status field for Swift compatibility
             const moviesWithStatus = (movies || []).map(movie => ({
                 ...movie,
-                approval_status: 'approved' // Production movies are always approved
+                approval_status: 'published' // Production movies are published
             }))
 
             results.production = {

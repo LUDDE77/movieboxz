@@ -372,6 +372,8 @@ enum ApprovalStatus: String, Codable {
     case pending
     case approved
     case rejected
+    case publishing
+    case published
 }
 
 // Enrichment priority modes
