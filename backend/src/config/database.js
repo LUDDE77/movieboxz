@@ -90,6 +90,14 @@ export const dbOperations = {
             query = query.eq('needs_verification', true)
         }
 
+        if (filters.isTvSeries) {
+            query = query.eq('is_tv_series', true)
+        }
+
+        if (filters.isKidsContent) {
+            query = query.eq('is_kids_content', true)
+        }
+
         if (filters.search) {
             // Sanitize search query for PostgreSQL full-text search
             // Convert "big stan" to "big & stan" (AND operator)
