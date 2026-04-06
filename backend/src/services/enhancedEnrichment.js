@@ -429,15 +429,28 @@ class EnhancedEnrichment {
         try {
             logger.info(`Enriching by IMDB ID: ${imdbId}`)
 
-            // Scrape IMDB data
-            const imdbData = await this.scrapeIMDBData(imdbId)
-
-            if (!imdbData) {
-                logger.warn(`Failed to scrape IMDB data for: ${imdbId}`)
-                return null
+            // Try OMDB first (reliable API, works on Railway)
+            let omdbData = null
+            try {
+                omdbData = await omdbService.getByImdbId(imdbId)
+                if (omdbData) {
+                    logger.info(`✓ Got OMDB data for ${imdbId}: ${omdbData.title}`)
+                }
+            } catch (error) {
+                logger.debug(`OMDB lookup failed for ${imdbId}: ${error.message}`)
             }
 
-            // Try to get TMDB data if possible (for posters/backdrops)
+            // Fall back to scraping IMDB directly (works locally, may fail on Railway)
+            let imdbData = null
+            if (!omdbData) {
+                imdbData = await this.scrapeIMDBData(imdbId)
+                if (!imdbData) {
+                    logger.warn(`Failed to get data for ${imdbId} from OMDB or IMDB scrape`)
+                    return null
+                }
+            }
+
+            // Try to get TMDB data for posters/backdrops
             let tmdbDetails = null
             try {
                 const tmdbResults = await tmdbService.findByIMDBId(imdbId)
@@ -445,38 +458,47 @@ class EnhancedEnrichment {
                     tmdbDetails = tmdbResults
                 }
             } catch (error) {
-                logger.debug(`TMDB lookup failed for ${imdbId}, using IMDB-only data`)
+                logger.debug(`TMDB lookup failed for ${imdbId}, using OMDB/IMDB-only data`)
             }
 
-            // Build enrichment data
+            // Parse genres: OMDB returns comma-separated string, IMDB scrape returns array
+            let genres = []
+            if (omdbData?.genre) {
+                genres = omdbData.genre.split(',').map(g => g.trim()).filter(Boolean)
+            } else if (imdbData?.genres) {
+                genres = Array.isArray(imdbData.genres) ? imdbData.genres : [imdbData.genres]
+            }
+
+            const source = omdbData ? 'omdb_direct' : 'imdb_scrape'
+            const title = omdbData?.title || imdbData?.title
             const enrichmentData = {
                 imdb_id: imdbId,
                 tmdb_id: tmdbDetails?.id || null,
-                title: imdbData.title,
-                original_title: imdbData.title,
-                description: imdbData.description,
-                release_date: imdbData.release_date,
-                runtime_minutes: imdbData.runtime_minutes,
-                poster_path: tmdbDetails?.poster_path || null,
+                title,
+                original_title: title,
+                description: omdbData?.description || imdbData?.description,
+                release_date: omdbData?.release_date || imdbData?.release_date,
+                runtime_minutes: omdbData?.runtime_minutes || imdbData?.runtime_minutes,
+                poster_path: tmdbDetails?.poster_path || omdbData?.poster_path || null,
                 backdrop_path: tmdbDetails?.backdrop_path || null,
                 vote_average: tmdbDetails?.vote_average || null,
                 vote_count: tmdbDetails?.vote_count || null,
                 popularity: tmdbDetails?.popularity || null,
-                genres: imdbData.genres || [],
-                imdb_rating: imdbData.imdb_rating,
-                imdb_votes: imdbData.imdb_votes,
-                rated: imdbData.rated,
-                director: imdbData.director,
-                actors: imdbData.actors,
-                country: imdbData.country,
-                language: imdbData.language,
-                media_type: imdbData.type === 'Movie' ? 'movie' : 'tv',
+                genres,
+                imdb_rating: omdbData?.imdb_rating || imdbData?.imdb_rating,
+                imdb_votes: omdbData?.imdb_votes || imdbData?.imdb_votes,
+                rated: omdbData?.rated || imdbData?.rated,
+                director: omdbData?.director || imdbData?.director,
+                actors: omdbData?.actors || imdbData?.actors,
+                country: omdbData?.country || imdbData?.country,
+                language: omdbData?.language || imdbData?.language,
+                media_type: (omdbData?.is_tv_show || imdbData?.type !== 'Movie') ? 'tv' : 'movie',
                 confidence: 100, // Manual IMDB ID = 100% confidence
                 actorMatch: false,
-                source: 'imdb_direct'
+                source
             }
 
-            logger.info(`✓ Enriched from IMDB: ${enrichmentData.title}`)
+            logger.info(`✓ Enriched from ${source}: ${enrichmentData.title}`)
             return enrichmentData
 
         } catch (error) {

@@ -2155,17 +2155,17 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         }
 
         // Update description if we got one and movie doesn't have one
-        if (enriched.description && !movie.description) {
+        if (enriched?.description && !movie.description) {
             updateData.description = enriched.description
         }
 
         // Update release_date if we got one and movie doesn't have one
-        if (enriched.release_date && !movie.release_date) {
+        if (enriched?.release_date && !movie.release_date) {
             updateData.release_date = enriched.release_date
         }
 
         // Update runtime if we got one and movie doesn't have one
-        if (enriched.runtime_minutes && !movie.runtime_minutes) {
+        if (enriched?.runtime_minutes && !movie.runtime_minutes) {
             updateData.runtime_minutes = enriched.runtime_minutes
         }
 
@@ -2184,7 +2184,7 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
         if (updateError) throw updateError
 
         // Update genres if enrichment returned any
-        if (enriched.genres && enriched.genres.length > 0) {
+        if (enriched?.genres && enriched.genres.length > 0) {
             logger.info(`[Production Movies] Received ${enriched.genres.length} genre names from enrichment:`)
             logger.info(`[Production Movies] Genre names: ${JSON.stringify(enriched.genres)}`)
 
