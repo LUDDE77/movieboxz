@@ -33,22 +33,20 @@ router.get('/', async (req, res, next) => {
                 poster_path,
                 year_start,
                 year_end,
-                movies!inner(
+                movies(
                     id,
                     season_number,
                     is_tv_series,
                     is_available
                 )
             `)
-            .eq('movies.is_tv_series', true)
-            .eq('movies.is_available', true)
             .order('title', { ascending: true })
 
         if (seriesError) throw seriesError
 
         // Build series objects with derived counts.
         const allSeries = (seriesRows || []).map(series => {
-            const episodes = series.movies || []
+            const episodes = (series.movies || []).filter(m => m.is_available !== false)
             const distinctSeasons = new Set(
                 episodes
                     .map(e => e.season_number)
