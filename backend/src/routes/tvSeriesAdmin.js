@@ -33,7 +33,7 @@ router.get('/tv-content', async (req, res, next) => {
                 created_at,
                 updated_at,
                 channels(id, title, thumbnail_url),
-                movie_genres(genres(id, name, tmdb_id))
+                movie_genres(genres(id, name))
             `)
             .or('is_tv_show.eq.true,is_tv_series.eq.true')
             .order('title', { ascending: true })
