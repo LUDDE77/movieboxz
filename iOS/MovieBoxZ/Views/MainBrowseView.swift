@@ -559,13 +559,9 @@ struct FeaturedMovieBanner: View {
 
             // Content
             #if os(tvOS)
-            // tvOS: Spacer fills top, content anchored at bottom.
-            // Dots sit 10pt above banner bottom — FIXED. Everything stacks upward.
-            VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: 24) {
-                // Poster bottom-aligned with info so poster bottom is fixed
-                HStack(alignment: .bottom, spacing: 36) {
+            // tvOS: title/poster pinned at y=300 from banner top, rest flows down.
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(alignment: .top, spacing: 36) {
                     // Poster — fixed size, always same position
                     AsyncImage(url: movie.posterURL) { phase in
                         switch phase {
@@ -718,11 +714,10 @@ struct FeaturedMovieBanner: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
-                } // end inner VStack
-                .padding(.horizontal, 80)
-                .padding(.bottom, 10)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 80)
+            .padding(.top, 300)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
             // banner frame — no Spacer() needed, so content never shifts per-movie.
