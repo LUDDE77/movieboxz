@@ -333,7 +333,7 @@ struct SeriesDetailView: View {
                             .cornerRadius(10)
                     }
                     #if os(tvOS)
-                    .buttonStyle(.card)
+                    .buttonStyle(FocusBorderButtonStyle(cornerRadius: 10))
                     #else
                     .buttonStyle(.plain)
                     #endif
@@ -363,7 +363,7 @@ struct SeriesDetailView: View {
         } label: {
             episodeCardContent(episode: episode)
         }
-        .buttonStyle(.card)
+        .buttonStyle(FocusBorderButtonStyle())
         .frame(width: episodeCardWidth)
         .accessibilityLabel(episodeLabel(episode))
         #else

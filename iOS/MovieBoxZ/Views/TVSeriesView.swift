@@ -100,7 +100,7 @@ struct TVSeriesView: View {
         } label: {
             seriesCardContent(series)
         }
-        .buttonStyle(.card)
+        .buttonStyle(FocusBorderButtonStyle())
         .accessibilityLabel(seriesAccessibilityLabel(series))
         .accessibilityHint("Double tap to browse episodes")
         #else

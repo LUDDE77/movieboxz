@@ -955,15 +955,9 @@ struct MovieCard: View {
         } label: {
             cardContent
         }
-        .buttonStyle(.card)
-        .scaleEffect(isFocused ? 1.12 : 1.0)  // Increased from 1.08
-        .shadow(
-            color: .black.opacity(isFocused ? 0.5 : 0.2),
-            radius: isFocused ? 40 : 10,
-            y: isFocused ? 15 : 5
-        )
-        .brightness(isFocused ? 0.1 : 0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
+        .buttonStyle(FocusBorderButtonStyle())
+        .brightness(isFocused ? 0.08 : 0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
         .accessibilityLabel("\(movie.displayTitle). Released in \(movie.formattedReleaseYear ?? "Unknown"). Rating \(movie.formattedRating)")
         .accessibilityHint("Double tap to view movie details")
         .contextMenu {
