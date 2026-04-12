@@ -556,156 +556,166 @@ struct FeaturedMovieBanner: View {
 
             // Content
             #if os(tvOS)
-            // tvOS: poster on the left + info column on the right
-            HStack(alignment: .bottom, spacing: 36) {
-                // Movie poster
-                AsyncImage(url: movie.posterURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(2/3, contentMode: .fill)
-                    default:
-                        Rectangle().fill(Color.gray.opacity(0.3))
-                    }
-                }
-                .frame(width: 180, height: 270)
-                .cornerRadius(14)
-                .shadow(color: .black.opacity(0.6), radius: 20, y: 10)
-                .clipped()
-
-                // Info column
-                VStack(alignment: .leading, spacing: 14) {
-                    Text(movie.displayTitle)
-                        .font(.system(size: heroTitleSize, weight: .black))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .shadow(radius: 10)
-
-                    // Genre chips
-                    if let genres = movie.genres, !genres.isEmpty {
-                        HStack(spacing: 8) {
-                            ForEach(genres.prefix(3), id: \.id) { genre in
-                                Text(genre.name)
-                                    .font(.system(size: bodyTextSize - 10, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.9))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.white.opacity(0.15))
-                                    .cornerRadius(5)
-                            }
+            // tvOS: content pinned from the TOP so title/poster position never shifts.
+            // Dots are separate and centered below the content row.
+            VStack(alignment: .leading, spacing: 24) {
+                // Poster + info row — top-aligned so both anchor at the same y
+                HStack(alignment: .top, spacing: 36) {
+                    // Poster — fixed size, always same position
+                    AsyncImage(url: movie.posterURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(2/3, contentMode: .fill)
+                        default:
+                            Rectangle().fill(Color.gray.opacity(0.3))
                         }
                     }
+                    .frame(width: 180, height: 270)
+                    .cornerRadius(14)
+                    .shadow(color: .black.opacity(0.6), radius: 20, y: 10)
+                    .clipped()
+                    // Crossfade poster when movie changes
+                    .id(currentIndex)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.6), value: currentIndex)
 
-                    // Metadata badges
-                    HStack(spacing: 8) {
-                        if let year = movie.formattedReleaseYear {
-                            Text(year)
-                                .font(.system(size: bodyTextSize - 8, weight: .semibold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.2))
-                                .cornerRadius(6)
-                        }
-                        if let rating = movie.voteAverage ?? movie.imdbRating {
-                            HStack(spacing: 4) {
-                                Image(systemName: "star.fill").foregroundColor(.yellow)
-                                Text(String(format: "%.1f", rating))
-                            }
-                            .font(.system(size: bodyTextSize - 8, weight: .semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(6)
-                        }
-                        if let runtime = movie.runtimeMinutes, runtime > 0 {
-                            Text(movie.formattedRuntime)
-                                .font(.system(size: bodyTextSize - 8, weight: .semibold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.2))
-                                .cornerRadius(6)
-                        }
-                    }
-
-                    if let overview = movie.description {
-                        Text(overview)
-                            .font(.system(size: bodyTextSize))
-                            .foregroundColor(.white.opacity(0.85))
-                            .lineLimit(2)
-                            .shadow(radius: 5)
-                    }
-
-                    // Action buttons
-                    HStack(spacing: 20) {
-                        Button {
-                            onPlayVideo(movie.youtubeVideoId)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "play.rectangle.fill").foregroundColor(.red)
-                                Text("Watch on YouTube")
-                            }
-                            .font(.system(size: bodyTextSize, weight: .semibold))
+                    // Info column
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(movie.displayTitle)
+                            .font(.system(size: heroTitleSize, weight: .black))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 28)
-                            .padding(.vertical, 14)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(10)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
-                        .accessibilityHint("Opens YouTube app to play the movie")
-
-                        Button {
-                            LibraryManager.shared.toggleFavorite(movie.id)
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: movie.isFavorite ? "heart.fill" : "heart")
-                                    .foregroundColor(movie.isFavorite ? .red : .white)
-                                Text(movie.isFavorite ? "In My List" : "My List")
-                            }
-                            .font(.system(size: bodyTextSize, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 28)
-                            .padding(.vertical, 14)
-                            .background(Color.white.opacity(0.15))
-                            .cornerRadius(10)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(movie.isFavorite ? "Remove from My List" : "Add to My List")
-                    }
-
-                    // Channel attribution — below buttons
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.circle.fill")
-                            .foregroundColor(.red)
-                            .font(.system(size: bodyTextSize - 8))
-                        Text(movie.channelTitle)
-                            .font(.system(size: bodyTextSize - 8))
-                            .foregroundColor(.white.opacity(0.65))
                             .lineLimit(1)
-                    }
+                            .shadow(radius: 10)
 
-                    // Dot indicators for carousel
-                    if totalMovies > 1 {
-                        HStack(spacing: 8) {
-                            ForEach(0..<totalMovies, id: \.self) { idx in
-                                Button {
-                                    onSelectIndex?(idx)
-                                } label: {
-                                    Circle()
-                                        .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
-                                        .frame(width: idx == currentIndex ? 12 : 8, height: idx == currentIndex ? 12 : 8)
+                        // Genre chips
+                        if let genres = movie.genres, !genres.isEmpty {
+                            HStack(spacing: 8) {
+                                ForEach(genres.prefix(3), id: \.id) { genre in
+                                    Text(genre.name)
+                                        .font(.system(size: bodyTextSize - 10, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.9))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.white.opacity(0.15))
+                                        .cornerRadius(5)
                                 }
-                                .buttonStyle(.plain)
-                                .animation(.easeInOut(duration: 0.2), value: currentIndex)
                             }
                         }
+
+                        // Metadata badges
+                        HStack(spacing: 8) {
+                            if let year = movie.formattedReleaseYear {
+                                Text(year)
+                                    .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(6)
+                            }
+                            if let rating = movie.voteAverage ?? movie.imdbRating {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "star.fill").foregroundColor(.yellow)
+                                    Text(String(format: "%.1f", rating))
+                                }
+                                .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(6)
+                            }
+                            if let runtime = movie.runtimeMinutes, runtime > 0 {
+                                Text(movie.formattedRuntime)
+                                    .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(6)
+                            }
+                        }
+
+                        if let overview = movie.description {
+                            Text(overview)
+                                .font(.system(size: bodyTextSize))
+                                .foregroundColor(.white.opacity(0.85))
+                                .lineLimit(2)
+                                .shadow(radius: 5)
+                        }
+
+                        // Action buttons
+                        HStack(spacing: 20) {
+                            Button {
+                                onPlayVideo(movie.youtubeVideoId)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "play.rectangle.fill").foregroundColor(.red)
+                                    Text("Watch on YouTube")
+                                }
+                                .font(.system(size: bodyTextSize, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 14)
+                                .background(Color.black.opacity(0.6))
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
+                            .accessibilityHint("Opens YouTube app to play the movie")
+
+                            Button {
+                                LibraryManager.shared.toggleFavorite(movie.id)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: movie.isFavorite ? "heart.fill" : "heart")
+                                        .foregroundColor(movie.isFavorite ? .red : .white)
+                                    Text(movie.isFavorite ? "In My List" : "My List")
+                                }
+                                .font(.system(size: bodyTextSize, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 14)
+                                .background(Color.white.opacity(0.15))
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(movie.isFavorite ? "Remove from My List" : "Add to My List")
+                        }
+
+                        // Channel attribution
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.system(size: bodyTextSize - 8))
+                            Text(movie.channelTitle)
+                                .font(.system(size: bodyTextSize - 8))
+                                .foregroundColor(.white.opacity(0.65))
+                                .lineLimit(1)
+                        }
                     }
+
+                    Spacer()
                 }
 
-                Spacer()
+                // Dots — outside the info column, centered across full width
+                if totalMovies > 1 {
+                    HStack(spacing: 10) {
+                        ForEach(0..<totalMovies, id: \.self) { idx in
+                            Button {
+                                onSelectIndex?(idx)
+                            } label: {
+                                Circle()
+                                    .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
+                                    .frame(width: idx == currentIndex ? 14 : 10,
+                                           height: idx == currentIndex ? 14 : 10)
+                                    .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
             }
             .padding(.horizontal, 80)
-            .padding(.bottom, 230) // +10px up from previous 220
+            .padding(.top, 280)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
             // banner frame — no Spacer() needed, so content never shifts per-movie.
