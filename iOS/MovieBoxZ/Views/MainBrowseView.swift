@@ -716,7 +716,7 @@ struct FeaturedMovieBanner: View {
                 }
             }
             .padding(.horizontal, 80)
-            .padding(.top, 550)
+            .padding(.top, 500)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
