@@ -289,22 +289,22 @@ class MovieService: ObservableObject {
     }
 
     func fetchSeriesList(page: Int = 1, limit: Int = 50) async throws -> [TVSeries] {
-        var components = URLComponents(string: "\(baseURL)/series")!
-        components.queryItems = [
-            URLQueryItem(name: "page", value: "\(page)"),
-            URLQueryItem(name: "limit", value: "\(limit)")
-        ]
-        let (data, _) = try await URLSession.shared.data(from: components.url!)
-        struct Response: Codable { let series: [TVSeries] }
-        let response = try JSONDecoder().decode(Response.self, from: data)
-        return response.series
+        struct Inner: Codable { let series: [TVSeries] }
+        struct Response: Codable { let success: Bool; let data: Inner }
+        let response = try await performRequest(
+            endpoint: "/series?page=\(page)&limit=\(limit)",
+            type: Response.self
+        )
+        return response.data.series
     }
 
     func fetchSeriesEpisodes(seriesId: String) async throws -> SeriesDetailResponse {
-        return try await performRequest(
+        struct Response: Codable { let success: Bool; let data: SeriesDetailResponse }
+        let response = try await performRequest(
             endpoint: "/series/\(seriesId)/episodes",
-            type: SeriesDetailResponse.self
+            type: Response.self
         )
+        return response.data
     }
 }
 
