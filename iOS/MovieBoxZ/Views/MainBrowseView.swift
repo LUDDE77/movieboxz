@@ -23,6 +23,10 @@ struct MainBrowseView: View {
     @State private var selectedMovie: Movie?
     @State private var selectedCategory: CategoryType?
 
+    // Hero carousel state
+    @State private var currentHeroIndex: Int = 0
+    @State private var heroTimer: Timer?
+
     // Platform-specific font sizes
     #if os(tvOS)
     private let heroTitleSize: CGFloat = 72
@@ -31,15 +35,48 @@ struct MainBrowseView: View {
     private let cardMetadataSize: CGFloat = 25
     private let bodyTextSize: CGFloat = 29
     #else
-    private let heroTitleSize: CGFloat = 56
-    private let sectionHeaderSize: CGFloat = 24
-    private let cardTitleSize: CGFloat = 18
-    private let cardMetadataSize: CGFloat = 14
-    private let bodyTextSize: CGFloat = 18
+    private let heroTitleSize: CGFloat = 28
+    private let sectionHeaderSize: CGFloat = 20
+    private let cardTitleSize: CGFloat = 14
+    private let cardMetadataSize: CGFloat = 12
+    private let bodyTextSize: CGFloat = 14
     #endif
 
     var body: some View {
         ZStack {
+            // Full-screen black base — fills safe areas edge to edge
+            Color.black.ignoresSafeArea()
+
+            // iOS: Backdrop placed at ZStack level so it fills the full screen frame
+            // offered by ContentView's GeometryReader layout.
+            #if os(iOS)
+            if !featuredMovies.isEmpty, !isLoading {
+                let heroMovie = featuredMovies[min(currentHeroIndex, featuredMovies.count - 1)]
+                AsyncImage(url: heroMovie.backdropURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        Color.clear
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: .clear, location: 0.4),
+                        .init(color: Color.black.opacity(0.3), location: 0.6),
+                        .init(color: Color.black.opacity(0.7), location: 0.8),
+                        .init(color: Color.black, location: 1.0)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            #endif
+
             if isLoading && featuredMovies.isEmpty {
                 // Show skeleton screen on initial load
                 LoadingSkeletonView()
@@ -49,11 +86,20 @@ struct MainBrowseView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
                         // HERO SECTION (scrolls away naturally)
-                        if let featuredMovie = featuredMovies.first {
+                        if !featuredMovies.isEmpty {
+                            let heroMovie = featuredMovies[min(currentHeroIndex, featuredMovies.count - 1)]
                             FeaturedMovieBanner(
-                                movie: featuredMovie,
+                                movie: heroMovie,
                                 heroTitleSize: heroTitleSize,
                                 bodyTextSize: bodyTextSize,
+                                totalMovies: featuredMovies.count,
+                                currentIndex: currentHeroIndex,
+                                onSelectIndex: { idx in
+                                    withAnimation(.easeInOut(duration: 0.4)) {
+                                        currentHeroIndex = idx
+                                    }
+                                    startHeroTimer()
+                                },
                                 onPlayVideo: playVideo
                             )
                             .clipped()
@@ -172,137 +218,142 @@ struct MainBrowseView: View {
                 .background(Color.black)
                 .ignoresSafeArea()
                 #else
-                // iOS: Original scrolling layout
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        // Featured Movie Banner
-                        if let featuredMovie = featuredMovies.first {
-                            FeaturedMovieBanner(
-                                movie: featuredMovie,
-                                heroTitleSize: heroTitleSize,
-                                bodyTextSize: bodyTextSize,
-                                onPlayVideo: playVideo
-                            )
-                            .frame(height: 400)
-                        }
-
-                        // Movie Categories
-                        VStack(spacing: 50) {
-                            if !trendingMovies.isEmpty {
-                                MovieRowView(
-                                    title: "Trending Now",
-                                    movies: trendingMovies,
-                                    sectionHeaderSize: sectionHeaderSize,
-                                    cardTitleSize: cardTitleSize,
-                                    cardMetadataSize: cardMetadataSize,
-                                    onPlayVideo: playVideo,
-                                    onSeeAll: {
-                                        selectedCategory = .trending
-                                    }
+                // iOS: Landscape-optimized layout.
+                // ContentView's GeometryReader passes the full physical screen frame here,
+                // so screenGeo.size.height is the true screen height.
+                GeometryReader { screenGeo in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            // Featured Movie Banner — fills full viewport height (cinematic landscape hero)
+                            if !featuredMovies.isEmpty {
+                                let heroMovie = featuredMovies[min(currentHeroIndex, featuredMovies.count - 1)]
+                                FeaturedMovieBanner(
+                                    movie: heroMovie,
+                                    heroTitleSize: heroTitleSize,
+                                    bodyTextSize: bodyTextSize,
+                                    bannerHeight: screenGeo.size.height,
+                                    totalMovies: featuredMovies.count,
+                                    currentIndex: currentHeroIndex,
+                                    onSelectIndex: { idx in
+                                        withAnimation(.easeInOut(duration: 0.4)) {
+                                            currentHeroIndex = idx
+                                        }
+                                        startHeroTimer() // reset timer on manual tap
+                                    },
+                                    onPlayVideo: playVideo
                                 )
+                                .frame(height: screenGeo.size.height)
                             }
 
-                            if !popularMovies.isEmpty {
-                                MovieRowView(
-                                    title: "Popular Movies",
-                                    movies: popularMovies,
-                                    sectionHeaderSize: sectionHeaderSize,
-                                    cardTitleSize: cardTitleSize,
-                                    cardMetadataSize: cardMetadataSize,
-                                    onPlayVideo: playVideo,
-                                    onSeeAll: {
-                                        selectedCategory = .popular
-                                    }
-                                )
-                            }
-
-                            // Dynamic Genre Categories
-                            ForEach(genreCategories, id: \.genre.id) { category in
-                                if !category.movies.isEmpty {
+                            // Movie Categories — solid black background so the
+                            // fixed backdrop above doesn't show behind the carousels
+                            VStack(spacing: 50) {
+                                if !trendingMovies.isEmpty {
                                     MovieRowView(
-                                        title: category.genre.name,
-                                        movies: category.movies,
+                                        title: "Trending Now",
+                                        movies: trendingMovies,
                                         sectionHeaderSize: sectionHeaderSize,
                                         cardTitleSize: cardTitleSize,
                                         cardMetadataSize: cardMetadataSize,
                                         onPlayVideo: playVideo,
-                                        onSeeAll: {
-                                            selectedCategory = .genre(id: category.genre.id, name: category.genre.name)
-                                        }
+                                        onSeeAll: { selectedCategory = .trending }
+                                    )
+                                }
+
+                                if !popularMovies.isEmpty {
+                                    MovieRowView(
+                                        title: "Popular Movies",
+                                        movies: popularMovies,
+                                        sectionHeaderSize: sectionHeaderSize,
+                                        cardTitleSize: cardTitleSize,
+                                        cardMetadataSize: cardMetadataSize,
+                                        onPlayVideo: playVideo,
+                                        onSeeAll: { selectedCategory = .popular }
+                                    )
+                                }
+
+                                ForEach(genreCategories, id: \.genre.id) { category in
+                                    if !category.movies.isEmpty {
+                                        MovieRowView(
+                                            title: category.genre.name,
+                                            movies: category.movies,
+                                            sectionHeaderSize: sectionHeaderSize,
+                                            cardTitleSize: cardTitleSize,
+                                            cardMetadataSize: cardMetadataSize,
+                                            onPlayVideo: playVideo,
+                                            onSeeAll: { selectedCategory = .genre(id: category.genre.id, name: category.genre.name) }
+                                        )
+                                    }
+                                }
+
+                                if !uncategorizedMovies.isEmpty {
+                                    MovieRowView(
+                                        title: "Other",
+                                        movies: uncategorizedMovies,
+                                        sectionHeaderSize: sectionHeaderSize,
+                                        cardTitleSize: cardTitleSize,
+                                        cardMetadataSize: cardMetadataSize,
+                                        onPlayVideo: playVideo,
+                                        onSeeAll: { selectedCategory = .uncategorized }
+                                    )
+                                }
+
+                                if !recentMovies.isEmpty {
+                                    MovieRowView(
+                                        title: "Recently Added",
+                                        movies: recentMovies,
+                                        sectionHeaderSize: sectionHeaderSize,
+                                        cardTitleSize: cardTitleSize,
+                                        cardMetadataSize: cardMetadataSize,
+                                        onPlayVideo: playVideo,
+                                        onSeeAll: { selectedCategory = .recent }
+                                    )
+                                }
+
+                                if !allMovies.isEmpty {
+                                    MovieRowView(
+                                        title: "All Movies",
+                                        movies: allMovies,
+                                        sectionHeaderSize: sectionHeaderSize,
+                                        cardTitleSize: cardTitleSize,
+                                        cardMetadataSize: cardMetadataSize,
+                                        onPlayVideo: playVideo,
+                                        onSeeAll: { selectedCategory = .allMovies }
+                                    )
+                                }
+
+                                if !tvSeries.isEmpty {
+                                    MovieRowView(
+                                        title: "TV Series",
+                                        movies: tvSeries,
+                                        sectionHeaderSize: sectionHeaderSize,
+                                        cardTitleSize: cardTitleSize,
+                                        cardMetadataSize: cardMetadataSize,
+                                        onPlayVideo: playVideo,
+                                        onSeeAll: { selectedCategory = .tvSeries }
                                     )
                                 }
                             }
-
-                            // Uncategorized Movies
-                            if !uncategorizedMovies.isEmpty {
-                                MovieRowView(
-                                    title: "Other",
-                                    movies: uncategorizedMovies,
-                                    sectionHeaderSize: sectionHeaderSize,
-                                    cardTitleSize: cardTitleSize,
-                                    cardMetadataSize: cardMetadataSize,
-                                    onPlayVideo: playVideo,
-                                    onSeeAll: {
-                                        selectedCategory = .uncategorized
-                                    }
-                                )
-                            }
-
-                            if !recentMovies.isEmpty {
-                                MovieRowView(
-                                    title: "Recently Added",
-                                    movies: recentMovies,
-                                    sectionHeaderSize: sectionHeaderSize,
-                                    cardTitleSize: cardTitleSize,
-                                    cardMetadataSize: cardMetadataSize,
-                                    onPlayVideo: playVideo,
-                                    onSeeAll: {
-                                        selectedCategory = .recent
-                                    }
-                                )
-                            }
-
-                            if !allMovies.isEmpty {
-                                MovieRowView(
-                                    title: "All Movies",
-                                    movies: allMovies,
-                                    sectionHeaderSize: sectionHeaderSize,
-                                    cardTitleSize: cardTitleSize,
-                                    cardMetadataSize: cardMetadataSize,
-                                    onPlayVideo: playVideo,
-                                    onSeeAll: {
-                                        selectedCategory = .allMovies
-                                    }
-                                )
-                            }
-
-                            if !tvSeries.isEmpty {
-                                MovieRowView(
-                                    title: "TV Series",
-                                    movies: tvSeries,
-                                    sectionHeaderSize: sectionHeaderSize,
-                                    cardTitleSize: cardTitleSize,
-                                    cardMetadataSize: cardMetadataSize,
-                                    onPlayVideo: playVideo,
-                                    onSeeAll: {
-                                        selectedCategory = .tvSeries
-                                    }
-                                )
-                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 30)
+                            .padding(.bottom, 50)
+                            .background(Color.black)
                         }
-                        .padding(.top, 30)
-                        .padding(.bottom, 50)
                     }
+                    .background(.clear)
                 }
-                .background(Color.black)
-                .ignoresSafeArea()
                 #endif
             }
         }
         .onAppear {
             if featuredMovies.isEmpty {
                 loadMovies()
+            } else {
+                startHeroTimer()
             }
+        }
+        .onDisappear {
+            stopHeroTimer()
         }
         .sheet(item: $selectedMovie) { movie in
             MovieDetailView(movie: movie)
@@ -320,20 +371,41 @@ struct MainBrowseView: View {
         }
     }
 
+    private func startHeroTimer() {
+        stopHeroTimer()
+        guard featuredMovies.count > 1 else { return }
+        heroTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 0.6)) {
+                currentHeroIndex = (currentHeroIndex + 1) % featuredMovies.count
+            }
+        }
+    }
+
+    private func stopHeroTimer() {
+        heroTimer?.invalidate()
+        heroTimer = nil
+    }
+
     private func loadMovies() {
         Task {
             do {
                 isLoading = true
                 errorMessage = nil
 
-                // Load all recent movies
-                let allMovies = try await movieService.fetchRecentMovies(limit: 50)
+                // Load featured movies (admin-curated, up to 5)
+                async let featuredResult = movieService.fetchFeaturedMovies()
+                // Load popular and recent in parallel
+                async let popularResult = movieService.fetchPopularMovies(page: 1, limit: 10)
+                async let recentResult = movieService.fetchRecentMovies(page: 1, limit: 50)
 
-                // Populate core categories
-                featuredMovies = Array(allMovies.prefix(1))
+                let (fetchedFeatured, fetchedPopular, allMovies) = try await (featuredResult, popularResult, recentResult)
+
+                featuredMovies = fetchedFeatured.isEmpty ? Array(allMovies.prefix(3)) : fetchedFeatured
+                popularMovies = fetchedPopular
                 trendingMovies = allMovies.filter { $0.trending }
-                popularMovies = Array(allMovies.prefix(10))
                 recentMovies = allMovies
+                currentHeroIndex = 0
+                startHeroTimer()
 
                 // Fetch all genres from backend
                 let genres = try await movieService.fetchAllGenres()
@@ -438,152 +510,336 @@ struct FeaturedMovieBanner: View {
     let movie: Movie
     let heroTitleSize: CGFloat
     let bodyTextSize: CGFloat
+    var bannerHeight: CGFloat = 650
+    var totalMovies: Int = 1
+    var currentIndex: Int = 0
+    var onSelectIndex: ((Int) -> Void)? = nil
     let onPlayVideo: (String) -> Void
 
-    private let bannerHeight: CGFloat = 650
-
     var body: some View {
-        GeometryReader { geo in
-            let bannerWidth = geo.size.width
-            ZStack {
-                // Background Image - fills available width
-                AsyncImage(url: movie.backdropURL) { phase in
+        ZStack(alignment: .bottom) {
+            #if os(tvOS)
+            // tvOS: backdrop and gradient live inside the banner
+            AsyncImage(url: movie.backdropURL) { phase in
+                switch phase {
+                case .empty:
+                    Rectangle().fill(Color.gray.opacity(0.2)).shimmer()
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                case .failure:
+                    Rectangle().fill(Color.gray.opacity(0.3))
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: .clear, location: 0.0),
+                    .init(color: .clear, location: 0.25),
+                    .init(color: Color.black.opacity(0.2), location: 0.5),
+                    .init(color: Color.black.opacity(0.6), location: 0.72),
+                    .init(color: Color.black.opacity(0.85), location: 0.88),
+                    .init(color: Color.black, location: 1.0)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #endif
+            // iOS: backdrop and gradient are rendered at the parent ZStack level
+            // in MainBrowseView, where .ignoresSafeArea() is guaranteed to work.
+            // This view is transparent — just the content overlay.
+
+            // Content
+            #if os(tvOS)
+            // tvOS: poster on the left + info column on the right
+            HStack(alignment: .bottom, spacing: 36) {
+                // Movie poster
+                AsyncImage(url: movie.posterURL) { phase in
                     switch phase {
-                    case .empty:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .shimmer()
                     case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: bannerWidth, height: bannerHeight)
-                            .clipped()
-                    case .failure:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
-                    @unknown default:
-                        EmptyView()
+                        image.resizable().aspectRatio(2/3, contentMode: .fill)
+                    default:
+                        Rectangle().fill(Color.gray.opacity(0.3))
                     }
                 }
-                .frame(width: bannerWidth, height: bannerHeight)
-                .position(x: bannerWidth / 2, y: bannerHeight / 2)
+                .frame(width: 180, height: 270)
+                .cornerRadius(14)
+                .shadow(color: .black.opacity(0.6), radius: 20, y: 10)
+                .clipped()
 
-                // Gradient Overlay (stronger fade in bottom 40%)
-                LinearGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: .clear, location: 0.0),
-                        .init(color: .clear, location: 0.4),
-                        .init(color: Color.black.opacity(0.3), location: 0.6),
-                        .init(color: Color.black.opacity(0.7), location: 0.8),
-                        .init(color: Color.black, location: 1.0)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(width: bannerWidth, height: bannerHeight)
+                // Info column
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(movie.displayTitle)
+                        .font(.system(size: heroTitleSize, weight: .black))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .shadow(radius: 10)
 
-            // Content - absolute position at bottom (independent of backdrop)
-            VStack {
-                Spacer()
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Title
-                        Text(movie.displayTitle)
-                            .font(.system(size: heroTitleSize, weight: .black))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .shadow(radius: 10)
-
-                        // Metadata badges
+                    // Genre chips
+                    if let genres = movie.genres, !genres.isEmpty {
                         HStack(spacing: 8) {
-                            if let year = movie.formattedReleaseYear {
-                                Text(year)
-                                    .font(.system(size: bodyTextSize - 8, weight: .semibold))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color.white.opacity(0.2))
-                                    .cornerRadius(6)
+                            ForEach(genres.prefix(3), id: \.id) { genre in
+                                Text(genre.name)
+                                    .font(.system(size: bodyTextSize - 10, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.9))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.15))
+                                    .cornerRadius(5)
                             }
+                        }
+                    }
 
-                            // Display rating: prefer TMDB, fallback to IMDB
-                            if let rating = movie.voteAverage ?? movie.imdbRating {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "star.fill")
-                                        .foregroundColor(.yellow)
-                                    Text(String(format: "%.1f", rating))
-                                }
+                    // Metadata badges
+                    HStack(spacing: 8) {
+                        if let year = movie.formattedReleaseYear {
+                            Text(year)
                                 .font(.system(size: bodyTextSize - 8, weight: .semibold))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
                                 .background(Color.white.opacity(0.2))
                                 .cornerRadius(6)
+                        }
+                        if let rating = movie.voteAverage ?? movie.imdbRating {
+                            HStack(spacing: 4) {
+                                Image(systemName: "star.fill").foregroundColor(.yellow)
+                                Text(String(format: "%.1f", rating))
+                            }
+                            .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(6)
+                        }
+                        if let runtime = movie.runtimeMinutes, runtime > 0 {
+                            Text(movie.formattedRuntime)
+                                .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(6)
+                        }
+                    }
+
+                    if let overview = movie.description {
+                        Text(overview)
+                            .font(.system(size: bodyTextSize))
+                            .foregroundColor(.white.opacity(0.85))
+                            .lineLimit(2)
+                            .shadow(radius: 5)
+                    }
+
+                    // Action buttons
+                    HStack(spacing: 20) {
+                        Button {
+                            onPlayVideo(movie.youtubeVideoId)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "play.rectangle.fill").foregroundColor(.red)
+                                Text("Watch on YouTube")
+                            }
+                            .font(.system(size: bodyTextSize, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 28)
+                            .padding(.vertical, 14)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
+                        .accessibilityHint("Opens YouTube app to play the movie")
+
+                        Button {
+                            LibraryManager.shared.toggleFavorite(movie.id)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: movie.isFavorite ? "heart.fill" : "heart")
+                                    .foregroundColor(movie.isFavorite ? .red : .white)
+                                Text(movie.isFavorite ? "In My List" : "My List")
+                            }
+                            .font(.system(size: bodyTextSize, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 28)
+                            .padding(.vertical, 14)
+                            .background(Color.white.opacity(0.15))
+                            .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(movie.isFavorite ? "Remove from My List" : "Add to My List")
+                    }
+
+                    // Channel attribution — below buttons
+                    HStack(spacing: 6) {
+                        Image(systemName: "play.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.system(size: bodyTextSize - 8))
+                        Text(movie.channelTitle)
+                            .font(.system(size: bodyTextSize - 8))
+                            .foregroundColor(.white.opacity(0.65))
+                            .lineLimit(1)
+                    }
+
+                    // Dot indicators for carousel
+                    if totalMovies > 1 {
+                        HStack(spacing: 8) {
+                            ForEach(0..<totalMovies, id: \.self) { idx in
+                                Button {
+                                    onSelectIndex?(idx)
+                                } label: {
+                                    Circle()
+                                        .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
+                                        .frame(width: idx == currentIndex ? 12 : 8, height: idx == currentIndex ? 12 : 8)
+                                }
+                                .buttonStyle(.plain)
+                                .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                            }
+                        }
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 80)
+            .padding(.bottom, 230) // +10px up from previous 220
+            #else
+            // iOS: landscape hero — content column + dot indicator
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer()
+
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Title
+                        Text(movie.displayTitle)
+                            .font(.system(size: heroTitleSize, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                            .shadow(radius: 10)
+
+                        // Metadata badges: year, rating, runtime
+                        HStack(spacing: 8) {
+                            if let year = movie.formattedReleaseYear {
+                                Text(year)
+                                    .font(.system(size: bodyTextSize - 4, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(6)
+                            }
+                            if let rating = movie.voteAverage ?? movie.imdbRating {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "star.fill").foregroundColor(.yellow)
+                                    Text(String(format: "%.1f", rating))
+                                }
+                                .font(.system(size: bodyTextSize - 4, weight: .semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(6)
+                            }
+                            if let runtime = movie.runtimeMinutes, runtime > 0 {
+                                Text(movie.formattedRuntime)
+                                    .font(.system(size: bodyTextSize - 4, weight: .semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(6)
                             }
                         }
 
-                        // Description (2 lines maximum)
+                        // Description
                         if let overview = movie.description {
                             Text(overview)
                                 .font(.system(size: bodyTextSize))
                                 .foregroundColor(.white.opacity(0.9))
                                 .lineLimit(2)
                                 .shadow(radius: 5)
-                                .padding(.vertical, 4)
                         }
 
-                        HStack(spacing: 15) {
-                            // Play button with YouTube branding
+                        // Action buttons row
+                        HStack(spacing: 12) {
+                            // Watch button
                             Button {
                                 onPlayVideo(movie.youtubeVideoId)
                             } label: {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "play.rectangle.fill")
-                                        .foregroundColor(.red)
+                                    Image(systemName: "play.rectangle.fill").foregroundColor(.red)
                                     Text("Watch on YouTube")
                                 }
                                 .font(.system(size: bodyTextSize, weight: .semibold))
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 25)
-                                .padding(.vertical, 12)
-                                .background(Color.black.opacity(0.6))
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 11)
+                                .background(Color.black.opacity(0.65))
                                 .cornerRadius(8)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
-                            .accessibilityHint("Opens YouTube app to play the movie")
 
-                            Spacer()
-
-                            // YouTube channel attribution
-                            HStack(spacing: 6) {
-                                Image(systemName: "play.circle.fill")
-                                    .foregroundColor(.red)
-                                    .font(.system(size: bodyTextSize - 10))
-                                Text(movie.channelTitle)
-                                    .font(.system(size: bodyTextSize - 10))
-                                    .foregroundColor(.white.opacity(0.7))
+                            // Add to List button
+                            Button {
+                                LibraryManager.shared.toggleFavorite(movie.id)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: movie.isFavorite ? "heart.fill" : "heart")
+                                        .foregroundColor(movie.isFavorite ? .red : .white)
+                                    Text(movie.isFavorite ? "In My List" : "My List")
+                                }
+                                .font(.system(size: bodyTextSize, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 11)
+                                .background(Color.white.opacity(0.15))
+                                .cornerRadius(8)
                             }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.top, 4)
+
+                        // Channel attribution — below buttons, not beside them
+                        HStack(spacing: 5) {
+                            Image(systemName: "play.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.system(size: bodyTextSize - 2))
+                            Text(movie.channelTitle)
+                                .font(.system(size: bodyTextSize - 2))
+                                .foregroundColor(.white.opacity(0.65))
+                                .lineLimit(1)
                         }
                     }
+                    .frame(maxWidth: 520)
 
                     Spacer()
+
+                    // Dot indicators (right-aligned, vertically centered with content)
+                    if totalMovies > 1 {
+                        VStack(spacing: 6) {
+                            ForEach(0..<totalMovies, id: \.self) { idx in
+                                Button {
+                                    onSelectIndex?(idx)
+                                } label: {
+                                    Circle()
+                                        .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
+                                        .frame(width: idx == currentIndex ? 8 : 6, height: idx == currentIndex ? 8 : 6)
+                                }
+                                .buttonStyle(.plain)
+                                .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                            }
+                        }
+                        .padding(.bottom, 8)
+                    }
                 }
-                #if os(tvOS)
-                .frame(height: 200)
-                .padding(.horizontal, 80)
-                .padding(.bottom, 30)
-                #else
-                .padding(.horizontal, 16)
-                .padding(.bottom, 30)
-                #endif
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40) // +10px up from previous 30
             }
-            .frame(width: bannerWidth, height: bannerHeight)
-        }
-        .clipped()
-        .layoutPriority(1)
+            #endif
         }
         .frame(height: bannerHeight)
+        .clipped()
+        .layoutPriority(1)
     }
 }
 
@@ -655,10 +911,12 @@ struct MovieRowView: View {
                     }
                 }
                 .padding(.leading, 16)
+                .padding(.trailing, 16)
                 .padding(.vertical, 15) // Add vertical breathing room for focus animation
                 #endif
             }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

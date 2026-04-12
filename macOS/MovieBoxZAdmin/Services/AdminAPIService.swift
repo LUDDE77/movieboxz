@@ -529,6 +529,82 @@ class AdminAPIService: ObservableObject {
         return try await updateStagedMovie(movieId: movieId, updates: updates)
     }
 
+    // MARK: - TV Series Admin
+
+    func getTVContent() async throws -> [Movie] {
+        print("📺 [API] Fetching TV content...")
+        let response: APIResponse<TVContentData> = try await request(endpoint: "/tv-content")
+        print("✅ [API] TV content retrieved: \(response.data.movies.count) movies")
+        return response.data.movies
+    }
+
+    func getAdminTVSeriesList() async throws -> [TvSeries] {
+        print("📺 [API] Fetching TV series list...")
+        let response: APIResponse<TvSeriesListData> = try await request(endpoint: "/tv-series")
+        print("✅ [API] TV series retrieved: \(response.data.series.count) series")
+        return response.data.series
+    }
+
+    func createAdminTVSeries(title: String, imdbId: String?, description: String?) async throws -> TvSeries {
+        print("📺 [API] Creating TV series: \(title)")
+
+        struct Body: Codable {
+            let title: String
+            let imdb_id: String?
+            let description: String?
+        }
+
+        let body = Body(title: title, imdb_id: imdbId, description: description)
+        let response: APIResponse<TvSeries> = try await request(endpoint: "/tv-series", method: "POST", body: body)
+        print("✅ [API] TV series created: \(response.data.title)")
+        return response.data
+    }
+
+    func updateMovieTVInfo(
+        movieId: String,
+        seasonNumber: Int?,
+        episodeNumber: Int?,
+        seriesType: String?,
+        tvSeriesId: String?,
+        isTvShow: Bool?,
+        isTvSeries: Bool?
+    ) async throws -> Movie {
+        print("✏️ [API] Updating TV info for movie \(movieId)")
+
+        guard let url = URL(string: "\(baseURL)/api/admin/movies/\(movieId)/tv-info") else {
+            throw APIError.invalidURL
+        }
+
+        var requestBody: [String: Any] = [:]
+        if let v = seasonNumber { requestBody["season_number"] = v }
+        if let v = episodeNumber { requestBody["episode_number"] = v }
+        if let v = seriesType { requestBody["series_type"] = v }
+        if let v = tvSeriesId { requestBody["tv_series_id"] = v } else if tvSeriesId != nil { requestBody["tv_series_id"] = NSNull() }
+        if let v = isTvShow { requestBody["is_tv_show"] = v }
+        if let v = isTvSeries { requestBody["is_tv_series"] = v }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "PATCH"
+        req.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 { throw APIError.unauthorized }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        let apiResponse = try JSONDecoder().decode(APIResponse<Movie>.self, from: data)
+        print("✅ [API] Movie TV info updated successfully")
+        return apiResponse.data
+    }
+
     // MARK: - Channel Management
 
     func getChannelsWithPatterns() async throws -> ChannelsWithPatternsData {
@@ -993,6 +1069,37 @@ class AdminAPIService: ObservableObject {
         print("✅ [API] Production movie genres updated successfully")
 
         return response.data
+    }
+
+    // MARK: - Featured Movies Management
+
+    struct FeaturedListData: Codable {
+        let movies: [FeaturedMovieItem]
+        let count: Int
+    }
+
+    struct EmptyData: Codable {}
+
+    func getFeaturedMovies() async throws -> [FeaturedMovieItem] {
+        let response: APIResponse<FeaturedListData> = try await request(endpoint: "/featured")
+        return response.data.movies
+    }
+
+    func featureMovie(movieId: String) async throws {
+        struct EmptyResponse: Codable {}
+        let _: APIResponse<EmptyResponse> = try await request(endpoint: "/featured/\(movieId)", method: "POST")
+    }
+
+    func unfeatureMovie(movieId: String) async throws {
+        struct EmptyResponse: Codable {}
+        let _: APIResponse<EmptyResponse> = try await request(endpoint: "/featured/\(movieId)", method: "DELETE")
+    }
+
+    func reorderFeaturedMovies(movieIds: [String]) async throws {
+        struct ReorderBody: Codable { let movieIds: [String] }
+        struct EmptyResponse: Codable {}
+        let body = ReorderBody(movieIds: movieIds)
+        let _: APIResponse<EmptyResponse> = try await request(endpoint: "/featured/reorder", method: "PATCH", body: body)
     }
 
     /// Enrich a production movie with a manual IMDB ID

@@ -21,6 +21,8 @@
 		1D9038D42F38D24D005CB07C /* ChannelMovieDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D9038D32F38D24D005CB07C /* ChannelMovieDetailView.swift */; };
 		1A00000F000000000000004 /* SharedComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000010000000000000004 /* SharedComponents.swift */; };
 		1A000011000000000000005 /* ProductionMovieEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000012000000000000005 /* ProductionMovieEditView.swift */; };
+		1A000001000000000000006 /* TVSeriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000006 /* TVSeriesView.swift */; };
+		1A000001000000000000007 /* FeaturedMoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000007 /* FeaturedMoviesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +42,8 @@
 		1D9038D32F38D24D005CB07C /* ChannelMovieDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelMovieDetailView.swift; sourceTree = "<group>"; };
 		1A000010000000000000004 /* SharedComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedComponents.swift; sourceTree = "<group>"; };
 		1A000012000000000000005 /* ProductionMovieEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionMovieEditView.swift; sourceTree = "<group>"; };
+		1A000002000000000000006 /* TVSeriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSeriesView.swift; sourceTree = "<group>"; };
+		1A000002000000000000007 /* FeaturedMoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedMoviesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +99,8 @@
 				1A000006000000000000001 /* MoviesView.swift */,
 				1A000012000000000000005 /* ProductionMovieEditView.swift */,
 				1A000010000000000000004 /* SharedComponents.swift */,
+				1A000002000000000000006 /* TVSeriesView.swift */,
+				1A000002000000000000007 /* FeaturedMoviesView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -197,6 +203,8 @@
 				1A000009000000000000001 /* AdminAPIService.swift in Sources */,
 				1A000011000000000000005 /* ProductionMovieEditView.swift in Sources */,
 				1A00000F000000000000004 /* SharedComponents.swift in Sources */,
+				1A000001000000000000006 /* TVSeriesView.swift in Sources */,
+				1A000001000000000000007 /* FeaturedMoviesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

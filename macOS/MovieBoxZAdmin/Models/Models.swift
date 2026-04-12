@@ -62,11 +62,16 @@ struct Movie: Codable, Identifiable {
     let country: String?
     let isTvShow: Bool?
     let isTvSeries: Bool?
+    let tvSeriesId: String?
+    let seasonNumber: Int?
+    let episodeNumber: Int?
+    let seriesType: String?
     let isKidsContent: Bool?
     let posterPath: String?
     let backdropPath: String?
     let enrichmentSource: String?
     let featured: Bool?
+    let featuredOrder: Int?
     let trending: Bool?
     let staffPick: Bool?
     let addedAt: String?
@@ -104,11 +109,16 @@ struct Movie: Codable, Identifiable {
         case country
         case isTvShow = "is_tv_show"
         case isTvSeries = "is_tv_series"
+        case tvSeriesId = "tv_series_id"
+        case seasonNumber = "season_number"
+        case episodeNumber = "episode_number"
+        case seriesType = "series_type"
         case isKidsContent = "is_kids_content"
         case posterPath = "poster_path"
         case backdropPath = "backdrop_path"
         case enrichmentSource = "enrichment_source"
         case featured
+        case featuredOrder = "featured_order"
         case trending
         case staffPick = "staff_pick"
         case addedAt = "added_at"
@@ -127,6 +137,28 @@ struct Movie: Codable, Identifiable {
     var status: String { isAvailable ? "available" : "unavailable" }
     var youtubeURL: URL? {
         URL(string: "https://www.youtube.com/watch?v=\(youtubeVideoId)")
+    }
+}
+
+// MARK: - Featured Movie (lightweight, for featured carousel management)
+struct FeaturedMovieItem: Codable, Identifiable {
+    let id: String
+    let title: String
+    let posterPath: String?
+    let backdropPath: String?
+    let featuredOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case posterPath = "poster_path"
+        case backdropPath = "backdrop_path"
+        case featuredOrder = "featured_order"
+    }
+
+    var posterURL: URL? {
+        guard let path = posterPath else { return nil }
+        return URL(string: "https://image.tmdb.org/t/p/w342\(path)")
     }
 }
 
@@ -294,22 +326,40 @@ struct PatternTestData: Codable {
 struct TvSeries: Codable, Identifiable, Hashable {
     let id: String
     let title: String
+    let imdbId: String?
     let description: String?
     let posterPath: String?
+    let backdropPath: String?
+    let firstAirDate: String?
+    let numberOfSeasons: Int?
+    let numberOfEpisodes: Int?
+    let isAvailable: Bool?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case title
         case description
+        case imdbId = "imdb_id"
         case posterPath = "poster_path"
+        case backdropPath = "backdrop_path"
+        case firstAirDate = "first_air_date"
+        case numberOfSeasons = "number_of_seasons"
+        case numberOfEpisodes = "number_of_episodes"
+        case isAvailable = "is_available"
         case createdAt = "created_at"
     }
 }
 
 struct TvSeriesListData: Codable {
     let series: [TvSeries]
-    let pagination: Pagination
+    let total: Int
+}
+
+// Admin TV content response
+struct TVContentData: Codable {
+    let movies: [Movie]
+    let total: Int
 }
 
 // MARK: - Pagination

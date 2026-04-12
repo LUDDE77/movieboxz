@@ -18,6 +18,10 @@ struct AdminView: View {
                     .tag(2)
                 Label("Genres", systemImage: "theatermasks.fill")
                     .tag(3)
+                Label("TV Series", systemImage: "tv.and.mediabox")
+                    .tag(4)
+                Label("Featured", systemImage: "star.fill")
+                    .tag(5)
             }
             .navigationTitle("Admin")
             .frame(minWidth: 200)
@@ -32,6 +36,10 @@ struct AdminView: View {
                     ChannelManagementView()
                 case 3:
                     GenresView()
+                case 4:
+                    TVSeriesView()
+                case 5:
+                    FeaturedMoviesView()
                 default:
                     Text("Select a section")
                 }

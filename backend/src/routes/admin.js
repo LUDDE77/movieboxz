@@ -2399,4 +2399,130 @@ router.post('/movies/:id/enrich-from-data', async (req, res, next) => {
     }
 })
 
+// =============================================================================
+// FEATURED MOVIES MANAGEMENT (max 5, admin-controlled carousel)
+// =============================================================================
+
+// GET /api/admin/featured — list current featured movies in order
+router.get('/featured', async (req, res, next) => {
+    try {
+        const { data, error } = await supabase
+            .from('movies')
+            .select('id, title, poster_path, backdrop_path, release_date, imdb_rating, vote_average, featured_order')
+            .eq('featured', true)
+            .not('featured_order', 'is', null)
+            .order('featured_order', { ascending: true })
+
+        if (error) throw error
+
+        res.json({
+            success: true,
+            data: { movies: data || [], count: (data || []).length },
+            message: `${(data || []).length} featured movies`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// POST /api/admin/featured/:movieId — feature a movie (max 5)
+router.post('/featured/:movieId', async (req, res, next) => {
+    try {
+        const { movieId } = req.params
+
+        // Count current featured movies
+        const { data: current, error: countError } = await supabase
+            .from('movies')
+            .select('id, featured_order')
+            .eq('featured', true)
+            .not('featured_order', 'is', null)
+            .order('featured_order', { ascending: true })
+
+        if (countError) throw countError
+
+        if (current.length >= 5) {
+            return res.status(400).json({
+                success: false,
+                error: 'Max 5 featured movies allowed. Remove one first.'
+            })
+        }
+
+        const alreadyFeatured = current.find(m => m.id === movieId)
+        if (alreadyFeatured) {
+            return res.status(400).json({
+                success: false,
+                error: 'Movie is already featured'
+            })
+        }
+
+        // Assign next available slot (1–5)
+        const usedOrders = current.map(m => m.featured_order)
+        let nextOrder = 1
+        while (usedOrders.includes(nextOrder)) nextOrder++
+
+        const { data: updated, error: updateError } = await supabase
+            .from('movies')
+            .update({ featured: true, featured_order: nextOrder, updated_at: new Date().toISOString() })
+            .eq('id', movieId)
+            .select('id, title, featured_order')
+            .single()
+
+        if (updateError) throw updateError
+
+        res.json({
+            success: true,
+            data: updated,
+            message: `Movie featured at position ${nextOrder}`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// DELETE /api/admin/featured/:movieId — unfeature a movie
+router.delete('/featured/:movieId', async (req, res, next) => {
+    try {
+        const { movieId } = req.params
+
+        const { error } = await supabase
+            .from('movies')
+            .update({ featured: false, featured_order: null, updated_at: new Date().toISOString() })
+            .eq('id', movieId)
+
+        if (error) throw error
+
+        res.json({ success: true, message: 'Movie removed from featured' })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// PATCH /api/admin/featured/reorder — reorder featured movies
+// Body: { movieIds: ["id1","id2",...] } — array in desired order, position = index + 1
+router.patch('/featured/reorder', async (req, res, next) => {
+    try {
+        const { movieIds } = req.body
+
+        if (!Array.isArray(movieIds) || movieIds.length === 0 || movieIds.length > 5) {
+            return res.status(400).json({
+                success: false,
+                error: 'movieIds must be an array of 1–5 movie IDs'
+            })
+        }
+
+        await Promise.all(
+            movieIds.map((id, index) =>
+                supabase
+                    .from('movies')
+                    .update({ featured_order: index + 1, updated_at: new Date().toISOString() })
+                    .eq('id', id)
+            )
+        )
+
+        res.json({ success: true, message: 'Featured movies reordered' })
+    } catch (error) {
+        next(error)
+    }
+})
+
 export default router
