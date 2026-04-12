@@ -29,10 +29,10 @@ router.get('/tv-content', async (req, res, next) => {
                 series_type,
                 imdb_id,
                 channel_id,
-                channel_title,
                 is_available,
                 created_at,
-                updated_at
+                updated_at,
+                channels(id, title, thumbnail_url)
             `)
             .or('is_tv_show.eq.true,is_tv_series.eq.true')
             .order('title', { ascending: true })
@@ -41,11 +41,17 @@ router.get('/tv-content', async (req, res, next) => {
 
         logger.info(`TV content fetch: ${movies.length} movies`)
 
+        const flatMovies = movies.map(({ channels, ...m }) => ({
+            ...m,
+            channel_title: channels?.title || null,
+            channel_thumbnail: channels?.thumbnail_url || null
+        }))
+
         res.json({
             success: true,
             data: {
-                movies,
-                total: movies.length
+                movies: flatMovies,
+                total: flatMovies.length
             }
         })
     } catch (error) {
@@ -171,10 +177,10 @@ router.patch('/movies/:id/tv-info', async (req, res, next) => {
                 series_type,
                 imdb_id,
                 channel_id,
-                channel_title,
                 is_available,
                 created_at,
-                updated_at
+                updated_at,
+                channels(id, title, thumbnail_url)
             `)
             .single()
 
@@ -189,9 +195,14 @@ router.patch('/movies/:id/tv-info', async (req, res, next) => {
 
         logger.info(`Updated TV info for movie ${id}: ${JSON.stringify(updates)}`)
 
+        const { channels, ...movieData } = movie
         res.json({
             success: true,
-            data: movie
+            data: {
+                ...movieData,
+                channel_title: channels?.title || null,
+                channel_thumbnail: channels?.thumbnail_url || null
+            }
         })
     } catch (error) {
         next(error)
