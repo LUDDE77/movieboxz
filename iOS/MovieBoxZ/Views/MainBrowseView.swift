@@ -559,14 +559,13 @@ struct FeaturedMovieBanner: View {
 
             // Content
             #if os(tvOS)
-            // tvOS: VStack fills the full banner height. Color.clear spacer at top
-            // provides a FIXED absolute distance from banner top — content always
-            // starts at the same y regardless of info column height.
+            // tvOS: Spacer fills top, content anchored at bottom.
+            // Dots sit 10pt above banner bottom — FIXED. Everything stacks upward.
             VStack(alignment: .leading, spacing: 0) {
-                Color.clear.frame(height: 200) // fixed top anchor
+                Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 24) {
-                // Poster + info row — top-aligned so both anchor at the same y
-                HStack(alignment: .top, spacing: 36) {
+                // Poster bottom-aligned with info so poster bottom is fixed
+                HStack(alignment: .bottom, spacing: 36) {
                     // Poster — fixed size, always same position
                     AsyncImage(url: movie.posterURL) { phase in
                         switch phase {
@@ -721,7 +720,7 @@ struct FeaturedMovieBanner: View {
                 }
                 } // end inner VStack
                 .padding(.horizontal, 80)
-                Spacer(minLength: 0)
+                .padding(.bottom, 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             #else
