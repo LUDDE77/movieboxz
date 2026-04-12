@@ -559,9 +559,12 @@ struct FeaturedMovieBanner: View {
 
             // Content
             #if os(tvOS)
-            // tvOS: content pinned from the TOP so title/poster position never shifts.
-            // Dots are separate and centered below the content row.
-            VStack(alignment: .leading, spacing: 24) {
+            // tvOS: VStack fills the full banner height. Color.clear spacer at top
+            // provides a FIXED absolute distance from banner top — content always
+            // starts at the same y regardless of info column height.
+            VStack(alignment: .leading, spacing: 0) {
+                Color.clear.frame(height: 200) // fixed top anchor
+                VStack(alignment: .leading, spacing: 24) {
                 // Poster + info row — top-aligned so both anchor at the same y
                 HStack(alignment: .top, spacing: 36) {
                     // Poster — fixed size, always same position
@@ -716,10 +719,11 @@ struct FeaturedMovieBanner: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
+                } // end inner VStack
+                .padding(.horizontal, 80)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 80)
-            .padding(.top, 160)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
             // banner frame — no Spacer() needed, so content never shifts per-movie.
