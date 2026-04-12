@@ -42,7 +42,10 @@ router.get('/', async (req, res, next) => {
             `)
             .order('title', { ascending: true })
 
-        if (seriesError) throw seriesError
+        if (seriesError) {
+            logger.error(`Series list query failed: ${JSON.stringify(seriesError)}`)
+            throw seriesError
+        }
 
         // Build series objects with derived counts.
         const allSeries = (seriesRows || []).map(series => {
