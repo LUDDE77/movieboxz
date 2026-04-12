@@ -17,6 +17,8 @@ import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
 import healthRouter from './routes/health.js'
 import stagingRouter from './routes/staging-simple.js'
+import { tvSeriesAdminRouter } from './routes/tvSeriesAdmin.js'
+import seriesRouter from './routes/series.js'
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js'
@@ -95,6 +97,7 @@ app.use('/api/health', healthRouter)
 
 // API routes
 app.use('/api/movies', moviesRouter)
+app.use('/api/series', seriesRouter)
 app.use('/api/channels', channelsRouter)
 app.use('/api/browse', browseRouter)
 app.use('/api/user', userRouter)
@@ -102,6 +105,7 @@ app.use('/api/user', userRouter)
 app.use('/api/admin/channels', channelsAdminRouter)
 app.use('/api/admin/channel-management', channelManagementRouter)
 app.use('/api/admin/staging', stagingRouter)
+app.use('/api/admin', tvSeriesAdminRouter)
 app.use('/api/admin', adminRouter)
 
 // Root endpoint

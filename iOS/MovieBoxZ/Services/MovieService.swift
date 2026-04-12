@@ -271,6 +271,41 @@ class MovieService: ObservableObject {
         )
         return response.data.movies
     }
+
+    func fetchTVSeries(page: Int = 1, limit: Int = 200) async throws -> [Movie] {
+        let response = try await performRequest(
+            endpoint: "/movies?is_tv_series=true&sort=recent&page=\(page)&limit=\(limit)",
+            type: MoviesResponse.self
+        )
+        return response.data.movies
+    }
+
+    func fetchKidsContent(page: Int = 1, limit: Int = 200) async throws -> [Movie] {
+        let response = try await performRequest(
+            endpoint: "/movies?is_kids_content=true&sort=popular&page=\(page)&limit=\(limit)",
+            type: MoviesResponse.self
+        )
+        return response.data.movies
+    }
+
+    func fetchSeriesList(page: Int = 1, limit: Int = 50) async throws -> [TVSeries] {
+        var components = URLComponents(string: "\(baseURL)/series")!
+        components.queryItems = [
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+        let (data, _) = try await URLSession.shared.data(from: components.url!)
+        struct Response: Codable { let series: [TVSeries] }
+        let response = try JSONDecoder().decode(Response.self, from: data)
+        return response.series
+    }
+
+    func fetchSeriesEpisodes(seriesId: String) async throws -> SeriesDetailResponse {
+        return try await performRequest(
+            endpoint: "/series/\(seriesId)/episodes",
+            type: SeriesDetailResponse.self
+        )
+    }
 }
 
 // MARK: - HTTP Method Enum

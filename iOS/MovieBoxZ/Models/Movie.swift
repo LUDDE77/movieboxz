@@ -50,6 +50,64 @@ struct Movie: Codable, Identifiable {
     // Genres
     let genres: [Genre]?
 
+    // TV Series fields
+    let isTvSeries: Bool?
+    let tvSeriesId: String?
+    let seasonNumber: Int?
+    let episodeNumber: Int?
+    let seriesType: String?
+
+    init(id: String, youtubeVideoId: String, title: String, originalTitle: String?, description: String?,
+         releaseDate: Date?, runtimeMinutes: Int?, youtubeVideoTitle: String, channelId: String,
+         channelTitle: String, channelThumbnail: String?, viewCount: Int, likeCount: Int?,
+         commentCount: Int?, publishedAt: Date?, lastRefreshed: Date?, tmdbId: Int?, imdbId: String?,
+         posterPath: String?, backdropPath: String?, voteAverage: Double?, voteCount: Int?,
+         popularity: Double?, imdbRating: Double?, rated: String?, category: String?, quality: String?,
+         featured: Bool, trending: Bool, isAvailable: Bool, isEmbeddable: Bool, genres: [Genre]?,
+         addedAt: Date, lastValidated: Date?,
+         isTvSeries: Bool? = nil, tvSeriesId: String? = nil, seasonNumber: Int? = nil,
+         episodeNumber: Int? = nil, seriesType: String? = nil) {
+        self.id = id
+        self.youtubeVideoId = youtubeVideoId
+        self.title = title
+        self.originalTitle = originalTitle
+        self.description = description
+        self.releaseDate = releaseDate
+        self.runtimeMinutes = runtimeMinutes
+        self.youtubeVideoTitle = youtubeVideoTitle
+        self.channelId = channelId
+        self.channelTitle = channelTitle
+        self.channelThumbnail = channelThumbnail
+        self.viewCount = viewCount
+        self.likeCount = likeCount
+        self.commentCount = commentCount
+        self.publishedAt = publishedAt
+        self.lastRefreshed = lastRefreshed
+        self.tmdbId = tmdbId
+        self.imdbId = imdbId
+        self.posterPath = posterPath
+        self.backdropPath = backdropPath
+        self.voteAverage = voteAverage
+        self.voteCount = voteCount
+        self.popularity = popularity
+        self.imdbRating = imdbRating
+        self.rated = rated
+        self.category = category
+        self.quality = quality
+        self.featured = featured
+        self.trending = trending
+        self.isAvailable = isAvailable
+        self.isEmbeddable = isEmbeddable
+        self.genres = genres
+        self.addedAt = addedAt
+        self.lastValidated = lastValidated
+        self.isTvSeries = isTvSeries
+        self.tvSeriesId = tvSeriesId
+        self.seasonNumber = seasonNumber
+        self.episodeNumber = episodeNumber
+        self.seriesType = seriesType
+    }
+
     // Timestamps
     let addedAt: Date
     let lastValidated: Date?
@@ -87,6 +145,11 @@ struct Movie: Codable, Identifiable {
         case isAvailable = "is_available"
         case isEmbeddable = "is_embeddable"
         case genres
+        case isTvSeries = "is_tv_series"
+        case tvSeriesId = "tv_series_id"
+        case seasonNumber = "season_number"
+        case episodeNumber = "episode_number"
+        case seriesType = "series_type"
         case addedAt = "added_at"
         case lastValidated = "last_validated"
     }
@@ -127,8 +190,8 @@ struct Movie: Codable, Identifiable {
             // Otherwise, it's a TMDB relative path - prepend base URL
             return URL(string: "https://image.tmdb.org/t/p/original\(backdropPath)")
         }
-        // Fallback to YouTube thumbnail (max quality)
-        return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/maxresdefault.jpg")
+        // Fallback to YouTube thumbnail (hqdefault always exists, maxresdefault often 404s)
+        return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
     }
 
     var youtubeThumbURL: URL {
@@ -141,7 +204,7 @@ struct Movie: Codable, Identifiable {
     }
 
     var youtubeAppURL: URL? {
-        URL(string: "youtube://www.youtube.com/watch?v=\(youtubeVideoId)")
+        URL(string: "youtube:///watch?v=\(youtubeVideoId)")
     }
 
     var channelURL: URL? {
@@ -249,4 +312,75 @@ struct GenreMoviesData: Codable {
     let genre: Genre
     let movies: [Movie]
     let pagination: Pagination
+}
+
+// MARK: - TV Series Models
+
+struct TVSeries: Codable, Identifiable {
+    let id: String
+    let title: String
+    let description: String?
+    let posterPath: String?
+    let yearStart: Int?
+    let yearEnd: Int?
+    let episodeCount: Int?
+    let seasonCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, description
+        case posterPath = "poster_path"
+        case yearStart = "year_start"
+        case yearEnd = "year_end"
+        case episodeCount = "episode_count"
+        case seasonCount = "season_count"
+    }
+
+    var posterURL: URL? {
+        guard let path = posterPath else { return nil }
+        if path.hasPrefix("http") { return URL(string: path) }
+        return URL(string: "https://image.tmdb.org/t/p/w500\(path)")
+    }
+}
+
+struct SeriesSeason: Identifiable {
+    let seasonNumber: Int
+    let episodes: [Movie]
+    var id: Int { seasonNumber }
+}
+
+struct SeriesDetailResponse: Codable {
+    let series: TVSeriesDetail
+    let seasons: [SeasonResponse]
+}
+
+struct TVSeriesDetail: Codable {
+    let id: String
+    let title: String
+    let description: String?
+    let posterPath: String?
+    let yearStart: Int?
+    let yearEnd: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, description
+        case posterPath = "poster_path"
+        case yearStart = "year_start"
+        case yearEnd = "year_end"
+    }
+
+    var posterURL: URL? {
+        guard let path = posterPath else { return nil }
+        if path.hasPrefix("http") { return URL(string: path) }
+        return URL(string: "https://image.tmdb.org/t/p/w500\(path)")
+    }
+}
+
+struct SeasonResponse: Codable {
+    let seasonNumber: Int
+    let episodes: [Movie]
+
+    enum CodingKeys: String, CodingKey {
+        case seasonNumber = "seasonNumber"
+        case episodes
+    }
 }

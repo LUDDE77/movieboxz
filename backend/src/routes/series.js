@@ -1,0 +1,186 @@
+import express from 'express'
+import { supabase } from '../config/database.js'
+import { logger } from '../utils/logger.js'
+
+const router = express.Router()
+
+// =============================================================================
+// GET /api/series
+// List all TV series that have at least 1 episode in the movies table.
+// Query params:
+//   - limit: Items per page (default: 50)
+//   - page:  Page number (default: 1)
+// Response includes episode_count and season_count derived from linked movies.
+// =============================================================================
+router.get('/', async (req, res, next) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 50, 100)
+        const page = parseInt(req.query.page) || 1
+        const offset = (page - 1) * limit
+
+        logger.info(`Fetching series list - page ${page}, limit ${limit}`)
+
+        // Fetch all tv_series rows joined with their episodes.
+        // We pull movies inline so we can compute counts without N+1 queries.
+        // Supabase does not support aggregate sub-selects via the JS client, so
+        // we fetch the joined rows and compute counts in JS, then paginate.
+        const { data: seriesRows, error: seriesError } = await supabase
+            .from('tv_series')
+            .select(`
+                id,
+                title,
+                description,
+                poster_path,
+                year_start,
+                year_end,
+                movies!inner(
+                    id,
+                    season_number,
+                    is_tv_series,
+                    is_available
+                )
+            `)
+            .eq('movies.is_tv_series', true)
+            .eq('movies.is_available', true)
+            .order('title', { ascending: true })
+
+        if (seriesError) throw seriesError
+
+        // Build series objects with derived counts.
+        const allSeries = (seriesRows || []).map(series => {
+            const episodes = series.movies || []
+            const distinctSeasons = new Set(
+                episodes
+                    .map(e => e.season_number)
+                    .filter(n => n !== null && n !== undefined)
+            )
+
+            return {
+                id: series.id,
+                title: series.title,
+                description: series.description,
+                poster_path: series.poster_path,
+                year_start: series.year_start,
+                year_end: series.year_end,
+                episode_count: episodes.length,
+                season_count: distinctSeasons.size
+            }
+        })
+
+        // Filter out series with no episodes (shouldn't happen due to !inner
+        // join, but guard defensively).
+        const withEpisodes = allSeries.filter(s => s.episode_count > 0)
+
+        const total = withEpisodes.length
+        const paginated = withEpisodes.slice(offset, offset + limit)
+
+        res.json({
+            success: true,
+            data: {
+                series: paginated,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            },
+            message: `Retrieved ${paginated.length} series`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// GET /api/series/:seriesId/episodes
+// Return series metadata and all episodes grouped by season.
+// Episodes are movies where tv_series_id = :seriesId and is_tv_series = true,
+// ordered by season_number ASC, episode_number ASC.
+// =============================================================================
+router.get('/:seriesId/episodes', async (req, res, next) => {
+    try {
+        const { seriesId } = req.params
+
+        logger.info(`Fetching episodes for series: ${seriesId}`)
+
+        // Fetch series metadata
+        const { data: series, error: seriesError } = await supabase
+            .from('tv_series')
+            .select(`
+                id,
+                title,
+                description,
+                poster_path,
+                year_start,
+                year_end
+            `)
+            .eq('id', seriesId)
+            .single()
+
+        if (seriesError) {
+            if (seriesError.code === 'PGRST116') {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Series not found',
+                    message: `No series found with ID: ${seriesId}`
+                })
+            }
+            throw seriesError
+        }
+
+        // Fetch all episodes belonging to this series
+        const { data: episodeRows, error: episodesError } = await supabase
+            .from('movies')
+            .select(`
+                id,
+                title,
+                season_number,
+                episode_number,
+                description,
+                youtube_video_id,
+                poster_path,
+                backdrop_path,
+                runtime_minutes,
+                imdb_rating
+            `)
+            .eq('tv_series_id', seriesId)
+            .eq('is_tv_series', true)
+            .eq('is_available', true)
+            .order('season_number', { ascending: true })
+            .order('episode_number', { ascending: true })
+
+        if (episodesError) throw episodesError
+
+        // Group episodes by season_number
+        const seasonMap = new Map()
+        for (const episode of episodeRows || []) {
+            const seasonNum = episode.season_number ?? 0
+            if (!seasonMap.has(seasonNum)) {
+                seasonMap.set(seasonNum, [])
+            }
+            seasonMap.get(seasonNum).push(episode)
+        }
+
+        // Convert to sorted array of season objects
+        const seasons = Array.from(seasonMap.entries())
+            .sort(([a], [b]) => a - b)
+            .map(([seasonNumber, episodes]) => ({
+                seasonNumber,
+                episodes
+            }))
+
+        res.json({
+            success: true,
+            data: {
+                series,
+                seasons
+            },
+            message: `Retrieved ${episodeRows.length} episodes across ${seasons.length} season(s)`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+export default router
