@@ -32,7 +32,8 @@ router.get('/tv-content', async (req, res, next) => {
                 is_available,
                 created_at,
                 updated_at,
-                channels(id, title, thumbnail_url)
+                channels(id, title, thumbnail_url),
+                movie_genres(genres(id, name, tmdb_id))
             `)
             .or('is_tv_show.eq.true,is_tv_series.eq.true')
             .order('title', { ascending: true })
@@ -41,10 +42,11 @@ router.get('/tv-content', async (req, res, next) => {
 
         logger.info(`TV content fetch: ${movies.length} movies`)
 
-        const flatMovies = movies.map(({ channels, ...m }) => ({
+        const flatMovies = movies.map(({ channels, movie_genres, ...m }) => ({
             ...m,
             channel_title: channels?.title || null,
-            channel_thumbnail: channels?.thumbnail_url || null
+            channel_thumbnail: channels?.thumbnail_url || null,
+            genres: (movie_genres || []).map(mg => mg.genres).filter(Boolean)
         }))
 
         res.json({
