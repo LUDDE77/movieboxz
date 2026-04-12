@@ -172,29 +172,21 @@ router.get('/featured', async (req, res, next) => {
     try {
         logger.info('Fetching featured movies')
 
-        // Return up to 5 admin-curated featured movies, ordered by featured_order
-        const { data, error } = await supabase
-            .from('movies')
-            .select(`
-                *,
-                channels(id, title, thumbnail_url),
-                movie_genres(genres(id, name))
-            `)
-            .eq('featured', true)
-            .eq('is_available', true)
-            .not('featured_order', 'is', null)
-            .order('featured_order', { ascending: true })
-            .limit(5)
-
-        if (error) throw error
+        // Use getMovies to get fully-shaped movie objects (with channel_title, genres, etc.)
+        // sorted by featured_order so the admin-curated order is preserved
+        const result = await dbOperations.getMovies(
+            { featured: true, sortBy: 'featured_order', sortOrder: 'asc' },
+            5,
+            0
+        )
 
         res.json({
             success: true,
             data: {
-                movies: data || [],
-                total: (data || []).length
+                movies: result.movies,
+                total: result.total
             },
-            message: `Retrieved ${(data || []).length} featured movies`
+            message: `Retrieved ${result.movies.length} featured movies`
         })
     } catch (error) {
         next(error)
