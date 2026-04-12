@@ -546,7 +546,7 @@ struct SeriesDetailView: View {
     private func loadEpisodesFallback() async {
         do {
             let episodes = try await movieService.fetchTVSeries(limit: 200)
-            let filtered = episodes.filter { $0.tvSeriesId == series.id || $0.isTvSeries == true }
+            let filtered = episodes.filter { $0.tvSeriesId == series.id }
             if filtered.isEmpty {
                 // Show the series with no episodes rather than an error
                 seasons = []

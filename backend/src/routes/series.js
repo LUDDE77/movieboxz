@@ -133,18 +133,7 @@ router.get('/:seriesId/episodes', async (req, res, next) => {
         // Fetch all episodes belonging to this series
         const { data: episodeRows, error: episodesError } = await supabase
             .from('movies')
-            .select(`
-                id,
-                title,
-                season_number,
-                episode_number,
-                description,
-                youtube_video_id,
-                poster_path,
-                backdrop_path,
-                runtime_minutes,
-                imdb_rating
-            `)
+            .select('*, channels(id, title, thumbnail_url)')
             .eq('tv_series_id', seriesId)
             .eq('is_tv_series', true)
             .eq('is_available', true)
@@ -153,9 +142,19 @@ router.get('/:seriesId/episodes', async (req, res, next) => {
 
         if (episodesError) throw episodesError
 
+        // Flatten channel fields to match the standard movies API shape
+        const episodes = (episodeRows || []).map(ep => {
+            const { channels, ...rest } = ep
+            return {
+                ...rest,
+                channel_title: channels?.title || null,
+                channel_thumbnail: channels?.thumbnail_url || null
+            }
+        })
+
         // Group episodes by season_number
         const seasonMap = new Map()
-        for (const episode of episodeRows || []) {
+        for (const episode of episodes) {
             const seasonNum = episode.season_number ?? 0
             if (!seasonMap.has(seasonNum)) {
                 seasonMap.set(seasonNum, [])
