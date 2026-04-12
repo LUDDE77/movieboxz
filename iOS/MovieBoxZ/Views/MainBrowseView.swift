@@ -518,7 +518,7 @@ struct FeaturedMovieBanner: View {
     let onPlayVideo: (String) -> Void
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             #if os(tvOS)
             // tvOS: backdrop and gradient live inside the banner
             AsyncImage(url: movie.backdropURL) { phase in
@@ -535,6 +535,9 @@ struct FeaturedMovieBanner: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .id(currentIndex)
+            .transition(.opacity)
+            .animation(.easeInOut(duration: 0.8), value: currentIndex)
 
             LinearGradient(
                 gradient: Gradient(stops: [
@@ -715,7 +718,8 @@ struct FeaturedMovieBanner: View {
                 }
             }
             .padding(.horizontal, 80)
-            .padding(.top, 280)
+            .padding(.bottom, 60)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
             // banner frame — no Spacer() needed, so content never shifts per-movie.
@@ -846,6 +850,7 @@ struct FeaturedMovieBanner: View {
                     Color.clear.frame(height: 40)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             #endif
         }
         .frame(height: bannerHeight)
