@@ -1,7 +1,7 @@
 import { youtubeService } from './youtubeService.js'
 import { tmdbService } from './tmdbService.js'
 import { omdbService } from './omdbService.js'
-import { supabase } from '../config/database.js'
+import { supabase, dbOperations } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import channelPatternManager from './channelPatternManager.js'
 import manualEnrichmentQueue from './manualEnrichmentQueue.js'

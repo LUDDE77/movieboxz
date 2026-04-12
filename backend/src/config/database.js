@@ -775,6 +775,38 @@ export const dbOperations = {
         }
 
         return data
+    },
+
+    // Genre write operations (used by movieCurator.addMovieGenres)
+
+    async getGenreByTmdbId(tmdbId) {
+        const { data, error } = await supabase
+            .from('genres')
+            .select('*')
+            .eq('tmdb_id', tmdbId)
+            .maybeSingle()
+
+        if (error) throw error
+        return data || null
+    },
+
+    async createGenre({ tmdb_id, name }) {
+        const { data, error } = await supabase
+            .from('genres')
+            .upsert({ tmdb_id, name }, { onConflict: 'tmdb_id' })
+            .select()
+            .single()
+
+        if (error) throw error
+        return data
+    },
+
+    async addMovieGenre(movieId, genreId) {
+        const { error } = await supabase
+            .from('movie_genres')
+            .upsert({ movie_id: movieId, genre_id: genreId }, { onConflict: 'movie_id,genre_id' })
+
+        if (error) throw error
     }
 }
 

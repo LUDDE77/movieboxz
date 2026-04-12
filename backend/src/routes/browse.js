@@ -19,9 +19,9 @@ router.get('/genres', async (req, res, next) => {
             data: {
                 genres: genres.map(genre => ({
                     id: genre.id,
-                    tmdbId: genre.tmdb_id,
+                    tmdb_id: genre.tmdb_id,
                     name: genre.name,
-                    movieCount: parseInt(genre.movie_count) || 0
+                    movie_count: parseInt(genre.movie_count) || 0
                 })),
                 pagination: {
                     page: 1,
@@ -61,9 +61,9 @@ router.get('/genres/:genreId/info', async (req, res, next) => {
             success: true,
             data: {
                 id: genre.id,
-                tmdbId: genre.tmdb_id,
+                tmdb_id: genre.tmdb_id,
                 name: genre.name,
-                movieCount: parseInt(genre.movie_count) || 0
+                movie_count: parseInt(genre.movie_count) || 0
             },
             message: 'Genre details retrieved successfully'
         })
@@ -121,7 +121,7 @@ router.get('/genres/:genreId', async (req, res, next) => {
             data: {
                 genre: {
                     id: genre.id,
-                    tmdbId: genre.tmdb_id,
+                    tmdb_id: genre.tmdb_id,
                     name: genre.name
                 },
                 movies: result.movies,
