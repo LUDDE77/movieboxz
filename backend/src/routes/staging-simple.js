@@ -704,7 +704,7 @@ const STAGING_PATCH_ALLOWED_FIELDS = [
     'director', 'actors', 'language', 'country',
     'category', 'is_tv_show', 'is_tv_series', 'is_kids_content',
     'notes', 'channel_tag', 'tv_series_id',
-    'season_number', 'episode_number', 'episode_name', 'series_type'
+    'season_number', 'episode_number', 'episode_name'
 ]
 
 router.patch('/movies/:id', async (req, res, next) => {
