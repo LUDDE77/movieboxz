@@ -718,8 +718,8 @@ struct FeaturedMovieBanner: View {
                 }
             }
             .padding(.horizontal, 80)
-            .padding(.bottom, 60)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(.top, 160)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
             // banner frame — no Spacer() needed, so content never shifts per-movie.
