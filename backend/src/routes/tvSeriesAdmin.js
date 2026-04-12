@@ -30,6 +30,8 @@ router.get('/tv-content', async (req, res, next) => {
                 imdb_id,
                 channel_id,
                 is_available,
+                view_count,
+                like_count,
                 created_at,
                 updated_at,
                 channels(id, title, thumbnail_url),
