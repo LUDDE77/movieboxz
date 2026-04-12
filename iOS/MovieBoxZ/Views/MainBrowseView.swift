@@ -52,6 +52,8 @@ struct MainBrowseView: View {
             #if os(iOS)
             if !featuredMovies.isEmpty, !isLoading {
                 let heroMovie = featuredMovies[min(currentHeroIndex, featuredMovies.count - 1)]
+                // .id forces a new view on each index change so .transition fires.
+                // Only the backdrop animates — content layout stays static.
                 AsyncImage(url: heroMovie.backdropURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -61,6 +63,9 @@ struct MainBrowseView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(currentHeroIndex)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.8), value: currentHeroIndex)
 
                 LinearGradient(
                     gradient: Gradient(stops: [
@@ -95,9 +100,7 @@ struct MainBrowseView: View {
                                 totalMovies: featuredMovies.count,
                                 currentIndex: currentHeroIndex,
                                 onSelectIndex: { idx in
-                                    withAnimation(.easeInOut(duration: 0.4)) {
-                                        currentHeroIndex = idx
-                                    }
+                                    currentHeroIndex = idx
                                     startHeroTimer()
                                 },
                                 onPlayVideo: playVideo
@@ -374,10 +377,8 @@ struct MainBrowseView: View {
     private func startHeroTimer() {
         stopHeroTimer()
         guard featuredMovies.count > 1 else { return }
-        heroTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 0.6)) {
-                currentHeroIndex = (currentHeroIndex + 1) % featuredMovies.count
-            }
+        heroTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { _ in
+            currentHeroIndex = (currentHeroIndex + 1) % featuredMovies.count
         }
     }
 
@@ -813,27 +814,31 @@ struct FeaturedMovieBanner: View {
                     .frame(maxWidth: 520)
 
                     Spacer()
-
-                    // Dot indicators (right-aligned, vertically centered with content)
-                    if totalMovies > 1 {
-                        VStack(spacing: 6) {
-                            ForEach(0..<totalMovies, id: \.self) { idx in
-                                Button {
-                                    onSelectIndex?(idx)
-                                } label: {
-                                    Circle()
-                                        .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
-                                        .frame(width: idx == currentIndex ? 8 : 6, height: idx == currentIndex ? 8 : 6)
-                                }
-                                .buttonStyle(.plain)
-                                .animation(.easeInOut(duration: 0.2), value: currentIndex)
-                            }
-                        }
-                        .padding(.bottom, 8)
-                    }
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 40) // +10px up from previous 30
+                .padding(.bottom, 10)
+
+                // Dots — horizontally centered across the full width
+                if totalMovies > 1 {
+                    HStack(spacing: 8) {
+                        Spacer()
+                        ForEach(0..<totalMovies, id: \.self) { idx in
+                            Button {
+                                onSelectIndex?(idx)
+                            } label: {
+                                Circle()
+                                    .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
+                                    .frame(width: idx == currentIndex ? 8 : 6, height: idx == currentIndex ? 8 : 6)
+                                    .animation(.easeInOut(duration: 0.2), value: currentIndex)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer()
+                    }
+                    .padding(.bottom, 30)
+                } else {
+                    Spacer().frame(height: 40)
+                }
             }
             #endif
         }
