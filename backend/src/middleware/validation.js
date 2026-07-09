@@ -1,8 +1,8 @@
 export const validateRequest = (schema) => {
     return (req, res, next) => {
-        // Validate query parameters, body, or params based on request
-        const dataToValidate = req.method === 'GET' ? req.query :
-                              req.params.id ? req.params : req.body
+        // Route params take precedence (e.g. /movies/:id on GET), then query, then body
+        const dataToValidate = req.params && Object.keys(req.params).length > 0 ? req.params :
+                              req.method === 'GET' ? req.query : req.body
 
         const { error, value } = schema.validate(dataToValidate, {
             allowUnknown: false,
@@ -22,10 +22,10 @@ export const validateRequest = (schema) => {
         }
 
         // Replace original data with validated data
-        if (req.method === 'GET') {
-            req.query = value
-        } else if (req.params.id) {
+        if (req.params && Object.keys(req.params).length > 0) {
             req.params = value
+        } else if (req.method === 'GET') {
+            req.query = value
         } else {
             req.body = value
         }
