@@ -12,8 +12,8 @@ CREATE TABLE tv_series (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE staging_movies ADD COLUMN IF NOT EXISTS tv_series_id UUID REFERENCES tv_series(id) ON DELETE SET NULL;
+ALTER TABLE staged_movies ADD COLUMN IF NOT EXISTS tv_series_id UUID REFERENCES tv_series(id) ON DELETE SET NULL;
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS tv_series_id UUID REFERENCES tv_series(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS idx_staging_movies_tv_series_id ON staging_movies(tv_series_id);
+CREATE INDEX IF NOT EXISTS idx_staged_movies_tv_series_id ON staged_movies(tv_series_id);
 CREATE INDEX IF NOT EXISTS idx_movies_tv_series_id ON movies(tv_series_id);

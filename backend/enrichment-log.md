@@ -1,0 +1,721 @@
+# Enrichment Run - 2026-04-12 20:37:24
+
+## Summary
+
+- **Total Movies in DB**: 1200
+- **Movies Needing Enrichment**: 705
+- **Succeeded**: 705
+- **Failed**: 0
+- **Success Rate**: 100.0%
+
+## Succeeded (705 movies)
+
+- **XIII: The Conspiracy** (`tt1117667`) — was missing: director
+- **Executor** (`tt6236198`) — was missing: imdb_rating, director, actors
+- **The Arrival** (`tt0115571`) — was missing: imdb_rating, director, actors
+- **The Day of the Triffids** (`tt1332653`) — was missing: director
+- **The Babysitter's Seduction** (`tt0112437`) — was missing: imdb_rating, director, actors
+- **Outlawed** (`tt2445568`) — was missing: imdb_rating, director, actors
+- **Bangkok Dangerous** (`tt0814022`) — was missing: imdb_rating, director, actors
+- **My Secret Billionaire** (`tt1001534`) — was missing: imdb_rating, director, actors
+- **CRUSOE Part 1 & 2** (`tt1117552`) — was missing: director
+- **12 Rounds Lockdown** (`tt3957956`) — was missing: imdb_rating, director, actors
+- **JUNGLE** (`tt3758172`) — was missing: imdb_rating, director, actors
+- **More Beautiful for Having Been Broken** (`tt7326320`) — was missing: imdb_rating, director, actors
+- **Death Fighter** (`tt3724490`) — was missing: imdb_rating, director, actors
+- **Going Overboard** (`tt0096870`) — was missing: imdb_rating, director, actors
+- **Fatal Instinct** (`tt3036654`) — was missing: imdb_rating, director, actors
+- **The Secret of Grayskull** (`tt1216412`) — was missing: imdb_rating
+- **About an Age** (`tt5722280`) — was missing: imdb_rating, director, actors
+- **Frank & Jesse** (`tt0109835`) — was missing: imdb_rating, director, actors
+- **Why Did I Get Married** (`tt0906108`) — was missing: imdb_rating, director, actors
+- **The Substitute 2** (`tt0120847`) — was missing: imdb_rating, director, actors
+- **Ice — Part 1** (`tt1510984`) — was missing: director
+- **Hercules in New-York** (`tt0065832`) — was missing: imdb_rating, director, actors
+- **Messalina** (`tt0043802`) — was missing: imdb_rating, director, actors
+- **Where's the Money** (`tt5716848`) — was missing: imdb_rating, director, actors
+- **All the Way Boys** (`tt0069095`) — was missing: imdb_rating, director, actors
+- **Liberty Stands Still** (`tt0280870`) — was missing: imdb_rating, director, actors
+- **The Black Orchid** (`tt0052631`) — was missing: imdb_rating, director, actors
+- **Ice** (`tt1510984`) — was missing: director
+- **No Letting Go** (`tt3438208`) — was missing: imdb_rating, director, actors
+- **Route 666** (`tt0215135`) — was missing: imdb_rating, director, actors
+- **Druid Peak** (`tt2027091`) — was missing: imdb_rating, director, actors
+- **Young Guns** (`tt0096487`) — was missing: imdb_rating, director, actors
+- **Held Up** (`tt0165831`) — was missing: imdb_rating, director, actors
+- **Crusoe — Part 3** (`tt1117552`) — was missing: director
+- **Brotherhood of Justice** (`tt0090775`) — was missing: imdb_rating, director, actors
+- **Hope Dances** (`tt5442884`) — was missing: imdb_rating, director, actors
+- **The Perfect Match** (`tt4871980`) — was missing: imdb_rating, director, actors
+- **New York, I Love You** (`tt0808399`) — was missing: imdb_rating, director, actors
+- **Amazon Queen** (`tt13223248`) — was missing: imdb_rating, director, actors
+- **Deadly Contract** (`tt6015706`) — was missing: imdb_rating, director, actors
+- **Esther and the King** (`tt0053800`) — was missing: imdb_rating, director, actors
+- **Hurricane Season** (`tt1172998`) — was missing: imdb_rating, director, actors
+- **After Dark, My Sweet** (`tt0098994`) — was missing: imdb_rating, director, actors
+- **Mary White** (`tt0076371`) — was missing: imdb_rating, director, actors
+- **A Murder of Innocence** (`tt6967162`) — was missing: imdb_rating, director, actors
+- **White Sky** (`tt12295244`) — was missing: imdb_rating, director, actors
+- **Convict** (`tt2893780`) — was missing: imdb_rating, director, actors
+- **Crazy Kind of Love** (`tt1946310`) — was missing: imdb_rating, director, actors
+- **A Killer Next Door** (`tt10293308`) — was missing: imdb_rating, director, actors
+- **7 Below** (`tt1988781`) — was missing: imdb_rating, director, actors
+- **Crusoe — Part 5** (`tt1117552`) — was missing: director
+- **ROOM 203** (`tt12283036`) — was missing: imdb_rating, director, actors
+- **Sunfall** (`tt28083228`) — was missing: imdb_rating
+- **Crusoe — Part 13** (`tt1117552`) — was missing: director
+- **Snake Eater** (`tt0100645`) — was missing: imdb_rating, director, actors
+- **Animal 2** (`tt0985047`) — was missing: imdb_rating, director, actors
+- **CUBE** (`tt0123755`) — was missing: imdb_rating, director, actors
+- **All Roads Lead Home** (`tt0821810`) — was missing: imdb_rating, director, actors
+- **Big Legend** (`tt6409762`) — was missing: imdb_rating, director, actors
+- **Crusoe — Part 6** (`tt1117552`) — was missing: director
+- **Deadly Dance Mom** (`tt5582308`) — was missing: imdb_rating, director, actors
+- **Hunt for He Man** (`tt1216390`) — was missing: imdb_rating
+- **Texas Cotton** (`tt8009578`) — was missing: imdb_rating, director, actors
+- **PARENTS** (`tt0098068`) — was missing: imdb_rating, director, actors
+- **Crusoe — Part 8** (`tt1117552`) — was missing: director
+- **Created Equal** (`tt5873100`) — was missing: imdb_rating, director, actors
+- **Albert, R.N.** (`tt0045487`) — was missing: imdb_rating, director, actors
+- **The Legend of 5 Mile Cave** (`tt9021234`) — was missing: imdb_rating, director, actors
+- **Crusoe — Part 9** (`tt1117552`) — was missing: director
+- **The Promotion** (`tt0803057`) — was missing: imdb_rating, director, actors
+- **The Corner — Episode 1** (`tt0224853`) — was missing: director
+- **Sounder** (`tt0069303`) — was missing: imdb_rating, director, actors
+- **MAY** (`tt0303361`) — was missing: imdb_rating, director, actors
+- **Brush With Danger** (`tt2545692`) — was missing: imdb_rating, director, actors
+- **Gods of the Deep** (`tt13316770`) — was missing: imdb_rating, director, actors
+- **His Girl Friday** (`tt0032599`) — was missing: imdb_rating, director, actors
+- **CABIN 28** (`tt5457484`) — was missing: imdb_rating, director, actors
+- **A Chance in the World** (`tt6052748`) — was missing: imdb_rating, director, actors
+- **The Employer** (`tt1863203`) — was missing: imdb_rating, director, actors
+- **Hider in the house** (`tt0097503`) — was missing: imdb_rating, director, actors
+- **Lucky Number** (`tt2538204`) — was missing: imdb_rating, director, actors
+- **Eagle Wings** (`tt14188284`) — was missing: imdb_rating, director, actors
+- **Sam** (`tt15134088`) — was missing: imdb_rating, director, actors
+- **Cook Off** (`tt0493407`) — was missing: imdb_rating, director, actors
+- **Queen of the Seas** (`tt0127449`) — was missing: imdb_rating, director, actors
+- **The Magic Sword** (`tt0056211`) — was missing: imdb_rating, director, actors
+- **Walt Before Mickey** (`tt3154310`) — was missing: imdb_rating, director, actors
+- **AWAKE** (`tt0211933`) — was missing: imdb_rating, director, actors
+- **Separate But Equal** (`tt0102879`) — was missing: director
+- **The Way Ahead** (`tt0037449`) — was missing: imdb_rating, director, actors
+- **The Corner — Episode 3** (`tt0224853`) — was missing: director
+- **Heroes Don't Come Home** (`tt5086198`) — was missing: imdb_rating, director, actors
+- **Clarity** (`tt3387432`) — was missing: imdb_rating, director, actors
+- **American Justice** (`tt2940482`) — was missing: imdb_rating, director, actors
+- **Nobody's Angel** (`tt36153530`) — was missing: imdb_rating, director, actors
+- **A Dog of Flanders** (`tt0160216`) — was missing: imdb_rating, director, actors
+- **To the Beat! - Back 2 School** (`tt8854392`) — was missing: imdb_rating, director, actors
+- **Angel and the Badman** (`tt0039152`) — was missing: imdb_rating, director, actors
+- **The Pirate of the Black Hawk** (`tt0052072`) — was missing: imdb_rating, director, actors
+- **The Bulldog Breed** (`tt0053683`) — was missing: imdb_rating, director, actors
+- **WARLOCK : the End of Innocence** (`tt0157171`) — was missing: imdb_rating, director, actors
+- **Topper Returns** (`tt0034303`) — was missing: imdb_rating, director, actors
+- **Ben & Ara** (`tt3901260`) — was missing: imdb_rating, director, actors
+- **The Terror of Rome Against the Son of Hercules** (`tt0058312`) — was missing: imdb_rating, director, actors
+- **The Object of Beauty** (`tt0102573`) — was missing: imdb_rating, director, actors
+- **At the Frontera** (`tt4126870`) — was missing: imdb_rating, director, actors
+- **The Bulldog Breed** (`tt0053683`) — was missing: imdb_rating, director, actors
+- **Africa Screams** (`tt0041098`) — was missing: imdb_rating, director, actors
+- **Cottage to let** (`tt0033491`) — was missing: imdb_rating, director, actors
+- **Two Lost Worlds** (`tt0043080`) — was missing: imdb_rating, director, actors
+- **Demon Baby** (`tt3137732`) — was missing: imdb_rating, director, actors
+- **Dead on Arrival** (`tt5903088`) — was missing: imdb_rating, director, actors
+- **Constantine and the Cross** (`tt0055867`) — was missing: imdb_rating, director, actors
+- **The American King** (`tt13153712`) — was missing: imdb_rating, director, actors
+- **Fatal Call** (`tt2059193`) — was missing: imdb_rating, director, actors
+- **TOAST** (`tt1658851`) — was missing: imdb_rating, director, actors
+- **The Corner — Episode 4** (`tt0224853`) — was missing: director
+- **Separate But Equal** (`tt0102879`) — was missing: director
+- **Alien Intervention** (`tt15076688`) — was missing: imdb_rating, director, actors
+- **Into the Abyss** (`tt0993278`) — was missing: imdb_rating
+- **WARLOCK : The Armageddon** (`tt0108517`) — was missing: imdb_rating, director, actors
+- **Black Bags** (`tt12718392`) — was missing: imdb_rating, director, actors
+- **Camp Pleasant Lake** (`tt20864606`) — was missing: imdb_rating, director, actors
+- **Dead Men** (`tt2226440`) — was missing: imdb_rating, director, actors
+- **Ursus in the Valley of the Lions** (`tt0055578`) — was missing: imdb_rating, director, actors
+- **Brush With Danger** (`tt2545692`) — was missing: imdb_rating, director, actors
+- **Casino Jack** (`tt1194417`) — was missing: imdb_rating, director, actors
+- **Christmas in the Wilds** (`tt13438634`) — was missing: imdb_rating, director, actors
+- **Boone: The Bounty Hunter** (`tt3229488`) — was missing: imdb_rating, director, actors
+- **Operation Overlord** (`tt14488222`) — was missing: imdb_rating, director, actors
+- **Landing Up** (`tt4764490`) — was missing: imdb_rating, director, actors
+- **The Corner — Episode 6** (`tt0224853`) — was missing: director
+- **Camp Cool Kids** (`tt4703182`) — was missing: imdb_rating, director, actors
+- **The Haunting of Margam Castle** (`tt10648146`) — was missing: imdb_rating, director, actors
+- **The Corner — Episode 5** (`tt0224853`) — was missing: director
+- **Wedding Swingers** (`tt7141148`) — was missing: imdb_rating, director, actors
+- **Death Fighter** (`tt3724490`) — was missing: imdb_rating, director, actors
+- **Called to Duty** (`tt20508332`) — was missing: imdb_rating, director, actors
+- **Wait Till Helen Comes** (`tt1821701`) — was missing: imdb_rating, director, actors
+- **Christmas on the Range** (`tt10808294`) — was missing: imdb_rating, director, actors
+- **Inner Demon** (`tt2887840`) — was missing: imdb_rating, director, actors
+- **Permanent Midnight** (`tt0120788`) — was missing: imdb_rating, director, actors
+- **Lady of Guadalupe** (`tt10886702`) — was missing: imdb_rating, director, actors
+- **CODE 207** (`tt1295026`) — was missing: imdb_rating, director, actors
+- **Broken Contract** (`tt3848600`) — was missing: imdb_rating, director, actors
+- **Android Cop** (`tt3393070`) — was missing: imdb_rating, director, actors
+- **Monster Island** (`tt6269658`) — was missing: imdb_rating, director, actors
+- **To Save Skeletor** (`tt1216417`) — was missing: imdb_rating
+- **Christmas Harmony** (`tt8443810`) — was missing: imdb_rating, director, actors
+- **Eternal Code** (`tt8655738`) — was missing: imdb_rating, director, actors
+- **Craft Me a Romance** (`tt19868164`) — was missing: imdb_rating, director, actors
+- **Wake of the Red Witch** (`tt0040946`) — was missing: imdb_rating, director, actors
+- **The Corner — Episode 2** (`tt0224853`) — was missing: director
+- **Campbell's Kingdom** (`tt0050225`) — was missing: imdb_rating, director, actors
+- **The Congressman** (`tt3485800`) — was missing: imdb_rating, director, actors
+- **Christmas in the Pines** (`tt13401252`) — was missing: imdb_rating, director, actors
+- **To the Beat!** (`tt6237314`) — was missing: imdb_rating, director, actors
+- **Haunted Trail** (`tt14102146`) — was missing: imdb_rating, director, actors
+- **Separate But Equal** (`tt0102879`) — was missing: director
+- **Queen** (`tt0105937`) — was missing: director
+- **Beneath the 12-Mile Reef** (`tt0045551`) — was missing: imdb_rating, director, actors
+- **The Meanest Man in Texas** (`tt5601792`) — was missing: imdb_rating, director, actors
+- **The Congressman** (`tt3485800`) — was missing: imdb_rating, director, actors
+- **Springtime in the Rockies** (`tt0035370`) — was missing: imdb_rating, director, actors
+- **Christmas Cupcakes** (`tt7736656`) — was missing: imdb_rating, director, actors
+- **She-Ra: Princess of Power** (`tt0126171`) — was missing: director
+- **Kill Kane** (`tt3586930`) — was missing: imdb_rating, director, actors
+- **The Secret of Grayskull** (`tt1216412`) — was missing: imdb_rating
+- **Strive** (`tt3505898`) — was missing: imdb_rating, director, actors
+- **ADVERSE** (`tt8597594`) — was missing: imdb_rating, director, actors
+- **Better Criminal** (`tt4845940`) — was missing: imdb_rating, director, actors
+- **Falling for a Killer** (`tt21363128`) — was missing: imdb_rating, director, actors
+- **Flashbacks of a Fool** (`tt1037218`) — was missing: imdb_rating, director, actors
+- **Off The Menu** (`tt6140580`) — was missing: imdb_rating, director, actors
+- **The Curse of the Spellstone** (`tt0785452`) — was missing: imdb_rating
+- **Lady Detective Shadow** (`tt8391226`) — was missing: imdb_rating, director, actors
+- **Ben & Ara** (`tt3901260`) — was missing: imdb_rating, director, actors
+- **Halloween Candy** (`tt28741199`) — was missing: imdb_rating, director, actors
+- **Instinct to Kill** (`tt0291265`) — was missing: imdb_rating, director, actors
+- **A Miracle on Christmas Lake** (`tt5123866`) — was missing: imdb_rating, director, actors
+- **Conjuring the Genie** (`tt12060182`) — was missing: imdb_rating, director, actors
+- **Get Well Soon** (`tt0293176`) — was missing: imdb_rating, director, actors
+- **Backstreet Dreams** (`tt0099090`) — was missing: imdb_rating, director, actors
+- **She-Demon of Phantos** (`tt0785451`) — was missing: imdb_rating
+- **The Farmer and the Belle - Saving Santaland** (`tt7756084`) — was missing: imdb_rating, director, actors
+- **CLARITY** (`tt3387432`) — was missing: imdb_rating, director, actors
+- **The Atlanta Child Murders** (`tt0088750`) — was missing: director
+- **Romance in the Wilds** (`tt13438628`) — was missing: imdb_rating, director, actors
+- **April Rain** (`tt2676350`) — was missing: imdb_rating, director, actors
+- **The Ministers** (`tt0880570`) — was missing: imdb_rating, director, actors
+- **The Legend of Lake Hollow** (`tt9764958`) — was missing: imdb_rating, director, actors
+- **Amazon Queen** (`tt13223248`) — was missing: imdb_rating, director, actors
+- **The Challenger** (`tt1974382`) — was missing: imdb_rating, director, actors
+- **Fisto's Forest** (`tt1216388`) — was missing: imdb_rating
+- **Return of Evil** (`tt0801219`) — was missing: imdb_rating
+- **Dead Mary** (`tt0892047`) — was missing: imdb_rating, director, actors
+- **Orko's Missing Magic** (`tt0801215`) — was missing: imdb_rating
+- **The Return of Swamp Thing** (`tt0098193`) — was missing: imdb_rating, director, actors
+- **Mighty Fine** (`tt1675313`) — was missing: imdb_rating, director, actors
+- **Too Late for Tears** (`tt0041968`) — was missing: imdb_rating, director, actors
+- **Skipped Parts** (`tt0209322`) — was missing: imdb_rating, director, actors
+- **Dream A Little Dream** (`tt0097236`) — was missing: imdb_rating, director, actors
+- **REVISITANT** (`tt6435770`) — was missing: imdb_rating, director, actors
+- **Like Father, Like Daughter** (`tt0794768`) — was missing: imdb_rating
+- **Bulldog Drummond Escapes** (`tt0028668`) — was missing: imdb_rating, director, actors
+- **Orko's Favorite Uncle** (`tt0801214`) — was missing: imdb_rating
+- **She-Ra: Princess of Power** (`tt0126171`) — was missing: director
+- **The Time Wheel** (`tt1216414`) — was missing: imdb_rating
+- **In Tranzit** (`tt0785012`) — was missing: imdb_rating, director, actors
+- **The Healer** (`tt4356480`) — was missing: imdb_rating, director, actors
+- **Flight 313 - The Conspiracy** (`tt2662218`) — was missing: imdb_rating, director, actors
+- **To Save Skeletor** (`tt1216417`) — was missing: imdb_rating
+- **Have Rocket, Will Travel** (`tt0052880`) — was missing: imdb_rating, director, actors
+- **The Mystery of Man-E-Faces** (`tt0801230`) — was missing: imdb_rating
+- **Green Grow The Rushes** (`tt0043601`) — was missing: imdb_rating, director, actors
+- **Blood Brother** (`tt5246902`) — was missing: imdb_rating, director, actors
+- **Albert, R.N.** (`tt0045487`) — was missing: imdb_rating, director, actors
+- **Legal Action** (`tt7656570`) — was missing: imdb_rating, director, actors
+- **The Problem with Power** (`tt1220613`) — was missing: imdb_rating
+- **The Time Corridor** (`tt0785454`) — was missing: imdb_rating
+- **Maybe Shower** (`tt7206942`) — was missing: imdb_rating, director, actors
+- **Teela's Triumph** (`tt1216399`) — was missing: imdb_rating
+- **The Last Deal** (`tt3326138`) — was missing: imdb_rating, director, actors
+- **Dead Before They Wake** (`tt17044894`) — was missing: imdb_rating, director, actors
+- **Blood Honey** (`tt1380151`) — was missing: imdb_rating, director, actors
+- **Mexican Connection** (`tt16760028`) — was missing: imdb_rating, director, actors
+- **The Pursuit D.B. Cooper** (`tt0082958`) — was missing: imdb_rating, director, actors
+- **Quest for He-man** (`tt0794769`) — was missing: imdb_rating
+- **Island Of The Dolls** (`tt4423788`) — was missing: imdb_rating, director, actors
+- **The Gamesman** (`tt1216404`) — was missing: imdb_rating
+- **Loo-Kee Lends a Hand** (`tt0170567`) — was missing: imdb_rating
+- **Search for the Past** (`tt1216398`) — was missing: imdb_rating
+- **Birds of a Feather** (`tt0779613`) — was missing: imdb_rating
+- **Crazy** (`tt0443474`) — was missing: imdb_rating, director, actors
+- **Go Down, Moses** (`tt0592443`) — was missing: description, imdb_rating
+- **The Ghost Galleon** (`tt0071256`) — was missing: imdb_rating, director, actors
+- **Creatures from the Tar Swamp** (`tt0794772`) — was missing: imdb_rating
+- **The 12 Dogs of Christmas** (`tt0405615`) — was missing: imdb_rating, director, actors
+- **I Love Us** (`tt14271038`) — was missing: imdb_rating, director, actors
+- **Queen** (`tt0105937`) — was missing: director
+- **For Want of a Horse** (`tt0779622`) — was missing: imdb_rating
+- **He Ain't Heavy** (`tt0779627`) — was missing: imdb_rating
+- **A Violent Man** (`tt6162892`) — was missing: imdb_rating, director, actors
+- **Me and Marlborough** (`tt0026694`) — was missing: imdb_rating, director, actors
+- **Temple of the Sun** (`tt0801223`) — was missing: imdb_rating
+- **Search for the VHO** (`tt0801221`) — was missing: imdb_rating
+- **House of Purgatory** (`tt1773467`) — was missing: imdb_rating, director, actors
+- **Love's Kitchen** (`tt1519663`) — was missing: imdb_rating, director, actors
+- **My Favorite Girlfriend** (`tt15540696`) — was missing: imdb_rating, director, actors
+- **The Magic Falls** (`tt0962939`) — was missing: imdb_rating
+- **Search for the Past** (`tt1216398`) — was missing: imdb_rating
+- **Academy of Terror** (`tt0378491`) — was missing: imdb_rating, director, actors
+- **A Friend in Need** (`tt0785971`) — was missing: imdb_rating
+- **Green Grow The Rushes** (`tt0043601`) — was missing: imdb_rating, director, actors
+- **The Royal Cousin** (`tt0794774`) — was missing: imdb_rating
+- **Royal Wedding** (`tt0043983`) — was missing: imdb_rating, director, actors
+- **EXECUTOR** (`tt6236198`) — was missing: imdb_rating, director, actors
+- **Prime Evil** (`tt0095900`) — was missing: imdb_rating, director, actors
+- **County Line : No Fear** (`tt15141146`) — was missing: imdb_rating, director, actors
+- **Micah of Bright Moon** (`tt0779633`) — was missing: imdb_rating
+- **Island of Fear** (`tt1216391`) — was missing: imdb_rating
+- **The Gamesman** (`tt1216404`) — was missing: imdb_rating
+- **The Conqueror of the Orient** (`tt0148011`) — was missing: imdb_rating, director, actors
+- **The Pearl** (`tt0784534`) — was missing: imdb_rating
+- **A Year And Change** (`tt3339354`) — was missing: imdb_rating, director, actors
+- **She Loves Me Not** (`tt2390032`) — was missing: imdb_rating, director, actors
+- **Cadia, The World Within** (`tt7711350`) — was missing: imdb_rating, director, actors
+- **The Crimson Circle** (`tt0013035`) — was missing: imdb_rating, director, actors
+- **Above It All** (`tt0784513`) — was missing: imdb_rating
+- **The Time Wheel** (`tt1216414`) — was missing: imdb_rating
+- **Above Ground** (`tt3313314`) — was missing: imdb_rating, director, actors
+- **The Menkoff Method** (`tt3174842`) — was missing: imdb_rating, director, actors
+- **Courageous Mr. Penn** (`tt0033493`) — was missing: imdb_rating, director, actors
+- **Fearless Faith** (`tt8292804`) — was missing: imdb_rating, director, actors
+- **Striking Range** (`tt0457290`) — was missing: imdb_rating, director, actors
+- **100 Days to Live** (`tt10949778`) — was missing: imdb_rating, director, actors
+- **Orko's New Friend** (`tt1216396`) — was missing: imdb_rating
+- **Exit Speed** (`tt1042497`) — was missing: imdb_rating, director, actors
+- **The Standoff** (`tt4549224`) — was missing: imdb_rating, director, actors
+- **The Nemesis Within** (`tt3479036`) — was missing: imdb_rating
+- **The Mysteries of Pittsburg** (`tt0768218`) — was missing: imdb_rating, director, actors
+- **The Naughty List of Mr. Scrooge** (`tt34688170`) — was missing: imdb_rating, director, actors
+- **Perfect Break** (`tt3694104`) — was missing: imdb_rating, director, actors
+- **Island of Fear** (`tt1216391`) — was missing: imdb_rating
+- **Birds of a Feather** (`tt0779613`) — was missing: imdb_rating
+- **Hunt for He Man** (`tt1216390`) — was missing: imdb_rating
+- **Creatures from the Tar Swamp** (`tt0794772`) — was missing: imdb_rating
+- **Boone The Bounty Hunter** (`tt3229488`) — was missing: imdb_rating, director, actors
+- **Origin of the Sorceress** (`tt0962936`) — was missing: imdb_rating
+- **Killer Priest** (`tt1800313`) — was missing: imdb_rating, director, actors
+- **Chloe & Theo** (`tt1754736`) — was missing: imdb_rating, director, actors
+- **Search for the VHO** (`tt0801221`) — was missing: imdb_rating
+- **The Littlest Giant** (`tt1216409`) — was missing: imdb_rating
+- **The Clairvoyant** (`tt0024989`) — was missing: imdb_rating, director, actors
+- **Trunkfish** (`tt8551680`) — was missing: imdb_rating, director, actors
+- **Brigis** (`tt0784516`) — was missing: imdb_rating
+- **She-Ra: Princess of Power** (`tt0126171`) — was missing: director
+- **The Employer** (`tt1863203`) — was missing: imdb_rating, director, actors
+- **The Black Emperor of Broadway** (`tt9612892`) — was missing: imdb_rating, director, actors
+- **Solar Impact** (`tt11230050`) — was missing: imdb_rating, director, actors
+- **Cyrano de Bergerac** (`tt2518574`) — was missing: imdb_rating, director, actors
+- **10 Days to Destruction** (`tt1545489`) — was missing: imdb_rating, director, actors
+- **To Save Skeletor** (`tt1216417`) — was missing: imdb_rating
+- **Search for the VHO** (`tt0801221`) — was missing: imdb_rating
+- **Diamond Ray of Disappearance** (`tt0781877`) — was missing: imdb_rating
+- **Just Like Me** (`tt0779631`) — was missing: imdb_rating
+- **The Shadow of Skeletor** (`tt1216413`) — was missing: imdb_rating
+- **He-Man and the Masters of the Universe** (`tt0126158`) — was missing: director
+- **The Eternia Flower** (`tt1220612`) — was missing: imdb_rating
+- **Before I Go** (`tt8466482`) — was missing: imdb_rating, director, actors
+- **Prince Adam No More** (`tt0801217`) — was missing: imdb_rating
+- **Here, There, Skeletors Everywhere** (`tt1220607`) — was missing: imdb_rating
+- **Teela's Quest** (`tt0785973`) — was missing: imdb_rating
+- **American Justice** (`tt2940482`) — was missing: imdb_rating, director, actors
+- **Created Equal** (`tt5873100`) — was missing: imdb_rating, director, actors
+- **Magicats** (`tt0779632`) — was missing: imdb_rating
+- **She-Demon of Phantos** (`tt0785451`) — was missing: imdb_rating
+- **Battle of the Dragons** (`tt0962926`) — was missing: imdb_rating
+- **Jamaica Inn** (`tt0031505`) — was missing: imdb_rating, director, actors
+- **Almighty Zeus** (`tt14591022`) — was missing: imdb_rating, director, actors
+- **Diamond Ray of Disappearance** (`tt0781877`) — was missing: imdb_rating
+- **Search for the VHO** (`tt0801221`) — was missing: imdb_rating
+- **Break Even** (`tt9707580`) — was missing: imdb_rating, director, actors
+- **Fisto's Forest** (`tt1216388`) — was missing: imdb_rating
+- **Jacob - The Man Who Fought with God** (`tt0210069`) — was missing: imdb_rating, director, actors
+- **The Pearl** (`tt0784534`) — was missing: imdb_rating
+- **Chloe and Theo** (`tt1754736`) — was missing: imdb_rating, director, actors
+- **Safe Harbour** (`tt0974629`) — was missing: imdb_rating, director, actors
+- **Not So Blind** (`tt1179576`) — was missing: imdb_rating
+- **Shades of Orko** (`tt0784525`) — was missing: imdb_rating
+- **She-Ra: Princess of Power** (`tt0126171`) — was missing: director
+- **Bilal - A New Breed of Hero** (`tt3576728`) — was missing: imdb_rating, director, actors
+- **The Amazing Adventure** (`tt2609556`) — was missing: imdb_rating, director, actors
+- **The Naked Umbrella** (`tt22881548`) — was missing: imdb_rating, director, actors
+- **Dark Streets** (`tt0772165`) — was missing: imdb_rating, director, actors
+- **Mega Lightning 2** (`tt27130279`) — was missing: imdb_rating, director, actors
+- **Planet of Junk** (`tt3478950`) — was missing: description, imdb_rating, director, actors
+- **Burying the Ex** (`tt3339674`) — was missing: imdb_rating, director, actors
+- **Night Explorers : The Asylum** (`tt14088788`) — was missing: imdb_rating, director, actors
+- **Birds of a Feather** (`tt0779613`) — was missing: imdb_rating
+- **The Final Invasion** (`tt3481298`) — was missing: description, imdb_rating, director, actors
+- **Honesty Weekend** (`tt10131028`) — was missing: imdb_rating, director, actors
+- **Black Snow** (`tt0779614`) — was missing: imdb_rating
+- **A Loss for Words** (`tt0779609`) — was missing: imdb_rating
+- **Best F(r)iends** (`tt6155194`) — was missing: imdb_rating, director, actors
+- **Darksmoke and Fire** (`tt0779617`) — was missing: imdb_rating
+- **Double Trouble** (`tt0962928`) — was missing: imdb_rating
+- **For Want of a Horse** (`tt0779622`) — was missing: imdb_rating
+- **Anchors Aloft: Part I** (`tt0779611`) — was missing: imdb_rating
+- **Once Upon a Time** (`tt3479016`) — was missing: description, imdb_rating, director, actors
+- **Return of the Sea Hawk** (`tt0779638`) — was missing: imdb_rating
+- **He-Man and the Masters of the Universe** (`tt0126158`) — was missing: director
+- **The Ancient Mirror of Avathar** (`tt1220611`) — was missing: imdb_rating
+- **Ordeal in the Darklands** (`tt0801213`) — was missing: imdb_rating
+- **Disappearing Act** (`tt0781878`) — was missing: imdb_rating
+- **Birds of a Feather** (`tt0779613`) — was missing: imdb_rating
+- **Alf's Button Afloat** (`tt0029853`) — was missing: imdb_rating, director, actors
+- **The Time Corridor** (`tt0785454`) — was missing: imdb_rating
+- **The Shaping Staff** (`tt0598556`) — was missing: imdb_rating
+- **East Bay** (`tt3846472`) — was missing: imdb_rating, director, actors
+- **Jacob and the Widgets** (`tt1216392`) — was missing: imdb_rating
+- **Return of the General** (`tt0784523`) — was missing: imdb_rating
+- **Corregidor** (`tt0035755`) — was missing: imdb_rating, director, actors
+- **CONTAINMENT** (`tt3561236`) — was missing: imdb_rating, director, actors
+- **Glimmer Come Home** (`tt0784518`) — was missing: imdb_rating
+- **He-Man and the Masters of the Universe** (`tt0126158`) — was missing: director
+- **Double Down South** (`tt19407666`) — was missing: imdb_rating, director, actors
+- **The Inspector** (`tt0784532`) — was missing: imdb_rating
+- **Return of the General** (`tt0784523`) — was missing: imdb_rating
+- **Esme, my Love** (`tt8224010`) — was missing: imdb_rating, director, actors
+- **Cyber Bride** (`tt10273384`) — was missing: imdb_rating, director, actors
+- **Capture the Comet Keeper** (`tt1220605`) — was missing: imdb_rating
+- **Cold Freeze** (`tt3478982`) — was missing: description, imdb_rating, director, actors
+- **The Dragon's Gift** (`tt0801225`) — was missing: imdb_rating
+- **Council of Clones** (`tt3478972`) — was missing: description, imdb_rating, director, actors
+- **The Gambler** (`tt1216403`) — was missing: imdb_rating
+- **A Time to Leave** (`tt3481282`) — was missing: description, imdb_rating, director, actors
+- **Sanctuary** (`tt3478952`) — was missing: imdb_rating
+- **The Locket** (`tt0784533`) — was missing: imdb_rating
+- **Welcome Back, Kowl** (`tt0779660`) — was missing: imdb_rating
+- **Battle B-Boy** (`tt1947969`) — was missing: imdb_rating, director, actors
+- **Deadly Cuts** (`tt11366736`) — was missing: imdb_rating, director, actors
+- **Pressure** (`tt32547691`) — was missing: imdb_rating
+- **High Flyers** (`tt0474082`) — was missing: imdb_rating
+- **The Crimson Circle** (`tt0013035`) — was missing: imdb_rating, director, actors
+- **When Whispering Woods Last Bloomed** (`tt0784537`) — was missing: imdb_rating
+- **Assault on the Hive** (`tt0784514`) — was missing: imdb_rating
+- **47 Hours** (`tt7842256`) — was missing: imdb_rating, director, actors
+- **A Lesson in Love** (`tt0784512`) — was missing: imdb_rating
+- **The Crown of Knowledge** (`tt0779641`) — was missing: imdb_rating
+- **A Plague on Primus** (`tt3479018`) — was missing: imdb_rating
+- **Gift of Fear** (`tt16441804`) — was missing: imdb_rating, director, actors
+- **The Animal Kingdom** (`tt16606592`) — was missing: imdb_rating, director, actors
+- **Dementia 13** (`tt0056983`) — was missing: imdb_rating, director, actors
+- **The Crooked Circle** (`tt0022788`) — was missing: imdb_rating, director, actors
+- **Collision Course** (`tt3478948`) — was missing: description, imdb_rating, director, actors
+- **Capture the Comet Keeper** (`tt1220605`) — was missing: imdb_rating
+- **Darksmoke and Fire** (`tt0779617`) — was missing: imdb_rating
+- **Out of the Cocoon** (`tt0784521`) — was missing: imdb_rating
+- **She-Ra: Princess of Power** (`tt0126171`) — was missing: director
+- **Colourful & Impossible** (`tt4276890`) — was missing: imdb_rating, director, actors
+- **Streets of East L.A.** (`tt4975904`) — was missing: imdb_rating, director, actors
+- **The Perils of Peekablue** (`tt0784535`) — was missing: imdb_rating
+- **The Time Transformer** (`tt0784536`) — was missing: imdb_rating
+- **Something Old, Something New** (`tt1223018`) — was missing: imdb_rating
+- **City Without Men** (`tt0035740`) — was missing: imdb_rating, director, actors
+- **Where The Road Runs Out** (`tt2346198`) — was missing: imdb_rating, director, actors
+- **Sin Takes a Holiday** (`tt0021377`) — was missing: imdb_rating, director, actors
+- **Small Problems** (`tt0779639`) — was missing: imdb_rating
+- **Return of the General** (`tt0784523`) — was missing: imdb_rating
+- **The Galactic Guardians** (`tt3479002`) — was missing: imdb_rating
+- **Calber Island** (`tt7720214`) — was missing: imdb_rating, director, actors
+- **Climbing High** (`tt0031161`) — was missing: imdb_rating, director, actors
+- **Cold Freeze** (`tt3478982`) — was missing: description, imdb_rating, director, actors
+- **He-Caz** (`tt3478990`) — was missing: description, imdb_rating, director, actors
+- **Jungle Fever** (`tt0779630`) — was missing: imdb_rating
+- **The Inspector** (`tt0784532`) — was missing: imdb_rating
+- **Anchors Aloft: Part II** (`tt0779612`) — was missing: imdb_rating
+- **Bulldog Drummond Escapes** (`tt0028668`) — was missing: imdb_rating, director, actors
+- **Just Swipe** (`tt13616400`) — was missing: imdb_rating, director, actors
+- **The Three Avengers** (`tt0079110`) — was missing: imdb_rating, director, actors
+- **The Dream Zone** (`tt3479048`) — was missing: description, imdb_rating, director
+- **The Perils of Peekablue** (`tt0784535`) — was missing: imdb_rating
+- **Art Show Bingo** (`tt5947582`) — was missing: imdb_rating, director, actors
+- **Saving Paradise** (`tt3982212`) — was missing: imdb_rating, director, actors
+- **The Arena** (`tt1216400`) — was missing: imdb_rating
+- **Jungle Fever** (`tt0779630`) — was missing: imdb_rating
+- **The Prisoners of Beast Island** (`tt0763562`) — was missing: imdb_rating
+- **The Shaping Staff** (`tt0598556`) — was missing: imdb_rating
+- **When Whispering Woods Last Bloomed** (`tt0784537`) — was missing: imdb_rating
+- **Play It Again, Bow** (`tt0779637`) — was missing: imdb_rating
+- **The Adventures of Pepper & Paula** (`tt3283950`) — was missing: imdb_rating, director, actors
+- **Caught in the Act** (`tt0796266`) — was missing: imdb_rating, director, actors
+- **Slaves to the Machine** (`tt3478996`) — was missing: description, imdb_rating, director, actors
+- **A Lesson in Love** (`tt0784512`) — was missing: imdb_rating
+- **Among Ravens** (`tt2328696`) — was missing: imdb_rating, director, actors
+- **Time Out for Rhythm** (`tt0034296`) — was missing: imdb_rating, director, actors
+- **Acts of Desperation** (`tt3219686`) — was missing: imdb_rating, director, actors
+- **Welcome Back, Kowl** (`tt0779660`) — was missing: imdb_rating
+- **County Line: All In** (`tt15141144`) — was missing: imdb_rating, director, actors
+- **The Littlest Giant** (`tt1216409`) — was missing: imdb_rating
+- **Just Like Me** (`tt0779631`) — was missing: imdb_rating
+- **Four Ways to Sundown** (`tt3479026`) — was missing: description, imdb_rating, director, actors
+- **RIZE** (`tt0436724`) — was missing: imdb_rating, director, actors
+- **The New Wizard in Town** (`tt3479032`) — was missing: description, imdb_rating, director
+- **Grandma's House** (`tt5176486`) — was missing: imdb_rating, director, actors
+- **When Whispering Woods Last Bloomed** (`tt0784537`) — was missing: imdb_rating
+- **Reign of the Monster** (`tt0794770`) — was missing: imdb_rating
+- **The Bride of Slushhead** (`tt3481178`) — was missing: description, imdb_rating, director, actors
+- **The Bigamist** (`tt0045557`) — was missing: imdb_rating, director, actors
+- **The Pearl** (`tt0784534`) — was missing: imdb_rating
+- **The Stone in the Sword** (`tt0779653`) — was missing: imdb_rating
+- **A Loss for Words** (`tt0779609`) — was missing: imdb_rating
+- **10 Things We Should Do Before We Break Up** (`tt7939428`) — was missing: imdb_rating, director, actors
+- **Danger Lights** (`tt0020806`) — was missing: imdb_rating, director, actors
+- **One to Count On** (`tt0779636`) — was missing: imdb_rating
+- **Flogg's Revenge** (`tt3481294`) — was missing: imdb_rating
+- **Finding Grace** (`tt7838654`) — was missing: imdb_rating, director, actors
+- **Friendship** (`tt0779624`) — was missing: imdb_rating
+- **The Games** (`tt3481292`) — was missing: description, imdb_rating, director, actors
+- **Of Shadows and Skulls** (`tt0779635`) — was missing: imdb_rating
+- **Friendship** (`tt0779624`) — was missing: imdb_rating
+- **Whistle Stop** (`tt0039101`) — was missing: imdb_rating, director, actors
+- **Return of the Sea Hawk** (`tt0779638`) — was missing: imdb_rating
+- **The Blacksmith of Crelus** (`tt3481280`) — was missing: description, imdb_rating, director, actors
+- **Salt of the Earth** (`tt0047443`) — was missing: imdb_rating, director, actors
+- **Sharkproof** (`tt2288017`) — was missing: imdb_rating, director, actors
+- **Island of Fear** (`tt1216391`) — was missing: imdb_rating
+- **Ordeal in the Darklands** (`tt0801213`) — was missing: imdb_rating
+- **Savannah Sunrise** (`tt5591822`) — was missing: imdb_rating, director, actors
+- **Hope Dances** (`tt5442884`) — was missing: imdb_rating, director, actors
+- **At War with the Army** (`tt0042209`) — was missing: imdb_rating, director, actors
+- **Finding Tony** (`tt29486067`) — was missing: imdb_rating, director, actors
+- **The Crystal Castle** (`tt0779642`) — was missing: imdb_rating
+- **Jungle Fever** (`tt0779630`) — was missing: imdb_rating
+- **White Lie** (`tt9169036`) — was missing: imdb_rating, director, actors
+- **Save Our City** (`tt3481258`) — was missing: description, imdb_rating, director, actors
+- **Something Old, Something New** (`tt1223018`) — was missing: imdb_rating
+- **5 Weddings** (`tt1971310`) — was missing: imdb_rating, director, actors
+- **Danny Boy** (`tt13475382`) — was missing: imdb_rating, director, actors
+- **The Time Transformer** (`tt0784536`) — was missing: imdb_rating
+- **The Arena** (`tt1216400`) — was missing: imdb_rating
+- **Brain Drain** (`tt3479050`) — was missing: description, imdb_rating, director, actors
+- **Welcome Back, Kowl** (`tt0779660`) — was missing: imdb_rating
+- **Darksmoke and Fire** (`tt0779617`) — was missing: imdb_rating
+- **Micah of Bright Moon** (`tt0779633`) — was missing: imdb_rating
+- **One to Count On** (`tt0779636`) — was missing: imdb_rating
+- **The Sheriff of Gorn City** (`tt3479030`) — was missing: description, imdb_rating, director
+- **Crack in the World** (`tt3478906`) — was missing: description, imdb_rating, director, actors
+- **The Children's Planet** (`tt3479008`) — was missing: imdb_rating
+- **Born into a Dream** (`tt18244700`) — was missing: imdb_rating, director, actors
+- **The Prisoners of Beast Island** (`tt0763562`) — was missing: imdb_rating
+- **Valley of Power** (`tt0801240`) — was missing: imdb_rating
+- **Brigis** (`tt0784516`) — was missing: imdb_rating
+- **Rock to the Future** (`tt3481196`) — was missing: description, imdb_rating, director, actors
+- **Courageous Mr. Penn** (`tt0033493`) — was missing: imdb_rating, director, actors
+- **A Doggone Christmas** (`tt5853124`) — was missing: imdb_rating, director, actors
+- **You're in the Army Now** (`tt3479052`) — was missing: imdb_rating
+- **Balance of Power** (`tt3481206`) — was missing: description, imdb_rating, director, actors
+- **The Running of the Herd** (`tt3481202`) — was missing: imdb_rating
+- **Finding Grace** (`tt7838654`) — was missing: imdb_rating, director, actors
+- **Deadly Dance Mom** (`tt5582308`) — was missing: imdb_rating, director, actors
+- **No Easy Way** (`tt3479056`) — was missing: imdb_rating
+- **Mr. Robinson Crusoe** (`tt0023243`) — was missing: imdb_rating, director, actors
+- **Blackmail (1929)** (`tt0019702`) — was missing: imdb_rating
+- **The Tornadoes of Zil** (`tt3481218`) — was missing: description, imdb_rating, director, actors
+- **The Test of Time** (`tt3479024`) — was missing: description, imdb_rating, director, actors
+- **The 13th Man** (`tt0028360`) — was missing: imdb_rating, director, actors
+- **The Power of the Good and the Way of the Magic** (`tt3481264`) — was missing: description, imdb_rating, director, actors
+- **Somebody Killed Her Husband** (`tt0078294`) — was missing: imdb_rating, director, actors
+- **August Falls** (`tt3663718`) — was missing: imdb_rating, director, actors
+- **A Thousand Little Cuts** (`tt11244558`) — was missing: imdb_rating, director, actors
+- **Crypto Shadows** (`tt16287710`) — was missing: imdb_rating, director, actors
+- **Unexpected Ally** (`tt0779659`) — was missing: imdb_rating
+- **Queen's Gambit** (`tt3481268`) — was missing: description, imdb_rating, director, actors
+- **Good Mourning Lucille** (`tt2835334`) — was missing: imdb_rating, director, actors
+- **Adventures of the Crystal Skull** (`tt13967784`) — was missing: imdb_rating, director, actors
+- **Just Like Me** (`tt0779631`) — was missing: imdb_rating
+- **IRL** (`tt8560814`) — was missing: imdb_rating, director, actors
+- **Behind Office Doors** (`tt0287604`) — was missing: imdb_rating, director, actors
+- **Magicats** (`tt0779632`) — was missing: imdb_rating
+- **The Siege of Serus** (`tt3479006`) — was missing: description, imdb_rating, director, actors
+- **Horse Camp - A Love Tail** (`tt10941890`) — was missing: imdb_rating, director, actors
+- **There's Gems in Them Hills** (`tt3481274`) — was missing: imdb_rating
+- **PEEPERS** (`tt1379234`) — was missing: imdb_rating, director, actors
+- **Orko's New Friend** (`tt1216396`) — was missing: imdb_rating
+- **Phantom Ship** (`tt0065021`) — was missing: imdb_rating, director, actors
+- **Welcome to the Men's Group** (`tt3179350`) — was missing: imdb_rating, director, actors
+- **Danger Lights** (`tt0020806`) — was missing: imdb_rating, director, actors
+- **Half Shot at Sunrise** (`tt0020945`) — was missing: imdb_rating, director, actors
+- **Corregidor** (`tt0035755`) — was missing: imdb_rating, director, actors
+- **Jacob and the Widgets** (`tt1216392`) — was missing: imdb_rating
+- **The Taking of Levitan** (`tt3481222`) — was missing: description, imdb_rating, director, actors
+- **Four Boxes** (`tt1144545`) — was missing: imdb_rating, director, actors
+- **Class of '85** (`tt19413880`) — was missing: imdb_rating, director, actors
+- **The Crimson Circle** (`tt0013035`) — was missing: imdb_rating, director, actors
+- **Molli & Max in the Future** (`tt21426456`) — was missing: imdb_rating, director, actors
+- **The Shaping Staff** (`tt0598556`) — was missing: imdb_rating
+- **Ordeal in the Darklands** (`tt0801213`) — was missing: imdb_rating
+- **Magicats** (`tt0779632`) — was missing: imdb_rating
+- **Let It Bleed** (`tt3176414`) — was missing: imdb_rating, director, actors
+- **When Whispering Woods Last Bloomed** (`tt0784537`) — was missing: imdb_rating
+- **The Camels are Coming** (`tt0024945`) — was missing: imdb_rating, director, actors
+- **Freckles Comes Home** (`tt0034754`) — was missing: imdb_rating, director, actors
+- **The Girl Who Left Home** (`tt8774202`) — was missing: imdb_rating, director, actors
+- **Adventure Island** (`tt0039133`) — was missing: imdb_rating, director, actors
+- **The Call to the Games** (`tt3481276`) — was missing: description, imdb_rating, director, actors
+- **July Rising** (`tt7306968`) — was missing: imdb_rating, director, actors
+- **Temple of the Sun** (`tt0801223`) — was missing: imdb_rating
+- **The Guns of Nordor** (`tt3479060`) — was missing: imdb_rating
+- **The Stone in the Sword** (`tt0779653`) — was missing: imdb_rating
+- **The Christ Slayer** (`tt6221540`) — was missing: imdb_rating, director, actors
+- **Capture the Comet Keeper** (`tt1220605`) — was missing: imdb_rating
+- **How to Solve your own Murder** (`tt35268667`) — was missing: imdb_rating, director, actors
+- **Black Snow** (`tt0779614`) — was missing: imdb_rating
+- **The Mutiny of the Elsinore** (`tt0029280`) — was missing: imdb_rating, director, actors
+- **Einstein's God Model** (`tt1773389`) — was missing: imdb_rating, director, actors
+- **Micah of Bright Moon** (`tt0779633`) — was missing: imdb_rating
+- **Micah of Bright Moon** (`tt0779633`) — was missing: imdb_rating
+- **Jamaica Inn** (`tt0031505`) — was missing: imdb_rating, director, actors
+- **Club Paradise** (`tt0090856`) — was missing: imdb_rating, director, actors
+- **Reign of the Monster** (`tt0794770`) — was missing: imdb_rating
+- **In the Wake of the Bounty** (`tt0024176`) — was missing: imdb_rating, director, actors
+- **Fear and Desire** (`tt0045758`) — was missing: imdb_rating, director, actors
+- **Santa Stole Our Dog!** (`tt5801302`) — was missing: imdb_rating, director, actors
+- **Out of the Cocoon** (`tt0784521`) — was missing: imdb_rating
+- **The Strange Woman** (`tt0038990`) — was missing: imdb_rating, director, actors
+- **Below the Beltway** (`tt1453428`) — was missing: imdb_rating, director, actors
+- **The Bat** (`tt0052602`) — was missing: imdb_rating, director, actors
+- **Life with Father** (`tt0039566`) — was missing: imdb_rating, director, actors
+- **Counterblast** (`tt0040249`) — was missing: imdb_rating, director, actors
+- **The Bigamist** (`tt0045557`) — was missing: imdb_rating, director, actors
+- **The Time Transformer** (`tt0784536`) — was missing: imdb_rating
+- **The Gambler** (`tt1216403`) — was missing: imdb_rating
+- **Family Games** (`tt2139869`) — was missing: imdb_rating, director, actors
+- **Cross Streets** (`tt0025016`) — was missing: imdb_rating, director, actors
+- **Catfish Christmas** (`tt18937582`) — was missing: imdb_rating, director, actors
+- **The Wild Eye** (`tt38984845`) — was missing: imdb_rating, director, actors
+- **Confidential** (`tt0026231`) — was missing: imdb_rating, director, actors
+- **My First Miracle** (`tt3967826`) — was missing: imdb_rating, director, actors
+- **Confidential** (`tt0026231`) — was missing: imdb_rating, director, actors
+- **The Bulldog Breed** (`tt0053683`) — was missing: imdb_rating, director, actors
+- **What Lies Ahead** (`tt6009582`) — was missing: imdb_rating, director, actors
+- **The Arena** (`tt1216400`) — was missing: imdb_rating
+- **Life with Father** (`tt0039566`) — was missing: imdb_rating, director, actors
+- **Bread My Sweet** (`tt0281680`) — was missing: imdb_rating, director, actors
+- **The Chemists** (`tt15373550`) — was missing: imdb_rating, director, actors
+- **Caught in the Act** (`tt0796266`) — was missing: imdb_rating, director, actors
+- **Call of the Yukon** (`tt0029961`) — was missing: imdb_rating, director, actors
+- **Adolescents of Chymera** (`tt12837402`) — was missing: imdb_rating, director, actors
+- **How Sweet It Is** (`tt2294663`) — was missing: imdb_rating, director, actors
+- **Call of the Yukon** (`tt0029961`) — was missing: imdb_rating, director, actors
+- **Crashing Through Danger** (`tt0030023`) — was missing: imdb_rating, director, actors
+- **Bennett's Song** (`tt6841812`) — was missing: imdb_rating, director, actors
+- **Crimson Romance** (`tt0025011`) — was missing: imdb_rating, director, actors
+- **Against All Hope** (`tt0235166`) — was missing: imdb_rating, director, actors
+- **Micah of Bright Moon** (`tt0779633`) — was missing: imdb_rating
+- **Acts of Desperation** (`tt3219686`) — was missing: imdb_rating, director, actors
+- **Colonel Effingham's Raid** (`tt0037607`) — was missing: imdb_rating, director, actors
+- **Eat Locals** (`tt4401006`) — was missing: imdb_rating, director, actors
+- **Cheating Blondes** (`tt0023883`) — was missing: imdb_rating, director, actors
+- **Broken Dreams** (`tt0023849`) — was missing: imdb_rating, director, actors
+- **The Bromley Boys** (`tt2179231`) — was missing: imdb_rating, director, actors
+- **86 Melrose Avenue** (`tt10872080`) — was missing: imdb_rating, director, actors
+- **Morals for Women** (`tt0022161`) — was missing: imdb_rating, director, actors
+- **Gang War** (`tt0032508`) — was missing: imdb_rating, director, actors
+- **Before the Border** (`tt2462764`) — was missing: imdb_rating, director, actors
+- **Tango Shalom** (`tt2084952`) — was missing: imdb_rating, director, actors
+- **Shiner** (`tt0232632`) — was missing: imdb_rating, director, actors
+- **Anatomy of a Psycho** (`tt0054627`) — was missing: imdb_rating, director, actors
+- **Country Gentlemen** (`tt0027470`) — was missing: imdb_rating, director, actors
+- **Sinners in Paradise** (`tt0030754`) — was missing: imdb_rating, director, actors
+- **Bulldog Drummond Comes Back** (`tt0028667`) — was missing: imdb_rating, director, actors
+- **Goldfish Memory** (`tt0366527`) — was missing: imdb_rating, director, actors
+- **CARALIQUE** (`tt15325916`) — was missing: imdb_rating, director, actors
+- **A Bennett Song Holiday** (`tt8552834`) — was missing: imdb_rating, director, actors
+- **The Curtain Falls** (`tt0025024`) — was missing: imdb_rating, director, actors
+- **Danger! Women at Work** (`tt0035778`) — was missing: imdb_rating, director, actors
+- **The 13th Man** (`tt0097388`) — was missing: imdb_rating, director, actors
+- **The Prototype** (`tt1754700`) — was missing: imdb_rating, director, actors
+- **Hero of the Underworld** (`tt3586118`) — was missing: imdb_rating, director, actors
+- **Women Won't Tell** (`tt0024784`) — was missing: imdb_rating, director, actors
+- **Lost in the Stratosphere** (`tt0025424`) — was missing: imdb_rating, director, actors
+- **O-Kay for Sound** (`tt0029336`) — was missing: imdb_rating, director, actors
+- **Cheating Blondes** (`tt0023883`) — was missing: imdb_rating, director, actors
+- **Call of the Yukon** (`tt0029961`) — was missing: imdb_rating, director, actors
+- **Slipaway** (`tt4624204`) — was missing: imdb_rating, director, actors
+- **City Park** (`tt2290904`) — was missing: imdb_rating, director, actors
+- **Fourplay** (`tt5630752`) — was missing: imdb_rating, director, actors
+- **City Girl** (`tt0028721`) — was missing: imdb_rating, director, actors
+- **Scavenger Hunt** (`tt0079858`) — was missing: imdb_rating, director, actors
+- **Gun Cargo** (`tt0311237`) — was missing: imdb_rating, director, actors
+- **365 Nights in Hollywood** (`tt0024808`) — was missing: imdb_rating, director, actors
+- **Get Luke Lowe** (`tt9088374`) — was missing: imdb_rating, director, actors
+- **DriverX** (`tt4952044`) — was missing: imdb_rating, director, actors
+- **Buried Alive** (`tt0099188`) — was missing: imdb_rating, director, actors
+- **Dangerous Passage** (`tt0036741`) — was missing: imdb_rating, director, actors
+- **Captain Scarface** (`tt0045604`) — was missing: imdb_rating, director, actors
+- **Captured In Chinatown** (`tt0026177`) — was missing: imdb_rating, director, actors
+- **Patterns** (`tt0622424`) — was missing: imdb_rating
+- **The Great Flamarion** (`tt0037749`) — was missing: imdb_rating, director, actors
+- **Hamlet-Horatio** (`tt6923850`) — was missing: imdb_rating, director, actors
+- **Convention Girl** (`tt0026232`) — was missing: imdb_rating, director, actors
+- **Dangerous Holiday** (`tt0028763`) — was missing: imdb_rating, director, actors
+- **The Arkus Crown** (`tt4650410`) — was missing: imdb_rating, director, actors
+- **Operation Curveball** (`tt10051088`) — was missing: imdb_rating, director, actors
+- **The Runner Stumbles** (`tt0079831`) — was missing: imdb_rating, director, actors
+- **Clancy in Wall Street** (`tt0020770`) — was missing: imdb_rating, director, actors
+- **Cloud Dancer** (`tt0080545`) — was missing: imdb_rating, director, actors
+- **Captain Calamity** (`tt0027420`) — was missing: imdb_rating, director, actors
+- **Clipped Wings** (`tt0045633`) — was missing: imdb_rating, director, actors
+- **Manfish** (`tt0049477`) — was missing: imdb_rating, director, actors
+- **Ms. White Light** (`tt4073936`) — was missing: imdb_rating, director, actors
+- **Check and Double Check** (`tt0020758`) — was missing: imdb_rating, director, actors
+- **Danger on Wheels** (`tt0032380`) — was missing: imdb_rating, director, actors
+- **Broken Ceiling** (`tt5221360`) — was missing: imdb_rating, director, actors
+- **2 Lives in Pittsburgh** (`tt14328788`) — was missing: imdb_rating, director, actors
+- **Colonel Effingham's Raid** (`tt0037607`) — was missing: imdb_rating, director, actors
+- **Child Bride** (`tt0029989`) — was missing: imdb_rating, director, actors
+- **Circus Girl** (`tt0028719`) — was missing: imdb_rating, director, actors
+- **Club Paradise** (`tt0090856`) — was missing: imdb_rating, director, actors
+- **Dancing Man** (`tt0025030`) — was missing: imdb_rating, director, actors
+- **Black Gold** (`tt0027366`) — was missing: imdb_rating, director, actors
+- **Hobo Heyseus** (`tt2898670`) — was missing: imdb_rating, director, actors
+- **Seize the Night** (`tt9193690`) — was missing: imdb_rating, director, actors
+- **The Hybrids Family** (`tt2569548`) — was missing: imdb_rating, director, actors
+- **Cheers of the Crowd** (`tt0026203`) — was missing: imdb_rating, director, actors
+- **Let's Get Tough!** (`tt0034973`) — was missing: imdb_rating, director, actors
+- **City Park** (`tt2290904`) — was missing: imdb_rating, director, actors
+- **Daring Daughters** (`tt0023930`) — was missing: imdb_rating, director, actors
+- **Corsair** (`tt0021764`) — was missing: imdb_rating, director, actors
+- **Crimson Romance** (`tt0025011`) — was missing: imdb_rating, director, actors
+- **Barefoot Boy** (`tt0029898`) — was missing: imdb_rating, director, actors
+- **Circus Girl** (`tt0028719`) — was missing: imdb_rating, director, actors
+- **Car of Dreams** (`tt0026179`) — was missing: imdb_rating, director, actors
+- **The Dawn Express** (`tt0034637`) — was missing: imdb_rating, director, actors
+- **Half Shot At Sunrise** (`tt0020945`) — was missing: imdb_rating, director, actors
+- **Anatomy of a Psycho** (`tt0054627`) — was missing: imdb_rating, director, actors
+- **A Bennett Song Holiday** (`tt8552834`) — was missing: imdb_rating, director, actors
+- **Boys' Reformatory** (`tt0031119`) — was missing: imdb_rating, director, actors
+- **The Curtain Falls** (`tt0025024`) — was missing: imdb_rating, director, actors
+- **Crashing Through Danger** (`tt0030023`) — was missing: imdb_rating, director, actors
+- **Captured in Chinatown** (`tt0026177`) — was missing: imdb_rating, director, actors
+- **Three Guys Named Mike** (`tt0044125`) — was missing: imdb_rating, director, actors
+- **Cheers of the Crowd** (`tt0026203`) — was missing: imdb_rating, director, actors
+- **The Courageous Dr. Christian** (`tt0032361`) — was missing: imdb_rating, director, actors
+- **The Last Treasure Hunt** (`tt3163244`) — was missing: imdb_rating, director, actors
+- **Elfette Saves Christmas** (`tt10203940`) — was missing: imdb_rating, director, actors
+- **Check and Double Check** (`tt0020758`) — was missing: imdb_rating, director, actors
+- **Broken Dreams** (`tt0023849`) — was missing: imdb_rating, director, actors
+- **Clancy in Wall Street** (`tt0020770`) — was missing: imdb_rating, director, actors
+- **Benny Loves Killing** (`tt2275543`) — was missing: imdb_rating, director, actors
+- **Cross Streets** (`tt0025016`) — was missing: imdb_rating, director, actors
+- **The Big Combo** (`tt0047878`) — was missing: imdb_rating, director, actors
+- **South of the River** (`tt3406172`) — was missing: imdb_rating, director, actors
+- **Broken Strings** (`tt0135173`) — was missing: imdb_rating, director, actors
+- **Carnival Lady** (`tt0154285`) — was missing: imdb_rating, director, actors
+- **The Emperor Jones** (`tt0023985`) — was missing: imdb_rating, director, actors
+- **Coffee in Winter** (`tt3196640`) — was missing: imdb_rating, director, actors
+- **Broken Strings** (`tt0135173`) — was missing: imdb_rating, director, actors
+- **The Silver Horde** (`tt0021374`) — was missing: imdb_rating, director, actors
+- **Broken Strings** (`tt0135173`) — was missing: imdb_rating, director, actors
+- **The Contender** (`tt0208874`) — was missing: imdb_rating, director, actors
+- **The Stunt Man** (`tt0081568`) — was missing: imdb_rating, director, actors
+- **The Hunchback of Notre Dame** (`tt0116583`) — was missing: imdb_rating, director, actors
+
+## Failed (0 movies)
+
+None.

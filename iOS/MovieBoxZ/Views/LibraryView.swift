@@ -6,7 +6,7 @@ import SwiftUI
 // Phase 3: Will upgrade to Supabase for cross-device sync
 
 struct LibraryView: View {
-    @StateObject private var movieService = MovieService()
+    @EnvironmentObject private var movieService: MovieService
     @StateObject private var libraryManager = LibraryManager.shared
 
     @State private var viewMode: ViewMode = .myList
@@ -225,28 +225,48 @@ struct LibraryView: View {
         Task {
             isLoading = true
 
-            do {
-                // Get favorite and watched movie IDs from LibraryManager
-                let favoriteIds = libraryManager.favoriteMovieIds
+            // Get favorite and watched movie IDs from LibraryManager
+            let favoriteIds = libraryManager.favoriteMovieIds
+            let watchedIds = libraryManager.watchHistory.map { $0.movieId }
 
-                // Fetch all recent movies from backend
-                let allMovies = try await movieService.fetchRecentMovies(limit: 100)
+            // Fetch each favorited/watched movie by ID directly instead of
+            // pulling a capped "recent" list and filtering — otherwise any
+            // favorite older than the most recent N movies silently
+            // disappears from "My List". Fetches run concurrently and
+            // gracefully skip movies that fail to load (e.g. deleted).
+            async let favoritesResult = fetchMovies(byIds: favoriteIds)
+            async let watchedResult = fetchMovies(byIds: watchedIds)
+            let (fetchedFavorites, fetchedWatched) = await (favoritesResult, watchedResult)
 
-                // Filter movies by IDs
-                favoriteMovies = allMovies.filter { favoriteIds.contains($0.id) }
+            let favoritesById = Dictionary(uniqueKeysWithValues: fetchedFavorites.map { ($0.id, $0) })
+            favoriteMovies = favoriteIds.compactMap { favoritesById[$0] }
 
-                // For watch history, maintain order from LibraryManager
-                watchedMovies = libraryManager.watchHistory.compactMap { historyItem in
-                    allMovies.first { $0.id == historyItem.movieId }
+            let watchedById = Dictionary(uniqueKeysWithValues: fetchedWatched.map { ($0.id, $0) })
+            // Preserve most-recently-watched-first order from LibraryManager
+            watchedMovies = libraryManager.watchHistory.compactMap { watchedById[$0.movieId] }
+
+            isLoading = false
+        }
+    }
+
+    /// Fetches movies by ID concurrently, skipping any that fail (deleted,
+    /// unavailable, network error, etc.) instead of crashing or dropping
+    /// the whole list.
+    private func fetchMovies(byIds ids: [String]) async -> [Movie] {
+        guard !ids.isEmpty else { return [] }
+        return await withTaskGroup(of: Movie?.self) { group in
+            for id in ids {
+                group.addTask {
+                    try? await movieService.fetchMovieDetails(id: id)
                 }
-
-                isLoading = false
-            } catch {
-                print("❌ Error loading library: \(error)")
-                favoriteMovies = []
-                watchedMovies = []
-                isLoading = false
             }
+            var results: [Movie] = []
+            for await movie in group {
+                if let movie {
+                    results.append(movie)
+                }
+            }
+            return results
         }
     }
 
@@ -281,5 +301,6 @@ struct LibraryView: View {
 
 #Preview {
     LibraryView()
+        .environmentObject(MovieService())
         .preferredColorScheme(.dark)
 }

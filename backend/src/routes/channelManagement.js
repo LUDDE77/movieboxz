@@ -137,6 +137,65 @@ router.put('/:channelId/settings', async (req, res, next) => {
 // =============================================================================
 
 /**
+ * Shared import starter used by import-all, import-latest and reimport.
+ * Creates the import_history record and kicks off processImport in the
+ * background. Returns null if the channel does not exist.
+ */
+async function startChannelImport(channelId, { limit = null, sortOrder = 'latest', applySettings = true, autoEnrich = false } = {}) {
+    logger.info(`[Bulk Import] Starting import for ${channelId}, limit: ${limit || 'ALL'}, sort: ${sortOrder}, autoEnrich: ${autoEnrich}`)
+
+    // Get channel info
+    const { data: channel } = await supabase
+        .from('channels')
+        .select('title')
+        .eq('id', channelId)
+        .single()
+
+    if (!channel) {
+        return null
+    }
+
+    // Get channel settings if applying
+    let channelSettings = null
+    if (applySettings) {
+        const { data: settings } = await supabase
+            .from('channel_settings')
+            .select('*')
+            .eq('channel_id', channelId)
+            .single()
+        channelSettings = settings
+    }
+
+    // Create import history record
+    const { data: importRecord, error: importError } = await supabase
+        .from('import_history')
+        .insert({
+            channel_id: channelId,
+            import_type: limit ? 'partial' : 'full',
+            import_limit: limit,
+            sort_order: sortOrder,
+            status: 'running',
+            applied_settings: channelSettings,
+            auto_enriched: autoEnrich
+        })
+        .select()
+        .single()
+
+    if (importError) throw importError
+
+    // Start import process asynchronously
+    processImport(importRecord.id, channelId, channel.title, limit, sortOrder, channelSettings, autoEnrich)
+        .catch(error => {
+            logger.error('[Bulk Import] Process error:', error)
+        })
+
+    return {
+        batchId: importRecord.id,
+        channelTitle: channel.title
+    }
+}
+
+/**
  * POST /api/admin/channels/:channelId/import-all
  * Import all or limited videos from channel
  */
@@ -164,62 +223,21 @@ router.post('/:channelId/import-all', async (req, res, next) => {
             autoEnrichRaw: req.body.autoEnrich
         })
 
-        logger.info(`[Bulk Import] Starting import for ${channelId}, limit: ${limit || 'ALL'}, sort: ${sortOrder}, autoEnrich: ${autoEnrich}`)
+        const started = await startChannelImport(channelId, { limit, sortOrder, applySettings, autoEnrich })
 
-        // Get channel info
-        const { data: channel } = await supabase
-            .from('channels')
-            .select('title')
-            .eq('id', channelId)
-            .single()
-
-        if (!channel) {
+        if (!started) {
             return res.status(404).json({
                 success: false,
                 error: 'Channel not found'
             })
         }
 
-        // Get channel settings if applying
-        let channelSettings = null
-        if (applySettings) {
-            const { data: settings } = await supabase
-                .from('channel_settings')
-                .select('*')
-                .eq('channel_id', channelId)
-                .single()
-            channelSettings = settings
-        }
-
-        // Create import history record
-        const { data: importRecord, error: importError } = await supabase
-            .from('import_history')
-            .insert({
-                channel_id: channelId,
-                import_type: limit ? 'partial' : 'full',
-                import_limit: limit,
-                sort_order: sortOrder,
-                status: 'running',
-                applied_settings: channelSettings,
-                auto_enriched: autoEnrich
-            })
-            .select()
-            .single()
-
-        if (importError) throw importError
-
-        // Start import process asynchronously
-        processImport(importRecord.id, channelId, channel.title, limit, sortOrder, channelSettings, autoEnrich)
-            .catch(error => {
-                logger.error('[Bulk Import] Process error:', error)
-            })
-
         res.json({
             success: true,
             data: {
-                batchId: importRecord.id,
+                batchId: started.batchId,
                 status: 'running',
-                message: `Import started for ${channel.title}`
+                message: `Import started for ${started.channelTitle}`
             }
         })
     } catch (error) {
@@ -241,13 +259,26 @@ router.post('/:channelId/import-latest', async (req, res, next) => {
             applySettings = true
         } = req.body
 
-        // Reuse import-all logic
-        req.body.limit = limit
-        req.body.sortOrder = sortOrder
-        req.body.applySettings = applySettings
+        // Reuse import-all logic via the shared starter
+        const started = await startChannelImport(channelId, { limit, sortOrder, applySettings })
 
-        return router.handle({ ...req, url: `/${channelId}/import-all`, method: 'POST' }, res, next)
+        if (!started) {
+            return res.status(404).json({
+                success: false,
+                error: 'Channel not found'
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                batchId: started.batchId,
+                status: 'running',
+                message: `Import started for ${started.channelTitle}`
+            }
+        })
     } catch (error) {
+        logger.error('[Bulk Import] Start error:', error)
         next(error)
     }
 })
@@ -438,9 +469,24 @@ router.post('/:channelId/reimport', async (req, res, next) => {
             logger.info(`[Reimport] Deleted existing movies from ${channelId}`)
         }
 
-        // Trigger new import
-        req.body = { limit, applySettings, sortOrder: 'latest' }
-        return router.handle({ ...req, url: `/${channelId}/import-all`, method: 'POST' }, res, next)
+        // Trigger new import via the shared starter
+        const started = await startChannelImport(channelId, { limit, applySettings, sortOrder: 'latest' })
+
+        if (!started) {
+            return res.status(404).json({
+                success: false,
+                error: 'Channel not found'
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                batchId: started.batchId,
+                status: 'running',
+                message: `Import started for ${started.channelTitle}`
+            }
+        })
     } catch (error) {
         logger.error('[Reimport] Error:', error)
         next(error)

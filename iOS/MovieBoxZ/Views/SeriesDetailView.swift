@@ -6,7 +6,7 @@ import SwiftUI
 struct SeriesDetailView: View {
     let series: TVSeries
 
-    @StateObject private var movieService = MovieService()
+    @EnvironmentObject private var movieService: MovieService
     @Environment(\.dismiss) private var dismiss
 
     @State private var seasons: [SeriesSeason] = []
@@ -15,6 +15,9 @@ struct SeriesDetailView: View {
     @State private var errorMessage: String?
     @State private var selectedEpisode: Movie?
     @State private var selectedSeasonIndex: Int = 0
+    #if os(tvOS)
+    @Namespace private var closeNamespace
+    #endif
 
     // MARK: Platform sizes
 
@@ -60,6 +63,9 @@ struct SeriesDetailView: View {
                 mainContent
             }
         }
+        #if os(tvOS)
+        .focusScope(closeNamespace)
+        #endif
         .onAppear { loadSeriesDetail() }
         #if os(tvOS)
         .fullScreenCover(item: $selectedEpisode) { MovieDetailView(movie: $0) }
@@ -84,13 +90,15 @@ struct SeriesDetailView: View {
                             .padding(18)
                             .background(Circle().fill(Color.black.opacity(0.6)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 100)))
                     .accessibilityLabel("Close")
+                    .prefersDefaultFocus(true, in: closeNamespace)
                     Spacer()
                 }
                 .padding(.top, 60)
                 .padding(.horizontal, headerPadding)
                 .padding(.bottom, 16)
+                .focusSection()
                 #endif
 
                 // Header: poster + info
@@ -314,6 +322,9 @@ struct SeriesDetailView: View {
             }
         }
         .padding(.bottom, 60)
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     private var seasonPicker: some View {
@@ -333,13 +344,16 @@ struct SeriesDetailView: View {
                             .cornerRadius(10)
                     }
                     #if os(tvOS)
-                    .buttonStyle(FocusBorderButtonStyle(cornerRadius: 10))
+                    .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 10)))
                     #else
                     .buttonStyle(.plain)
                     #endif
                 }
             }
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     private func episodeRow(season: SeriesSeason) -> some View {
@@ -353,7 +367,13 @@ struct SeriesDetailView: View {
                 .padding(.horizontal, contentPadding)
                 .padding(.vertical, 8)
             }
+            #if os(tvOS)
+            .focusSection()
+            #endif
         }
+        #if os(tvOS)
+        .focusSection()
+        #endif
     }
 
     private func episodeCard(episode: Movie) -> some View {
@@ -505,7 +525,7 @@ struct SeriesDetailView: View {
                 .background(Color.red)
                 .cornerRadius(10)
                 #if os(tvOS)
-                .buttonStyle(.card)
+                .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 10)))
                 #else
                 .buttonStyle(.plain)
                 #endif

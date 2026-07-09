@@ -1,11 +1,15 @@
+// Load environment variables BEFORE all other imports so that modules reading
+// process.env at import time (config/database.js, service constructors) see them
+import 'dotenv/config'
+// Fail fast on missing required env vars before any other module reads process.env
+import './config/checkEnv.js'
+
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
-import morgan from 'morgan'
 import compression from 'compression'
 import rateLimit from 'express-rate-limit'
 import slowDown from 'express-slow-down'
-import dotenv from 'dotenv'
 
 // Import routes
 import moviesRouter from './routes/movies.js'
@@ -28,11 +32,10 @@ import { corsConfig } from './config/cors.js'
 // Import services
 import { logger } from './utils/logger.js'
 import { initializeCronJobs } from './services/cronJobs.js'
-
-// Load environment variables
-dotenv.config()
+import jobScheduler from './jobs/scheduler.js'
 
 const app = express()
+app.set('trust proxy', 1) // Behind Railway's proxy — needed so req.ip (rate limiting) is the client IP
 const port = process.env.PORT || 3000
 
 // =============================================================================
@@ -54,13 +57,7 @@ app.use(compression())
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Logging
-if (process.env.NODE_ENV === 'production') {
-    app.use(morgan('combined'))
-} else {
-    app.use(morgan('dev'))
-}
-
+// Logging (single structured request logger — morgan removed to avoid duplicate log lines)
 app.use(requestLogger)
 
 // Rate limiting
@@ -72,16 +69,13 @@ const limiter = rateLimit({
         code: 'RATE_LIMIT_EXCEEDED'
     },
     standardHeaders: true,
-    legacyHeaders: false,
-    // Skip rate limiting for admin endpoints (already protected by API key auth)
-    // Note: req.path is relative to the mount point ('/api'), so we check for '/admin' not '/api/admin'
-    skip: (req) => req.path.startsWith('/admin')
+    legacyHeaders: false
 })
 
 const speedLimiter = slowDown({
     windowMs: 15 * 60 * 1000, // 15 minutes
     delayAfter: 50, // allow 50 requests per 15 minutes, then...
-    delayMs: 500, // begin adding 500ms of delay per request above 50
+    delayMs: () => 500, // add a flat 500ms of delay per request above 50 (express-slow-down v2 API)
     maxDelayMs: 20000, // maximum delay of 20 seconds
 })
 
@@ -158,6 +152,13 @@ app.use(errorHandler)
 const gracefulShutdown = (signal) => {
     logger.info(`Received ${signal}. Starting graceful shutdown...`)
 
+    // Stop scheduled jobs first so no new work starts while we drain connections
+    try {
+        jobScheduler.stop()
+    } catch (error) {
+        logger.error('Error stopping job scheduler during shutdown:', error)
+    }
+
     server.close(() => {
         logger.info('HTTP server closed.')
         process.exit(0)
@@ -192,9 +193,10 @@ process.on('uncaughtException', (error) => {
     process.exit(1)
 })
 
+// Log unhandled rejections but keep the process alive — a single failed background
+// promise (e.g. a cron job) should not take down the whole API server
 process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    process.exit(1)
 })
 
 export default app

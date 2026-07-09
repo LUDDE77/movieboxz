@@ -19,5 +19,9 @@ struct MovieBoxZAdminApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
+
+        Settings {
+            AppSettingsView()
+        }
     }
 }

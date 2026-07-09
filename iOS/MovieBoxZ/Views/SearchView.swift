@@ -1,64 +1,43 @@
 import SwiftUI
 
 struct SearchView: View {
-    @StateObject private var movieService = MovieService()
+    @EnvironmentObject private var movieService: MovieService
     @State private var searchText = ""
     @State private var searchResults: [Movie] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
-    @State private var showingVideoPlayer = false
     @State private var currentMovie: Movie?
 
-    // Platform-specific grid columns (matching CategoryDetailView)
     #if os(tvOS)
-    private let columns = [
-        GridItem(.adaptive(minimum: 245, maximum: 245), spacing: 40)
-    ]
+    private let columns = [GridItem(.adaptive(minimum: 245, maximum: 245), spacing: 40)]
     private let cardTitleSize: CGFloat = 31
     private let cardMetadataSize: CGFloat = 25
     #else
-    private let columns = [
-        GridItem(.adaptive(minimum: 126, maximum: 180), spacing: 15)
-    ]
+    private let columns = [GridItem(.adaptive(minimum: 126, maximum: 180), spacing: 15)]
     private let cardTitleSize: CGFloat = 18
     private let cardMetadataSize: CGFloat = 14
     #endif
 
     var body: some View {
-        NavigationView {
-            VStack {
-                #if !os(tvOS)
-                searchBar
-                #endif
-                searchContent
-            }
-            .navigationTitle("Search")
-            .background(Color.black)
-            .onChange(of: searchText) { _, newValue in
-                if newValue.isEmpty {
-                    searchResults = []
-                }
-            }
+        ZStack {
+            Color.black.ignoresSafeArea()
+
             #if os(tvOS)
-            .searchable(text: $searchText, placement: .automatic)
-            .onSubmit(of: .search) {
-                performSearch()
-            }
+            tvOSLayout
+            #else
+            iOSLayout
             #endif
         }
-        #if os(tvOS)
-        .fullScreenCover(isPresented: $showingVideoPlayer) {
-            if let movie = currentMovie {
-                MovieDetailView(movie: movie)
-            }
+        // Live debounced search: cancels and restarts automatically whenever
+        // searchText changes, waits ~300ms before actually searching so we
+        // don't fire a request on every keystroke. `.onSubmit` below still
+        // triggers an immediate search.
+        .task(id: searchText) {
+            await debouncedSearch()
         }
-        #else
-        .sheet(isPresented: $showingVideoPlayer) {
-            if let movie = currentMovie {
-                MovieDetailView(movie: movie)
-            }
+        .sheet(item: $currentMovie) { movie in
+            MovieDetailView(movie: movie)
         }
-        #endif
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -66,155 +45,190 @@ struct SearchView: View {
         }
     }
 
-    private var searchBar: some View {
-        HStack {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Search movies...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .onSubmit {
-                        performSearch()
+    // MARK: - iOS Layout
+
+    #if !os(tvOS)
+    private var iOSLayout: some View {
+        VStack(spacing: 0) {
+            // Header + search bar
+            VStack(spacing: 12) {
+                Text("Search")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+
+                HStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.white.opacity(0.6))
+                        TextField("Search movies...", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .foregroundColor(.white)
+                            .tint(.red)
+                            .submitLabel(.search)
+                            .onSubmit { performSearch() }
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                                searchResults = []
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
                     }
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                        searchResults = []
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.15))
+                    .cornerRadius(10)
+
+                    if isSearching {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Button("Search") { performSearch() }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color.red)
+                            .cornerRadius(10)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 15)
-            .padding(.vertical, 10)
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(10)
+            .background(Color.white.opacity(0.05))
 
-            if isSearching {
-                ProgressView()
-                    .scaleEffect(0.8)
-            }
+            Divider().background(Color.white.opacity(0.1))
+
+            // Results
+            searchContent
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
     }
 
-    @ViewBuilder
     private var searchContent: some View {
-        if searchResults.isEmpty && !searchText.isEmpty && !isSearching {
-            emptyResultsView
-        } else if searchResults.isEmpty && searchText.isEmpty {
-            initialSearchView
-        } else {
-            searchResultsGrid
-        }
-    }
+        Group {
+            if searchResults.isEmpty && !searchText.isEmpty && !isSearching {
+                emptyState(icon: "magnifyingglass", title: "No Results", subtitle: "Try different keywords")
+            } else if searchResults.isEmpty {
+                emptyState(icon: "tv", title: "Search Movies", subtitle: "Find movies from curated YouTube channels")
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("\(searchResults.count) \(searchResults.count == 1 ? "result" : "results")")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.5))
+                            .padding(.horizontal, 16)
 
-    private var emptyResultsView: some View {
-        VStack {
-            Spacer()
-            VStack {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 60))
-                    .foregroundColor(.gray)
-                Text("No Results Found")
-                    .font(.title2)
-                    .fontWeight(.medium)
-                    .padding(.top)
-                Text("Try searching with different keywords")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-        }
-    }
-
-    private var initialSearchView: some View {
-        VStack {
-            Spacer()
-            VStack {
-                Image(systemName: "tv")
-                    .font(.system(size: 60))
-                    .foregroundColor(.gray)
-                Text("Search Movies")
-                    .font(.title2)
-                    .fontWeight(.medium)
-                    .padding(.top)
-                Text("Find your favorite YouTube movies")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-        }
-    }
-
-    private var searchResultsGrid: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Results count
-                Text("\(searchResults.count) \(searchResults.count == 1 ? "result" : "results")")
-                    .font(.system(size: cardTitleSize))
-                    .foregroundColor(.white.opacity(0.6))
-                    #if os(tvOS)
-                    .padding(.horizontal, 80)
-                    #else
-                    .padding(.horizontal, 16)
-                    #endif
-
-                // Grid of movies (matching CategoryDetailView layout)
-                LazyVGrid(columns: columns, spacing: 40) {
-                    ForEach(searchResults) { movie in
-                        MovieCard(
-                            movie: movie,
-                            cardTitleSize: cardTitleSize,
-                            cardMetadataSize: cardMetadataSize,
-                            onPlayVideo: playVideo
-                        )
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            ForEach(searchResults) { movie in
+                                MovieCard(
+                                    movie: movie,
+                                    cardTitleSize: cardTitleSize,
+                                    cardMetadataSize: cardMetadataSize,
+                                    onPlayVideo: { _ in currentMovie = movie }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 50)
                     }
+                    .padding(.top, 16)
                 }
-                .accessibilityIdentifier("search.grid.results")
-                #if os(tvOS)
-                .padding(.horizontal, 80)
-                .padding(.bottom, 100)
-                #else
-                .padding(.horizontal, 16)
-                .padding(.bottom, 50)
-                #endif
             }
-            .padding(.top, 20)
         }
     }
 
+    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: icon)
+                .font(.system(size: 50))
+                .foregroundColor(.white.opacity(0.3))
+            Text(title)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.white.opacity(0.8))
+            Text(subtitle)
+                .font(.system(size: 15))
+                .foregroundColor(.white.opacity(0.4))
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+    #endif
+
+    // MARK: - tvOS Layout
+
+    #if os(tvOS)
+    private var tvOSLayout: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 40) {
+                ForEach(searchResults) { movie in
+                    MovieCard(
+                        movie: movie,
+                        cardTitleSize: cardTitleSize,
+                        cardMetadataSize: cardMetadataSize,
+                        onPlayVideo: { _ in currentMovie = movie }
+                    )
+                }
+            }
+            .padding(.horizontal, 80)
+            .padding(.bottom, 100)
+        }
+        .searchable(text: $searchText, placement: .automatic)
+        .onSubmit(of: .search) { performSearch() }
+    }
+    #endif
+
+    // MARK: - Search
+
+    /// Immediate search — used by the Search button and onSubmit (both
+    /// platforms), bypassing the debounce delay.
     private func performSearch() {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        Task {
+            await runSearch(query: query)
+        }
+    }
+
+    /// Live debounced search driven by `.task(id: searchText)`. Waits ~300ms
+    /// so we don't hit the backend on every keystroke; automatically
+    /// cancelled and restarted by SwiftUI whenever `searchText` changes.
+    private func debouncedSearch() async {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            searchResults = []
             return
         }
 
-        Task {
-            isSearching = true
-            do {
-                searchResults = try await movieService.searchMovies(
-                    query: searchText.trimmingCharacters(in: .whitespacesAndNewlines),
-                    limit: 50
-                )
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            isSearching = false
+        do {
+            try await Task.sleep(nanoseconds: 300_000_000)
+        } catch {
+            return // superseded by a newer keystroke
         }
+        guard !Task.isCancelled else { return }
+
+        await runSearch(query: query)
     }
 
-    private func playVideo(_ videoId: String) {
-        // Find the movie with this video ID
-        if let movie = searchResults.first(where: { $0.youtubeVideoId == videoId }) {
-            currentMovie = movie
-            showingVideoPlayer = true
+    private func runSearch(query: String) async {
+        isSearching = true
+        do {
+            searchResults = try await movieService.searchMovies(query: query, limit: 50)
+        } catch {
+            errorMessage = error.localizedDescription
         }
+        isSearching = false
     }
 }
 
 #Preview {
     SearchView()
+        .environmentObject(MovieService())
         .preferredColorScheme(.dark)
 }

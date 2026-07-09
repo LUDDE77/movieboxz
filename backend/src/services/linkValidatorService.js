@@ -153,7 +153,7 @@ class LinkValidatorService {
             const url = `${this.YOUTUBE_VIDEOS_ENDPOINT}?` +
                 `part=status&id=${videoIds}&key=${this.YOUTUBE_API_KEY}`
 
-            const response = await fetch(url)
+            const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
             const data = await response.json()
 
             if (!response.ok) {

@@ -155,10 +155,14 @@ export const dbOperations = {
                 movie_people(*)
             `)
             .eq('id', id)
-            .single()
+            .maybeSingle()
 
         if (error) {
             throw error
+        }
+
+        if (!data) {
+            return null
         }
 
         // Transform data to flatten nested structures for iOS compatibility

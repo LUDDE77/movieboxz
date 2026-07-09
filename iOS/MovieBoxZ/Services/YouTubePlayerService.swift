@@ -14,16 +14,19 @@ class YouTubePlayerService {
 
     /// Check if YouTube app is installed on the device
     func isYouTubeAppInstalled() -> Bool {
-        // Both iOS and tvOS use youtube:// URL scheme
         guard let youtubeURL = URL(string: "youtube://") else {
+            #if DEBUG
             print("❌ Failed to create youtube:// URL")
+            #endif
             return false
         }
         let canOpen = UIApplication.shared.canOpenURL(youtubeURL)
+        #if DEBUG
         #if os(tvOS)
         print("🔍 [tvOS] canOpenURL(youtube://) = \(canOpen)")
         #else
         print("🔍 [iOS] canOpenURL(youtube://) = \(canOpen)")
+        #endif
         #endif
         return canOpen
     }
@@ -39,61 +42,74 @@ class YouTubePlayerService {
         // tvOS YouTube app uses proper URL scheme with path structure
         // Format: youtube:///watch?v=VIDEO_ID (triple slash = no host, just path+query)
         let youtubeAppURL = URL(string: "youtube:///watch?v=\(videoID)")
+        #if DEBUG
         print("📺 [tvOS] Attempting to open YouTube app with URL: \(youtubeAppURL?.absoluteString ?? "nil")")
-
-        // Debug: Check base scheme
         if let baseURL = URL(string: "youtube://") {
             let canOpenBase = UIApplication.shared.canOpenURL(baseURL)
             print("🔍 [tvOS] canOpenURL(youtube://) = \(canOpenBase)")
         }
+        #endif
 
-        // Debug: Check full URL
         if let url = youtubeAppURL {
             let canOpenFull = UIApplication.shared.canOpenURL(url)
+            #if DEBUG
             print("🔍 [tvOS] canOpenURL(\(url.absoluteString)) = \(canOpenFull)")
+            #endif
 
             if canOpenFull {
+                #if DEBUG
                 print("📺 [tvOS] YouTube app is available, opening video")
+                #endif
                 UIApplication.shared.open(url, options: [:]) { success in
+                    #if DEBUG
                     if success {
                         print("✅ [tvOS] YouTube app opened successfully to video")
-                        completion(true)
                     } else {
                         print("❌ [tvOS] YouTube app failed to open")
-                        completion(false)
                     }
+                    #endif
+                    completion(success)
                 }
             } else {
-                print("❌ [tvOS] canOpenURL returned false - YouTube app may not be installed")
+                #if DEBUG
+                print("❌ [tvOS] canOpenURL returned false — YouTube app may not be installed")
                 print("   OR LSApplicationQueriesSchemes not configured properly")
+                #endif
                 completion(false)
             }
         } else {
+            #if DEBUG
             print("❌ [tvOS] Failed to create YouTube URL")
+            #endif
             completion(false)
         }
         #else
-        // iOS YouTube app uses proper URL scheme with path structure
-        // Format: youtube:///watch?v=VIDEO_ID (triple slash = no host, just path+query)
+        // iOS: youtube:///watch?v=VIDEO_ID (triple slash = no host, just path+query)
         if let youtubeAppURL = URL(string: "youtube:///watch?v=\(videoID)"),
            UIApplication.shared.canOpenURL(youtubeAppURL) {
+            #if DEBUG
             print("📺 Opening in YouTube app: \(youtubeAppURL.absoluteString)")
+            #endif
             UIApplication.shared.open(youtubeAppURL, options: [:]) { success in
+                #if DEBUG
                 if success {
                     print("✅ YouTube app opened successfully")
                 } else {
                     print("❌ YouTube app failed to open, trying web fallback")
-                    // Try web fallback if YouTube app fails
-                    self.openInWeb(videoID: videoID, completion: completion)
-                    return
                 }
-                completion(success)
+                #endif
+                if !success {
+                    self.openInWeb(videoID: videoID, completion: completion)
+                } else {
+                    completion(success)
+                }
             }
             return
         }
 
-        // Fallback to web URL if YouTube app not available
+        #if DEBUG
         print("📱 YouTube app not available, opening in Safari")
+        #endif
         openInWeb(videoID: videoID, completion: completion)
         #endif
     }
@@ -101,22 +117,25 @@ class YouTubePlayerService {
     /// Opens video in Safari or default browser
     private func openInWeb(videoID: String, completion: @escaping (Bool) -> Void) {
         guard let webURL = URL(string: "https://www.youtube.com/watch?v=\(videoID)") else {
+            #if DEBUG
             print("❌ Failed to create web URL")
+            #endif
             completion(false)
             return
         }
 
+        #if DEBUG
         print("🌐 Opening in browser: \(webURL.absoluteString)")
+        #endif
         UIApplication.shared.open(webURL, options: [:]) { success in
+            #if DEBUG
             print(success ? "✅ Browser opened" : "❌ Browser failed")
+            #endif
             completion(success)
         }
     }
 
     /// Play a YouTube video using a Movie object
-    /// - Parameters:
-    ///   - movie: The movie containing YouTube video information
-    ///   - completion: Called with true if successfully opened, false otherwise
     func playMovie(_ movie: Movie, completion: @escaping (Bool) -> Void = { _ in }) {
         playVideo(videoID: movie.youtubeVideoId, completion: completion)
     }
@@ -124,12 +143,9 @@ class YouTubePlayerService {
     // MARK: - Channel Navigation
 
     /// Open a YouTube channel in the YouTube app or web browser
-    /// - Parameters:
-    ///   - channelID: The YouTube channel ID
-    ///   - completion: Called with true if successfully opened, false otherwise
     func openChannel(channelID: String, completion: @escaping (Bool) -> Void = { _ in }) {
         #if os(tvOS)
-        // tvOS: Channel deep linking not well supported, skip to web
+        // tvOS: Channel deep linking not well supported, use web
         if let webURL = URL(string: "https://www.youtube.com/channel/\(channelID)") {
             UIApplication.shared.open(webURL, options: [:]) { success in
                 completion(success)
@@ -160,11 +176,9 @@ class YouTubePlayerService {
 
     // MARK: - YouTube App Install
 
-    /// Open the App Store to install the YouTube app
-    /// Only works on iOS, not tvOS (tvOS users can install from their App Store)
+    /// Open the App Store to install the YouTube app (iOS only)
     func promptInstallYouTubeApp(completion: @escaping (Bool) -> Void = { _ in }) {
         #if os(iOS)
-        // YouTube App Store URL
         if let appStoreURL = URL(string: "https://apps.apple.com/app/youtube-watch-listen-stream/id544007664") {
             UIApplication.shared.open(appStoreURL, options: [:]) { success in
                 completion(success)
@@ -173,38 +187,30 @@ class YouTubePlayerService {
             completion(false)
         }
         #elseif os(tvOS)
-        // On tvOS, users need to manually install from App Store
-        // We can't programmatically open App Store to a specific app
+        // tvOS users install from their own App Store
         completion(false)
         #endif
     }
 
     // MARK: - URL Helpers
 
-    /// Get the YouTube app URL for a video
     func getYouTubeAppURL(for videoID: String) -> URL? {
-        // Both iOS and tvOS use same proper URL scheme format
-        // Triple slash (///) = no host, just path and query parameters
-        return URL(string: "youtube:///watch?v=\(videoID)")
+        URL(string: "youtube:///watch?v=\(videoID)")
     }
 
-    /// Get the YouTube web URL for a video
     func getYouTubeWebURL(for videoID: String) -> URL? {
-        return URL(string: "https://www.youtube.com/watch?v=\(videoID)")
+        URL(string: "https://www.youtube.com/watch?v=\(videoID)")
     }
 
-    /// Get the YouTube app URL for a channel
     func getChannelAppURL(for channelID: String) -> URL? {
         #if os(tvOS)
-        // tvOS doesn't support channel deep linking well
         return nil
         #else
         return URL(string: "youtube://channel/\(channelID)")
         #endif
     }
 
-    /// Get the YouTube web URL for a channel
     func getChannelWebURL(for channelID: String) -> URL? {
-        return URL(string: "https://www.youtube.com/channel/\(channelID)")
+        URL(string: "https://www.youtube.com/channel/\(channelID)")
     }
 }

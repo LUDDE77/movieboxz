@@ -12,6 +12,18 @@ extension DateFormatter {
 class MovieService: ObservableObject {
     @Published var isConnected = false
 
+    // MARK: - Shared Browse Data Cache
+    // Populated once by loadBrowseData() and reused across tab switches so
+    // MainBrowseView doesn't refetch/re-skeleton every time it reappears.
+    @Published private(set) var featuredMovies: [Movie] = []
+    @Published private(set) var trendingMovies: [Movie] = []
+    @Published private(set) var popularMovies: [Movie] = []
+    @Published private(set) var recentMovies: [Movie] = []
+    @Published private(set) var genreCategories: [(genre: Genre, movies: [Movie])] = []
+    @Published private(set) var uncategorizedMovies: [Movie] = []
+    @Published private(set) var allBrowseMovies: [Movie] = []
+    @Published private(set) var hasLoadedBrowseData = false
+
     private let baseURL: String
     private let session: URLSession
 
@@ -39,6 +51,57 @@ class MovieService: ObservableObject {
                 print("Backend connection failed: \(error)")
             }
         }
+    }
+
+    // MARK: - Browse Data Loading (shared cache)
+
+    /// Loads all data needed for the Browse tab (featured, trending, popular,
+    /// recent, genre carousels, uncategorized, all movies) and caches it on
+    /// this shared instance. Callers should check `hasLoadedBrowseData` first
+    /// and only call this when data is missing, or pass `force: true` for a
+    /// manual pull-to-refresh.
+    func loadBrowseData(force: Bool = false) async throws {
+        if hasLoadedBrowseData && !force { return }
+
+        // Featured / popular / recent movies in parallel
+        async let featuredResult = fetchFeaturedMovies()
+        async let popularResult = fetchPopularMovies(page: 1, limit: 10)
+        async let recentResult = fetchRecentMovies(page: 1, limit: 50)
+
+        let (fetchedFeatured, fetchedPopular, recentBatch) = try await (featuredResult, popularResult, recentResult)
+
+        // Fetch all genres from backend
+        let genres = try await fetchAllGenres()
+        let genresWithMovies = genres.filter { ($0.movieCount ?? 0) > 0 }
+
+        // Fetch genre movies, allMovies, and uncategorized in parallel
+        async let allMoviesResult = fetchAllMovies(sort: "popularity", limit: 50)
+        async let uncategorizedResult = fetchUncategorizedMovies(limit: 10)
+
+        var genreResults: [(genre: Genre, movies: [Movie])] = []
+        await withTaskGroup(of: (Genre, [Movie]).self) { group in
+            for genre in genresWithMovies {
+                group.addTask {
+                    let movies = (try? await self.fetchMoviesByGenre(genreId: genre.id, limit: 10)) ?? []
+                    return (genre, movies)
+                }
+            }
+            for await (genre, movies) in group {
+                genreResults.append((genre: genre, movies: movies))
+            }
+        }
+        genreResults.sort { $0.genre.name < $1.genre.name }
+
+        let (allMoviesData, uncategorizedData) = try await (allMoviesResult, uncategorizedResult)
+
+        self.featuredMovies = fetchedFeatured.isEmpty ? Array(recentBatch.prefix(3)) : fetchedFeatured
+        self.popularMovies = fetchedPopular
+        self.trendingMovies = recentBatch.filter { $0.trending }
+        self.recentMovies = recentBatch
+        self.genreCategories = genreResults
+        self.allBrowseMovies = allMoviesData
+        self.uncategorizedMovies = uncategorizedData
+        self.hasLoadedBrowseData = true
     }
 
     // MARK: - Generic Request Method

@@ -67,7 +67,7 @@ class TMDBService {
         try {
             logger.debug(`TMDB API request: ${endpoint}`)
 
-            const response = await fetch(url.toString())
+            const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })
             const responseTime = Date.now() - startTime
 
             if (!response.ok) {

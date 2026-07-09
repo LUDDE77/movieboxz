@@ -1,3 +1,4 @@
+import os from 'os'
 import express from 'express'
 import { testConnection } from '../config/database.js'
 import { youtubeService } from '../services/youtubeService.js'
@@ -17,9 +18,9 @@ router.get('/', async (req, res) => {
         // Check database connection
         const dbHealthy = await testConnection()
 
-        // Check external APIs — key presence only, NO API calls (healthCheck() costs 100 quota units)
+        // Check external APIs — key presence only, NO live API calls per probe
         const youtubeHealthy = !!process.env.YOUTUBE_API_KEY
-        const tmdbHealthy = await tmdbService.healthCheck()
+        const tmdbHealthy = !!process.env.TMDB_API_KEY
 
         const responseTime = Date.now() - startTime
         const allHealthy = dbHealthy && youtubeHealthy && tmdbHealthy
@@ -109,7 +110,7 @@ router.get('/detailed', async (req, res) => {
                 platform: process.platform,
                 memory: process.memoryUsage(),
                 cpu_usage: process.cpuUsage(),
-                load_average: require('os').loadavg()
+                load_average: os.loadavg()
             },
             features: {
                 movie_discovery: true,

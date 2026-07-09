@@ -88,3 +88,8 @@ claude.md
 /add_views_to_xcode.sh
 /"logo and splash"/
 MovieBoxZ/
+
+# Backup and env files
+*.bak*
+backend/.env
+.env

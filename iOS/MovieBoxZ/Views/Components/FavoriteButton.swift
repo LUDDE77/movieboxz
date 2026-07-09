@@ -23,6 +23,9 @@ struct FavoriteButton: View {
 
     var body: some View {
         Button {
+            #if os(iOS)
+            HapticFeedback.light()
+            #endif
             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                 libraryManager.toggleFavorite(movieId)
             }
@@ -37,7 +40,11 @@ struct FavoriteButton: View {
                         .shadow(color: .black.opacity(0.3), radius: 8)
                 )
         }
+        #if os(tvOS)
+        .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 100)))
+        #else
         .buttonStyle(.plain)
+        #endif
         .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
         .accessibilityHint(isFavorite ? "Removes this movie from your library" : "Saves this movie to your library")
     }

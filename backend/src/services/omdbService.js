@@ -55,7 +55,7 @@ class OMDbService {
 
             logger.debug(`OMDb: Searching for "${title}"${year ? ` (${year})` : ''}`)
 
-            const response = await axios.get(this.baseUrl, { params })
+            const response = await axios.get(this.baseUrl, { params, timeout: 10000 })
 
             if (response.data.Response === 'False') {
                 logger.debug(`OMDb: "${title}" not found (${response.data.Error})`)
@@ -90,7 +90,8 @@ class OMDbService {
                     apikey: this.apiKey,
                     i: imdbId,
                     plot: 'full'
-                }
+                },
+                timeout: 10000
             })
 
             if (response.data.Response === 'False') {
@@ -213,7 +214,7 @@ class OMDbService {
 
             logger.debug(`OMDb multi-search: "${title}"${year ? ` (${year})` : ''}`)
 
-            const response = await axios.get(this.baseUrl, { params })
+            const response = await axios.get(this.baseUrl, { params, timeout: 10000 })
 
             if (response.data.Response === 'False') {
                 logger.debug(`OMDb: No results for "${title}"`)

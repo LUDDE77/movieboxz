@@ -14,7 +14,11 @@ router.use(adminAuth)
 // =============================================================================
 router.get('/tv-content', async (req, res, next) => {
     try {
-        const { data: movies, error } = await supabase
+        const page = parseInt(req.query.page) || 1
+        const limit = Math.min(parseInt(req.query.limit) || 100, 500)
+        const offset = (page - 1) * limit
+
+        const { data: movies, error, count } = await supabase
             .from('movies')
             .select(`
                 id,
@@ -36,13 +40,14 @@ router.get('/tv-content', async (req, res, next) => {
                 updated_at,
                 channels(id, title, thumbnail_url),
                 movie_genres(genres(id, name))
-            `)
+            `, { count: 'exact' })
             .or('is_tv_show.eq.true,is_tv_series.eq.true')
             .order('title', { ascending: true })
+            .range(offset, offset + limit - 1)
 
         if (error) throw error
 
-        logger.info(`TV content fetch: ${movies.length} movies`)
+        logger.info(`TV content fetch: ${movies.length} movies (page ${page}, total ${count})`)
 
         const flatMovies = movies.map(({ channels, movie_genres, ...m }) => ({
             ...m,
@@ -55,7 +60,13 @@ router.get('/tv-content', async (req, res, next) => {
             success: true,
             data: {
                 movies: flatMovies,
-                total: flatMovies.length
+                total: count || 0,
+                pagination: {
+                    page,
+                    limit,
+                    total: count || 0,
+                    pages: Math.ceil((count || 0) / limit)
+                }
             }
         })
     } catch (error) {

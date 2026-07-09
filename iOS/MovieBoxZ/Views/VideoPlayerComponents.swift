@@ -182,7 +182,7 @@ struct VideoPlayerView: View {
                         .cornerRadius(12)
                     }
                     #if os(tvOS)
-                    .buttonStyle(.card)
+                    .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 12)))
                     #endif
 
                     // Warning if YouTube app not installed

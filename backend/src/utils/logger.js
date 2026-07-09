@@ -25,20 +25,7 @@ const logger = winston.createLogger({
     ]
 })
 
-// Add file logging in production
-if (process.env.NODE_ENV === 'production') {
-    logger.add(new winston.transports.File({
-        filename: 'logs/error.log',
-        level: 'error',
-        maxsize: 5242880, // 5MB
-        maxFiles: 5
-    }))
-
-    logger.add(new winston.transports.File({
-        filename: 'logs/combined.log',
-        maxsize: 5242880, // 5MB
-        maxFiles: 5
-    }))
-}
+// Console-only in all environments: Railway's filesystem is ephemeral, so file
+// transports just consume disk until the next deploy. Railway captures stdout/stderr.
 
 export { logger }

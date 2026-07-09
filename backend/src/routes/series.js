@@ -20,11 +20,11 @@ router.get('/', async (req, res, next) => {
 
         logger.info(`Fetching series list - page ${page}, limit ${limit}`)
 
-        // Fetch all tv_series rows joined with their episodes.
-        // We pull movies inline so we can compute counts without N+1 queries.
-        // Supabase does not support aggregate sub-selects via the JS client, so
-        // we fetch the joined rows and compute counts in JS, then paginate.
-        const { data: seriesRows, error: seriesError } = await supabase
+        // Fetch one page of tv_series rows joined with their episodes.
+        // movies!inner restricts to series with at least one non-unavailable
+        // episode, pagination happens in the database via .range(), and
+        // count: 'exact' returns the total matching series without loading them.
+        const { data: seriesRows, error: seriesError, count } = await supabase
             .from('tv_series')
             .select(`
                 id,
@@ -33,14 +33,16 @@ router.get('/', async (req, res, next) => {
                 poster_path,
                 year_start,
                 year_end,
-                movies(
+                movies!inner(
                     id,
                     season_number,
                     is_tv_series,
                     is_available
                 )
-            `)
+            `, { count: 'exact' })
+            .not('movies.is_available', 'is', false)
             .order('title', { ascending: true })
+            .range(offset, offset + limit - 1)
 
         if (seriesError) {
             logger.error(`Series list query failed: ${JSON.stringify(seriesError)}`)
@@ -48,7 +50,7 @@ router.get('/', async (req, res, next) => {
         }
 
         // Build series objects with derived counts.
-        const allSeries = (seriesRows || []).map(series => {
+        const paginated = (seriesRows || []).map(series => {
             const episodes = (series.movies || []).filter(m => m.is_available !== false)
             const distinctSeasons = new Set(
                 episodes
@@ -68,12 +70,7 @@ router.get('/', async (req, res, next) => {
             }
         })
 
-        // Filter out series with no episodes (shouldn't happen due to !inner
-        // join, but guard defensively).
-        const withEpisodes = allSeries.filter(s => s.episode_count > 0)
-
-        const total = withEpisodes.length
-        const paginated = withEpisodes.slice(offset, offset + limit)
+        const total = count || 0
 
         res.json({
             success: true,

@@ -6,7 +6,8 @@
 ALTER TABLE staged_movies
 ADD COLUMN IF NOT EXISTS episode_name TEXT,
 ADD COLUMN IF NOT EXISTS season_number INTEGER,
-ADD COLUMN IF NOT EXISTS episode_number INTEGER;
+ADD COLUMN IF NOT EXISTS episode_number INTEGER,
+ADD COLUMN IF NOT EXISTS is_tv_series BOOLEAN DEFAULT false;
 
 -- Add indexes for series filtering
 CREATE INDEX IF NOT EXISTS idx_staged_movies_series

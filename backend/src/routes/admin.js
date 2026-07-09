@@ -17,23 +17,20 @@ const router = express.Router()
 router.use(adminAuth)
 
 // =============================================================================
-// POST /api/admin/curate/all
-// Curate movies from all configured channels
+// POST /api/admin/curate/all — DISABLED
+// This endpoint called movieCurator.curateAllChannels(), which does not exist
+// (it threw on every invocation). Do not repoint it at curateChannelMovies:
+// that inserts directly into the movies table, bypassing the staging/approval
+// pipeline. Use the staging import endpoints per channel instead.
 // =============================================================================
-router.post('/curate/all', async (req, res, next) => {
-    try {
-        logger.info('Admin triggered full channel curation')
+router.post('/curate/all', (req, res) => {
+    logger.warn('Admin called deprecated endpoint: POST /api/admin/curate/all')
 
-        const results = await movieCurator.curateAllChannels()
-
-        res.json({
-            success: true,
-            data: results,
-            message: `Curation completed: ${results.moviesAdded} movies added from ${results.channelsProcessed} channels`
-        })
-    } catch (error) {
-        next(error)
-    }
+    res.status(410).json({
+        success: false,
+        error: 'Endpoint Removed',
+        message: 'Bulk curation across all channels has been removed. Import channels individually via the staging workflow (POST /api/admin/staging/import) instead.'
+    })
 })
 
 // =============================================================================
@@ -60,24 +57,15 @@ router.post('/curate/channel/:channelId', async (req, res, next) => {
 
 // =============================================================================
 // POST /api/admin/validate
-// Validate existing movies are still available
+// DISABLED: called movieCurator.validateExistingMovies(), which never existed —
+// this endpoint has thrown a 500 on every invocation. Link validation runs
+// nightly via linkValidatorService (jobs/scheduler.js).
 // =============================================================================
-router.post('/validate', async (req, res, next) => {
-    try {
-        const limit = parseInt(req.query.limit) || 100
-
-        logger.info(`Admin triggered movie validation (limit: ${limit})`)
-
-        const results = await movieCurator.validateExistingMovies(limit)
-
-        res.json({
-            success: true,
-            data: results,
-            message: `Validation completed: ${results.stillAvailable} available, ${results.nowUnavailable} unavailable`
-        })
-    } catch (error) {
-        next(error)
-    }
+router.post('/validate', (req, res) => {
+    res.status(410).json({
+        success: false,
+        error: 'This endpoint has been removed. Movie availability is validated automatically by the nightly link validation job.'
+    })
 })
 
 // =============================================================================
@@ -351,7 +339,7 @@ router.post('/channels/import-all', async (req, res, next) => {
 
         logger.info(`Created FULL curation job: ${job.id} for channel: ${channelInfo.title}`);
 
-        // Step 5: Start FULL import process with pagination (run in background)
+        // Step 5: Start FULL import process (run in background)
         (async () => {
             try {
                 await dbOperations.startCurationJob(job.id)
@@ -362,132 +350,77 @@ router.post('/channels/import-all', async (req, res, next) => {
                     moviesSkipped: 0,
                     errors: [],
                     channelInfo: channelInfo,
-                    pagesFetched: 0
+                    videosScanned: 0
                 }
 
-                let pageToken = null
-                const maxPages = 20 // Safety limit: 20 pages × 50 results = 1000 videos max
+                // Fetch all channel videos via the uploads playlist
+                // (~1 unit per page vs 100 units per page with search.list)
+                const videos = await youtubeService.getChannelVideos(channelId, {
+                    maxResults: 1000 // Safety limit, same cap as the old 20-page loop
+                })
 
-                do {
+                results.videosScanned = videos.length
+
+                for (let i = 0; i < videos.length; i++) {
+                    const video = videos[i]
+
                     try {
-                        logger.info(`Fetching page ${results.pagesFetched + 1} for channel ${channelInfo.title}`)
+                        if (movieCurator.isLikelyMovie(video)) {
+                            results.moviesFound++
 
-                        // Fetch videos with pagination
-                        const searchParams = {
-                            part: ['snippet'],
-                            channelId: channelId,
-                            type: 'video',
-                            order: 'date',
-                            maxResults: 50
-                        }
-
-                        if (pageToken) {
-                            searchParams.pageToken = pageToken
-                        }
-
-                        const searchResponse = await youtubeService.youtube.search.list(searchParams)
-                        youtubeService.updateQuotaUsage(100)
-
-                        if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
-                            break
-                        }
-
-                        // Get video IDs for detailed info
-                        const videoIds = searchResponse.data.items.map(item => item.id.videoId)
-
-                        // Get detailed video information
-                        const videosResponse = await youtubeService.youtube.videos.list({
-                            part: ['snippet', 'contentDetails', 'status', 'statistics'],
-                            id: videoIds
-                        })
-                        youtubeService.updateQuotaUsage(1)
-
-                        const videos = videosResponse.data.items.map(video => ({
-                            id: video.id,
-                            title: video.snippet.title,
-                            description: video.snippet.description,
-                            channelId: video.snippet.channelId,
-                            channelTitle: video.snippet.channelTitle,
-                            publishedAt: video.snippet.publishedAt,
-                            thumbnails: video.snippet.thumbnails,
-                            duration: video.contentDetails.duration,
-                            embeddable: video.status.embeddable,
-                            uploadStatus: video.status.uploadStatus,
-                            privacyStatus: video.status.privacyStatus,
-                            viewCount: parseInt(video.statistics.viewCount) || 0,
-                            likeCount: parseInt(video.statistics.likeCount) || 0,
-                            commentCount: parseInt(video.statistics.commentCount) || 0
-                        }))
-
-                        // Process each video
-                        for (const video of videos) {
+                            // Check if movie already exists
                             try {
-                                if (movieCurator.isLikelyMovie(video)) {
-                                    results.moviesFound++
-
-                                    // Check if movie already exists
-                                    try {
-                                        await dbOperations.getMovieByYouTubeId(video.id)
-                                        results.moviesSkipped++
-                                        continue
-                                    } catch (error) {
-                                        // Movie doesn't exist, continue processing
-                                    }
-
-                                    // Process and add movie
-                                    const success = await movieCurator.processMovie(video)
-                                    if (success) {
-                                        results.moviesAdded++
-                                        logger.info(`✅ [${results.moviesAdded}] Added: ${video.title}`)
-                                    } else {
-                                        results.errors.push({
-                                            videoId: video.id,
-                                            title: video.title,
-                                            error: 'Failed to process movie'
-                                        })
-                                    }
-                                }
+                                await dbOperations.getMovieByYouTubeId(video.id)
+                                results.moviesSkipped++
+                                continue
                             } catch (error) {
-                                logger.error(`Error processing video ${video.id}:`, error.message)
+                                // Movie doesn't exist, continue processing
+                            }
+
+                            // Process and add movie
+                            const success = await movieCurator.processMovie(video)
+                            if (success) {
+                                results.moviesAdded++
+                                logger.info(`✅ [${results.moviesAdded}] Added: ${video.title}`)
+                            } else {
                                 results.errors.push({
                                     videoId: video.id,
                                     title: video.title,
-                                    error: error.message
+                                    error: 'Failed to process movie'
                                 })
                             }
                         }
+                    } catch (error) {
+                        logger.error(`Error processing video ${video.id}:`, error.message)
+                        results.errors.push({
+                            videoId: video.id,
+                            title: video.title,
+                            error: error.message
+                        })
+                    }
 
-                        // Update job progress
+                    // Update job progress every 50 videos
+                    if ((i + 1) % 50 === 0 || i === videos.length - 1) {
                         await dbOperations.updateCurationJobProgress(job.id, {
                             processed: results.moviesFound,
                             successful: results.moviesAdded,
                             failed: results.errors.length
                         })
-
-                        results.pagesFetched++
-                        pageToken = searchResponse.data.nextPageToken
-
-                        // Small delay to respect rate limits
-                        await new Promise(resolve => setTimeout(resolve, 1000))
-
-                    } catch (error) {
-                        logger.error(`Error fetching page for channel ${channelInfo.title}:`, error.message)
-                        results.errors.push({
-                            page: results.pagesFetched + 1,
-                            error: error.message
-                        })
-                        break
                     }
+                }
 
-                } while (pageToken && results.pagesFetched < maxPages)
-
-                logger.info(`✅ FULL import completed for ${channelInfo.title}: ${results.moviesAdded} movies added from ${results.pagesFetched} pages`)
+                logger.info(`✅ FULL import completed for ${channelInfo.title}: ${results.moviesAdded} movies added from ${results.videosScanned} videos scanned`)
 
                 await dbOperations.completeCurationJob(job.id, results)
 
             } catch (error) {
                 logger.error(`FULL import failed for ${channelInfo.title}:`, error.message)
-                await dbOperations.failCurationJob(job.id, error.message)
+                try {
+                    await dbOperations.failCurationJob(job.id, error.message)
+                } catch (failError) {
+                    // Never let the failure path itself become an unhandled rejection
+                    logger.error(`Failed to mark curation job ${job.id} as failed:`, failError.message)
+                }
             }
         })()
 
@@ -624,222 +557,23 @@ router.get('/jobs', async (req, res, next) => {
 })
 
 // =============================================================================
-// POST /api/admin/enrich-tmdb
-// Enrich existing movies with TMDB metadata (posters, ratings, etc.)
+// POST /api/admin/enrich-tmdb  /  POST /api/admin/enrich-omdb
+// DISABLED: both called movieCurator.enrichWithTMDB / enrichWithOMDb, which
+// never existed — every movie errored and the endpoints reported 100% failures.
+// Use POST /api/admin/enrich-enhanced instead.
 // =============================================================================
-router.post('/enrich-tmdb', async (req, res, next) => {
-    try {
-        const limit = parseInt(req.query.limit) || 50
-
-        logger.info(`Admin triggered TMDB enrichment (limit: ${limit})`)
-
-        // Get movies without TMDB data
-        const { data: movies, error } = await supabase
-            .from('movies')
-            .select('id, title, original_title, tmdb_id')
-            .is('tmdb_id', null)
-            .limit(limit)
-
-        if (error) {
-            throw new Error(`Failed to fetch movies: ${error.message}`)
-        }
-
-        logger.info(`Found ${movies.length} movies without TMDB data`)
-
-        let enriched = 0
-        let failed = 0
-        const results = []
-
-        for (const movie of movies) {
-            try {
-                // Try to enrich with TMDB
-                const tmdbData = await movieCurator.enrichWithTMDB(movie.title || movie.original_title)
-
-                if (tmdbData) {
-                    // Extract genres before updating movie (genres go in separate table)
-                    const { genres, ...movieUpdateData } = tmdbData
-
-                    // Update movie with TMDB data (without genres)
-                    await dbOperations.updateMovie(movie.id, movieUpdateData)
-
-                    // Add genres if present
-                    if (genres && genres.length > 0) {
-                        await movieCurator.addMovieGenres(movie.id, genres)
-                    }
-
-                    enriched++
-                    results.push({
-                        id: movie.id,
-                        title: movie.title,
-                        status: 'enriched',
-                        tmdb_id: tmdbData.tmdb_id,
-                        has_poster: !!tmdbData.poster_path
-                    })
-
-                    logger.info(`✅ Enriched: ${movie.title} (TMDB ID: ${tmdbData.tmdb_id})`)
-                } else {
-                    failed++
-                    results.push({
-                        id: movie.id,
-                        title: movie.title,
-                        status: 'not_found'
-                    })
-
-                    logger.warn(`❌ No TMDB match: ${movie.title}`)
-                }
-
-                // Small delay to respect rate limits
-                await new Promise(resolve => setTimeout(resolve, 300))
-
-            } catch (error) {
-                failed++
-                results.push({
-                    id: movie.id,
-                    title: movie.title,
-                    status: 'error',
-                    error: error.message
-                })
-
-                logger.error(`❌ Error enriching ${movie.title}:`, error.message)
-            }
-        }
-
-        res.json({
-            success: true,
-            data: {
-                total: movies.length,
-                enriched,
-                failed,
-                results
-            },
-            message: `TMDB enrichment completed: ${enriched} enriched, ${failed} failed`
-        })
-
-    } catch (error) {
-        next(error)
-    }
+router.post('/enrich-tmdb', (req, res) => {
+    res.status(410).json({
+        success: false,
+        error: 'This endpoint has been removed. Use POST /api/admin/enrich-enhanced instead.'
+    })
 })
 
-// =============================================================================
-// POST /api/admin/enrich-omdb
-// Re-enrich movies that failed TMDB using OMDb (IMDB database)
-// =============================================================================
-router.post('/enrich-omdb', async (req, res, next) => {
-    try {
-        const { limit = 100 } = req.body
-
-        logger.info(`Admin triggered OMDb enrichment (limit: ${limit})`)
-
-        // Find movies without TMDB or OMDb data
-        // Order by updated_at DESC to prioritize recently cleaned titles
-        const { data: movies, error: queryError } = await supabase
-            .from('movies')
-            .select('id, title, original_title, tmdb_id, imdb_id, updated_at')
-            .is('tmdb_id', null)
-            .is('imdb_id', null)
-            .order('updated_at', { ascending: false })
-            .limit(limit)
-
-        if (queryError) {
-            throw new Error(`Database query failed: ${queryError.message}`)
-        }
-
-        if (!movies || movies.length === 0) {
-            return res.json({
-                success: true,
-                data: {
-                    total: 0,
-                    enriched: 0,
-                    failed: 0,
-                    results: []
-                },
-                message: 'No movies found to enrich'
-            })
-        }
-
-        let enriched = 0
-        let failed = 0
-        const results = []
-
-        for (const movie of movies) {
-            try {
-                // Try OMDb enrichment
-                const omdbData = await movieCurator.enrichWithOMDb(
-                    movie.title || movie.original_title
-                )
-
-                if (omdbData) {
-                    // Update movie with OMDb data
-                    const { error: updateError } = await supabase
-                        .from('movies')
-                        .update({
-                            imdb_id: omdbData.imdb_id,
-                            poster_path: omdbData.poster_path,
-                            description: omdbData.description,
-                            release_date: omdbData.release_date,
-                            runtime_minutes: omdbData.runtime_minutes,
-                            imdb_rating: omdbData.imdb_rating,
-                            imdb_votes: omdbData.imdb_votes,
-                            rated: omdbData.rated,
-                            director: omdbData.director,
-                            actors: omdbData.actors,
-                            language: omdbData.language,
-                            country: omdbData.country,
-                            is_tv_show: omdbData.is_tv_show,
-                            enrichment_source: 'omdb',
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', movie.id)
-
-                    if (updateError) {
-                        throw new Error(`Database update failed: ${updateError.message}`)
-                    }
-
-                    enriched++
-                    results.push({
-                        id: movie.id,
-                        title: movie.title,
-                        status: 'enriched',
-                        imdb_id: omdbData.imdb_id,
-                        has_poster: !!omdbData.poster_path
-                    })
-
-                    logger.info(`✅ OMDb enriched: ${movie.title} (IMDB: ${omdbData.imdb_id})`)
-                } else {
-                    failed++
-                    results.push({
-                        id: movie.id,
-                        title: movie.title,
-                        status: 'not_found'
-                    })
-                }
-
-            } catch (error) {
-                logger.error(`❌ Error enriching ${movie.title}:`, error.message)
-                failed++
-                results.push({
-                    id: movie.id,
-                    title: movie.title,
-                    status: 'error',
-                    error: error.message
-                })
-            }
-        }
-
-        res.json({
-            success: true,
-            data: {
-                total: movies.length,
-                enriched,
-                failed,
-                results
-            },
-            message: `OMDb enrichment completed: ${enriched} enriched, ${failed} failed`
-        })
-
-    } catch (error) {
-        next(error)
-    }
+router.post('/enrich-omdb', (req, res) => {
+    res.status(410).json({
+        success: false,
+        error: 'This endpoint has been removed. Use POST /api/admin/enrich-enhanced instead.'
+    })
 })
 
 // =============================================================================
@@ -1465,73 +1199,9 @@ router.post('/movies/:movieId/fix-title', async (req, res, next) => {
     }
 })
 
-// =============================================================================
-// DELETE /api/admin/channels/:channelId
-// Delete a channel and all its movies
-// =============================================================================
-router.delete('/channels/:channelId', async (req, res, next) => {
-    try {
-        const { channelId } = req.params
-
-        logger.info(`Admin triggered deletion for channel: ${channelId}`)
-
-        // Get channel info first
-        const { data: channel, error: channelError } = await supabase
-            .from('youtube_channels')
-            .select('channel_title, video_count')
-            .eq('id', channelId)
-            .single()
-
-        if (channelError || !channel) {
-            return res.status(404).json({
-                success: false,
-                error: 'Channel Not Found',
-                message: `Channel not found: ${channelId}`
-            })
-        }
-
-        // Count movies for this channel
-        const { count: movieCount } = await supabase
-            .from('movies')
-            .select('*', { count: 'exact', head: true })
-            .eq('channel_id', channelId)
-
-        // Delete all movies from this channel
-        const { error: moviesError } = await supabase
-            .from('movies')
-            .delete()
-            .eq('channel_id', channelId)
-
-        if (moviesError) {
-            throw new Error(`Failed to delete movies: ${moviesError.message}`)
-        }
-
-        // Delete the channel
-        const { error: deleteError } = await supabase
-            .from('youtube_channels')
-            .delete()
-            .eq('id', channelId)
-
-        if (deleteError) {
-            throw new Error(`Failed to delete channel: ${deleteError.message}`)
-        }
-
-        logger.info(`✅ Deleted channel ${channel.channel_title} and ${movieCount} movies`)
-
-        res.json({
-            success: true,
-            data: {
-                channelId,
-                channelTitle: channel.channel_title,
-                moviesDeleted: movieCount
-            },
-            message: `Deleted channel "${channel.channel_title}" and ${movieCount} associated movies`
-        })
-
-    } catch (error) {
-        next(error)
-    }
-})
+// NOTE: DELETE /api/admin/channels/:channelId lives in channelsAdmin.js.
+// A broken duplicate here (querying a nonexistent youtube_channels table)
+// was removed.
 
 // =============================================================================
 // CHANNEL PATTERN MANAGEMENT ROUTES

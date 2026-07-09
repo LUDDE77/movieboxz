@@ -8,6 +8,7 @@ enum CategoryType: Identifiable, Hashable {
     case recent
     case allMovies
     case tvSeries
+    case kids
     case uncategorized
 
     var id: String {
@@ -18,6 +19,7 @@ enum CategoryType: Identifiable, Hashable {
         case .recent: return "recent"
         case .allMovies: return "all-movies"
         case .tvSeries: return "tv-series"
+        case .kids: return "kids"
         case .uncategorized: return "uncategorized"
         }
     }
@@ -30,6 +32,7 @@ enum CategoryType: Identifiable, Hashable {
         case .recent: return "Recently Added"
         case .allMovies: return "All Movies"
         case .tvSeries: return "TV Series"
+        case .kids: return "Kids"
         case .uncategorized: return "Other"
         }
     }
@@ -41,7 +44,7 @@ enum CategoryType: Identifiable, Hashable {
 struct CategoryDetailView: View {
     let categoryType: CategoryType
 
-    @StateObject private var movieService = MovieService()
+    @EnvironmentObject private var movieService: MovieService
     @State private var movies: [Movie] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -58,7 +61,7 @@ struct CategoryDetailView: View {
     private let headerSize: CGFloat = 56
     #else
     private let columns = [
-        GridItem(.adaptive(minimum: 126, maximum: 180), spacing: 15)
+        GridItem(.adaptive(minimum: 126, maximum: 200), spacing: 15)
     ]
     private let cardTitleSize: CGFloat = 18
     private let cardMetadataSize: CGFloat = 14
@@ -125,7 +128,11 @@ struct CategoryDetailView: View {
                     .background(Color.white)
                     .cornerRadius(10)
             }
+            #if os(tvOS)
+            .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 10)))
+            #else
             .buttonStyle(.plain)
+            #endif
 
             Button {
                 dismiss()
@@ -134,7 +141,11 @@ struct CategoryDetailView: View {
                     .font(.system(size: cardTitleSize))
                     .foregroundColor(.white.opacity(0.8))
             }
+            #if os(tvOS)
+            .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 8)))
+            #else
             .buttonStyle(.plain)
+            #endif
         }
     }
 
@@ -155,7 +166,11 @@ struct CategoryDetailView: View {
                         .font(.system(size: headerSize - 20))
                         .foregroundColor(.white.opacity(0.8))
                     }
+                    #if os(tvOS)
+                    .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 8)))
+                    #else
                     .buttonStyle(.plain)
+                    #endif
 
                     Spacer()
 
@@ -260,8 +275,20 @@ struct CategoryDetailView: View {
                     )
 
                 case .tvSeries:
-                    // TODO: Implement when backend supports TV series
-                    fetchedMovies = []
+                    // TV Movie genre (TMDB id 10770)
+                    fetchedMovies = try await movieService.fetchMoviesByGenre(
+                        genreId: 10770,
+                        page: 1,
+                        limit: 200
+                    )
+
+                case .kids:
+                    // Family (10751) + Animation (16) genres combined and deduplicated
+                    async let familyMovies = movieService.fetchMoviesByGenre(genreId: 10751, page: 1, limit: 100)
+                    async let animationMovies = movieService.fetchMoviesByGenre(genreId: 16, page: 1, limit: 100)
+                    let (family, animation) = try await (familyMovies, animationMovies)
+                    var seen = Set<String>()
+                    fetchedMovies = (family + animation).filter { seen.insert($0.id).inserted }
 
                 case .uncategorized:
                     fetchedMovies = try await movieService.fetchUncategorizedMovies(
@@ -308,5 +335,6 @@ struct CategoryDetailView: View {
     CategoryDetailView(
         categoryType: .genre(id: 28, name: "Action & Adventure")
     )
+    .environmentObject(MovieService())
     .preferredColorScheme(.dark)
 }

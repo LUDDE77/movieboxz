@@ -87,43 +87,6 @@ struct YouTubeAttribution: View {
                         .foregroundColor(.primary)
                         .lineLimit(2)
 
-                    // Channel info (clickable)
-                    Button(action: openChannel) {
-                        HStack(spacing: 8) {
-                            // Channel thumbnail
-                            if let thumbURL = movie.channelThumbnail {
-                                AsyncImage(url: URL(string: thumbURL)) { image in
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Circle()
-                                        .fill(Color.gray.opacity(0.3))
-                                }
-                                #if os(tvOS)
-                                .frame(width: 32, height: 32)
-                                #else
-                                .frame(width: 20, height: 20)
-                                #endif
-                                .clipShape(Circle())
-                            }
-
-                            // Channel name
-                            Text(movie.channelTitle)
-                                #if os(tvOS)
-                                .font(.callout)
-                                #else
-                                .font(.caption)
-                                #endif
-                                .foregroundColor(.primary)
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
                     // YouTube stats
                     HStack(spacing: 12) {
                         Label(movie.formattedViewCount, systemImage: "eye.fill")
@@ -145,6 +108,55 @@ struct YouTubeAttribution: View {
             .padding()
             .background(Color.gray.opacity(0.1))
             .cornerRadius(12)
+
+            // Channel info — below the card, sized to content
+            Button(action: openChannel) {
+                HStack(spacing: 10) {
+                    // Channel thumbnail
+                    if let thumbURL = movie.channelThumbnail {
+                        AsyncImage(url: URL(string: thumbURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                        }
+                        #if os(tvOS)
+                        .frame(width: 36, height: 36)
+                        #else
+                        .frame(width: 24, height: 24)
+                        #endif
+                        .clipShape(Circle())
+                    } else {
+                        Image(systemName: "play.rectangle.fill")
+                            #if os(tvOS)
+                            .font(.system(size: 20))
+                            #else
+                            .font(.system(size: 16))
+                            #endif
+                            .foregroundColor(.red)
+                    }
+
+                    Text(movie.channelTitle)
+                        #if os(tvOS)
+                        .font(.callout)
+                        #else
+                        .font(.subheadline)
+                        #endif
+                        .foregroundColor(.primary)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            #if os(tvOS)
+            .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 10)))
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .fixedSize()
         }
     }
 

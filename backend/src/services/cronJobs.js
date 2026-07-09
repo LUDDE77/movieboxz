@@ -1,24 +1,13 @@
-import cron from 'node-cron'
-import { movieCurator } from './movieCurator.js'
 import jobScheduler from '../jobs/scheduler.js'
 import { logger } from '../utils/logger.js'
 
 export function initializeCronJobs() {
     logger.info('🕒 Initializing cron jobs for MovieBoxZ')
 
-    // Movie curation job - runs every 6 hours
-    cron.schedule(process.env.CURATION_SCHEDULE || '0 */6 * * *', async () => {
-        logger.info('🎬 Starting scheduled movie curation job')
-
-        try {
-            const results = await movieCurator.curateAllChannels()
-            logger.info(`✅ Scheduled curation completed: ${results.moviesAdded} movies added`)
-        } catch (error) {
-            logger.error('❌ Scheduled curation failed:', error.message)
-        }
-    }, {
-        timezone: 'UTC'
-    })
+    // NOTE: the old 6-hour "movie curation" cron was removed — it called
+    // movieCurator.curateAllChannels(), which does not exist (it threw on every
+    // run), and auto-curation would bypass the staging pipeline anyway.
+    // Imports go through the staging workflow (import → enrich → approve → publish).
 
     // Start new validation scheduler (Phase 7: Link validation with automatic failover)
     // Includes:

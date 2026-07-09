@@ -1,12 +1,26 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
-    @StateObject private var movieService = MovieService()
+    @EnvironmentObject private var movieService: MovieService
     @State private var isConnected = false
+
+    // MARK: - Update these URLs when web pages are live
+    private let privacyPolicyURL = URL(string: "https://movieboxz.app/privacy")!
+    private let termsOfServiceURL = URL(string: "https://movieboxz.app/terms")!
+    private let helpURL = URL(string: "https://movieboxz.app/help")!
+    private let supportEmail = "support@movieboxz.app"
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "Version \(version) (\(build))"
+    }
 
     var body: some View {
         NavigationView {
             List {
+                // MARK: App Identity
                 Section {
                     HStack {
                         Image(systemName: "tv.circle.fill")
@@ -15,7 +29,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading) {
                             Text("MovieBoxZ")
                                 .font(.headline)
-                            Text("Version 1.0.0")
+                            Text(appVersion)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -24,6 +38,7 @@ struct SettingsView: View {
                     .padding(.vertical, 5)
                 }
 
+                // MARK: Connection
                 Section("Connection") {
                     HStack {
                         Image(systemName: isConnected ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -40,6 +55,7 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: YouTube Integration
                 Section("YouTube Integration") {
                     HStack {
                         Image(systemName: "play.rectangle.fill")
@@ -62,6 +78,7 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: About
                 Section("About") {
                     HStack {
                         Image(systemName: "info.circle")
@@ -71,39 +88,100 @@ struct SettingsView: View {
                             .foregroundColor(.green)
                     }
 
-                    HStack {
-                        Image(systemName: "shield.checkered")
-                        Text("Privacy Policy")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
+                    Button {
+                        UIApplication.shared.open(privacyPolicyURL)
+                    } label: {
+                        HStack {
+                            Image(systemName: "shield.checkered")
+                                .foregroundColor(.primary)
+                            Text("Privacy Policy")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
-                    HStack {
-                        Image(systemName: "doc.text")
-                        Text("Terms of Service")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
+                    Button {
+                        UIApplication.shared.open(termsOfServiceURL)
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc.text")
+                                .foregroundColor(.primary)
+                            Text("Terms of Service")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 
+                // MARK: Support
                 Section("Support") {
-                    HStack {
-                        Image(systemName: "questionmark.circle")
-                        Text("Help & FAQ")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
+                    Button {
+                        UIApplication.shared.open(helpURL)
+                    } label: {
+                        HStack {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundColor(.primary)
+                            Text("Help & FAQ")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
+                    #if os(iOS)
+                    Button {
+                        if let mailURL = URL(string: "mailto:\(supportEmail)") {
+                            UIApplication.shared.open(mailURL)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "envelope")
+                                .foregroundColor(.primary)
+                            Text("Contact Support")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    #else
+                    // tvOS: mailto not supported, show email address instead
                     HStack {
                         Image(systemName: "envelope")
                         Text("Contact Support")
                         Spacer()
-                        Image(systemName: "chevron.right")
+                        Text(supportEmail)
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    #endif
+                }
+
+                // MARK: Privacy Notice
+                Section("Data & Privacy") {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "lock.shield.fill")
+                            .foregroundColor(.green)
+                            .padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("No account required")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Your favorites and watch history are stored only on this device. MovieBoxZ does not collect personal data or require sign-in.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
             }
             .navigationTitle("Settings")
@@ -119,5 +197,6 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environmentObject(MovieService())
         .preferredColorScheme(.dark)
 }

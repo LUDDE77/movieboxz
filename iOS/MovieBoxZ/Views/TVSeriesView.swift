@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TVSeriesView: View {
-    @StateObject private var movieService = MovieService()
+    @EnvironmentObject private var movieService: MovieService
     @State private var seriesList: [TVSeries] = []
     @State private var isLoading = true
     @State private var selectedSeries: TVSeries?

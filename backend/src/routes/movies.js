@@ -8,6 +8,12 @@ import { tmdbService } from '../services/tmdbService.js'
 
 const router = express.Router()
 
+// Maximum items per page allowed on public list endpoints
+const MAX_LIMIT = 100
+
+// Cache-Control for public read-only list endpoints
+const PUBLIC_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600'
+
 // =============================================================================
 // YOUTUBE TOS COMPLIANCE HELPERS
 // =============================================================================
@@ -86,8 +92,8 @@ router.get('/', async (req, res, next) => {
             limit = 20
         } = req.query
 
-        const pageNum = parseInt(page)
-        const limitNum = parseInt(limit)
+        const pageNum = parseInt(page) || 1
+        const limitNum = Math.min(parseInt(limit) || 20, MAX_LIMIT)
         const offset = (pageNum - 1) * limitNum
 
         logger.info(`Fetching movies with filters:`, { genre, channel, search, sort, page, limit })
@@ -140,6 +146,7 @@ router.get('/', async (req, res, next) => {
             result = await dbOperations.getMovies(filters, limitNum, offset)
         }
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -180,6 +187,7 @@ router.get('/featured', async (req, res, next) => {
             0
         )
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -200,7 +208,7 @@ router.get('/featured', async (req, res, next) => {
 router.get('/trending', async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
 
         logger.info(`Fetching trending movies - page ${page}`)
@@ -209,6 +217,7 @@ router.get('/trending', async (req, res, next) => {
             trending: true
         }, limit, offset)
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -234,9 +243,12 @@ router.get('/trending', async (req, res, next) => {
 router.get('/popular', async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
-        const sortBy = req.query.sort || 'view_count' // view_count, vote_average, popularity
+
+        // Whitelist sort values — never pass raw client input into .order()
+        const ALLOWED_SORTS = ['view_count', 'vote_average', 'published_at', 'created_at']
+        const sortBy = ALLOWED_SORTS.includes(req.query.sort) ? req.query.sort : 'view_count'
 
         logger.info(`Fetching popular movies - page ${page}, sorted by ${sortBy}`)
 
@@ -245,6 +257,7 @@ router.get('/popular', async (req, res, next) => {
             sortOrder: 'desc'
         }, limit, offset)
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -274,7 +287,7 @@ router.get('/popular', async (req, res, next) => {
 router.get('/top-rated', async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 50
+        const limit = Math.min(parseInt(req.query.limit) || 50, MAX_LIMIT)
         const minVotes = parseInt(req.query.minVotes) || 10
         const offset = (page - 1) * limit
 
@@ -337,7 +350,7 @@ router.get('/top-rated', async (req, res, next) => {
 router.get('/recent', async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
 
         logger.info(`Fetching recently added movies - page ${page}`)
@@ -347,6 +360,7 @@ router.get('/recent', async (req, res, next) => {
             sortOrder: 'desc'
         }, limit, offset)
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -371,7 +385,8 @@ router.get('/recent', async (req, res, next) => {
 // =============================================================================
 router.get('/search', validateRequest(movieQuerySchema), async (req, res, next) => {
     try {
-        const { q, category, year, page = 1, limit = 20 } = req.query
+        const { q, category, year, page = 1 } = req.query
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
 
         logger.info(`Searching movies: "${q}", category: ${category}, year: ${year}`)
@@ -419,7 +434,7 @@ router.get('/category/:category', async (req, res, next) => {
     try {
         const { category } = req.params
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
 
         logger.info(`Fetching movies in category: ${category}`)
@@ -457,7 +472,7 @@ router.get('/channel/:channelId', async (req, res, next) => {
     try {
         const { channelId } = req.params
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
 
         logger.info(`Fetching movies from channel: ${channelId}`)
@@ -519,24 +534,22 @@ router.get('/:id', validateRequest(movieIdSchema), async (req, res, next) => {
             })
         }
 
-        // Check if movie is still available on YouTube
-        try {
-            const youtubeStatus = await youtubeService.checkVideoAvailability(movie.youtube_video_id)
+        // YouTube availability: only re-check if never validated or stale (> 24h),
+        // and always fire-and-forget in the background — never block the response
+        // or burn quota on every consumer detail view
+        const lastValidated = movie.last_validated ? new Date(movie.last_validated) : null
+        const validationStale = !lastValidated ||
+            (Date.now() - lastValidated.getTime()) > 24 * 60 * 60 * 1000
 
-            // Update movie status if needed
-            if (!youtubeStatus.available || !youtubeStatus.embeddable) {
-                await dbOperations.updateMovie(id, {
+        if (validationStale) {
+            youtubeService.checkVideoAvailability(movie.youtube_video_id)
+                .then(youtubeStatus => dbOperations.updateMovie(id, {
                     is_available: youtubeStatus.available,
                     is_embeddable: youtubeStatus.embeddable,
                     validation_error: youtubeStatus.error,
                     last_validated: new Date().toISOString()
-                })
-
-                movie.is_available = youtubeStatus.available
-                movie.is_embeddable = youtubeStatus.embeddable
-            }
-        } catch (youtubeError) {
-            logger.warn(`Failed to check YouTube availability for movie ${id}:`, youtubeError.message)
+                }))
+                .catch(() => {})
         }
 
         res.json({
@@ -611,7 +624,7 @@ router.get('/:id/availability', validateRequest(movieIdSchema), async (req, res,
 router.get('/:id/recommendations', async (req, res, next) => {
     try {
         const { id } = req.params
-        const limit = parseInt(req.query.limit) || 10
+        const limit = Math.min(parseInt(req.query.limit) || 12, MAX_LIMIT)
 
         logger.info(`Getting recommendations for movie: ${id}`)
 
@@ -624,10 +637,10 @@ router.get('/:id/recommendations', async (req, res, next) => {
             })
         }
 
-        // Get movies with similar genres
-        const genres = movie.movie_genres?.map(mg => mg.genres.id) || []
+        // getMovieById flattens movie_genres into movie.genres ([{id, name}])
+        const genreIds = (movie.genres || []).map(g => g?.id).filter(Boolean)
 
-        if (genres.length === 0) {
+        if (genreIds.length === 0) {
             return res.json({
                 success: true,
                 data: {
@@ -637,26 +650,49 @@ router.get('/:id/recommendations', async (req, res, next) => {
             })
         }
 
-        // This would be a complex query - simplified for now
-        const recommendations = await dbOperations.getMovies({
-            sortBy: 'vote_average',
-            sortOrder: 'desc'
-        }, limit, 0)
+        // Find available movies sharing at least one genre with the source movie,
+        // best-rated first. shared_genres!inner restricts to matching movies while
+        // movie_genres(genres(...)) still returns each movie's full genre list.
+        const { data, error } = await supabase
+            .from('movies')
+            .select(`
+                *,
+                channels(id, title, thumbnail_url),
+                movie_genres(genres(id, name)),
+                shared_genres:movie_genres!inner(genre_id)
+            `)
+            .in('shared_genres.genre_id', genreIds)
+            .neq('id', id)
+            .eq('is_available', true)
+            .order('vote_average', { ascending: false, nullsFirst: false })
+            .limit(limit)
 
-        // Filter out the current movie
-        const filteredMovies = recommendations.movies.filter(m => m.id !== id)
+        if (error) {
+            throw error
+        }
+
+        // Flatten to the standard movie shape used by other endpoints
+        const recommendations = (data || []).map(rec => {
+            const { channels, movie_genres, shared_genres, ...movieData } = rec
+            return {
+                ...movieData,
+                channel_title: channels?.title || null,
+                channel_thumbnail: channels?.thumbnail_url || null,
+                genres: movie_genres?.map(mg => mg.genres) || []
+            }
+        })
 
         res.json({
             success: true,
             data: {
-                recommendations: filteredMovies.slice(0, limit),
-                basedOn: 'Similar genres and popular movies',
+                recommendations,
+                basedOn: 'Shared genres',
                 sourceMovie: {
                     id: movie.id,
                     title: movie.title
                 }
             },
-            message: `Generated ${filteredMovies.length} recommendations`
+            message: `Generated ${recommendations.length} recommendations`
         })
     } catch (error) {
         next(error)

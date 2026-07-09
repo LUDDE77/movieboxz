@@ -6,7 +6,7 @@ import SwiftUI
 struct MovieDetailView: View {
     let movie: Movie
     @Environment(\.dismiss) private var dismiss
-    @State private var showingVideoPlayer = false
+    @State private var showYouTubeUnavailableAlert = false
 
     // Platform-specific sizes
     #if os(tvOS)
@@ -24,32 +24,7 @@ struct MovieDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Action buttons (Close and Favorite) - above header
-                #if os(tvOS)
-                HStack(spacing: 20) {
-                    // Close button
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
-
-                    // Favorite button
-                    FavoriteButton(movieId: movie.id)
-                        .scaleEffect(1.1) // Match size with close button
-
-                    Spacer()
-                }
-                .padding(.top, 60)
-                .padding(.horizontal, 80)
-                .padding(.bottom, 20)
-                #endif
-
-                // Header with backdrop and poster
+                // Header with backdrop and poster (buttons overlaid inside on tvOS)
                 headerSection
 
                 // Content section
@@ -89,6 +64,16 @@ struct MovieDetailView: View {
         .overlay(alignment: .top) {
             // Top bar: close (left) and favourite (right)
             HStack {
+                Spacer()
+
+                FavoriteButton(movieId: movie.id)
+                    .scaleEffect(1.2)
+                    .background(
+                        Circle()
+                            .fill(Color.black.opacity(0.4))
+                            .frame(width: 44, height: 44)
+                    )
+
                 Button {
                     dismiss()
                 } label: {
@@ -102,16 +87,6 @@ struct MovieDetailView: View {
                         )
                 }
                 .accessibilityLabel("Close")
-
-                Spacer()
-
-                FavoriteButton(movieId: movie.id)
-                    .scaleEffect(1.2)
-                    .background(
-                        Circle()
-                            .fill(Color.black.opacity(0.4))
-                            .frame(width: 44, height: 44)
-                    )
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 20)
@@ -120,98 +95,98 @@ struct MovieDetailView: View {
         }
         #endif
         #if os(tvOS)
-        .fullScreenCover(isPresented: $showingVideoPlayer) {
-            VideoPlayerView(movie: movie)
-        }
         .onExitCommand {
             dismiss()
         }
-        #else
-        .sheet(isPresented: $showingVideoPlayer) {
-            VideoPlayerView(movie: movie)
-        }
         #endif
+        .alert("YouTube Unavailable", isPresented: $showYouTubeUnavailableAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Unable to open this video right now. Please make sure the YouTube app is installed, or try again later.")
+        }
     }
 
     // MARK: - Header Section
 
     private var headerSection: some View {
+        #if os(tvOS)
         ZStack(alignment: .bottomLeading) {
-            Color.clear  // forces ZStack to fill proposed width
-            // Backdrop image with shimmer
+            Color.clear
             AsyncImage(url: movie.backdropURL) { phase in
                 switch phase {
                 case .empty:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .shimmer()
+                    Rectangle().fill(Color.gray.opacity(0.2)).shimmer()
                 case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    image.resizable().aspectRatio(contentMode: .fill)
                 case .failure:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+                    Rectangle().fill(Color.gray.opacity(0.3))
                 @unknown default:
                     EmptyView()
                 }
             }
             .frame(maxWidth: .infinity)
-            #if os(tvOS)
-            .frame(height: 500)
-            #else
-            .frame(height: 350)
-            #endif
+            .frame(height: 580)
             .clipped()
 
-            // Gradient overlay (ensures readability)
             LinearGradient(
                 gradient: Gradient(stops: [
                     .init(color: .clear, location: 0.0),
-                    .init(color: Color.black.opacity(0.4), location: 0.5),
+                    .init(color: Color.black.opacity(0.4), location: 0.55),
                     .init(color: Color.black, location: 1.0)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
             )
             .frame(maxWidth: .infinity)
-            #if os(tvOS)
-            .frame(height: 500)
-            #else
-            .frame(height: 350)
-            #endif
+            .frame(height: 580)
 
-            // Poster and title overlay
+            // Close + Favourite — overlaid at the top of the backdrop
+            VStack(spacing: 0) {
+                HStack(spacing: 32) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 42, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(20)
+                            .background(
+                                Circle()
+                                    .fill(Color.black.opacity(0.5))
+                                    .shadow(color: .black.opacity(0.3), radius: 8)
+                            )
+                    }
+                    .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 100)))
+                    .accessibilityLabel("Close")
+
+                    FavoriteButton(movieId: movie.id)
+
+                    Spacer()
+                }
+                .padding(.top, 60)
+                .padding(.horizontal, 80)
+
+                Spacer()
+            }
+            .frame(height: 580)
+
+            // Poster + title at the bottom of the backdrop
             HStack(alignment: .bottom, spacing: 20) {
-                // Movie poster with shimmer
                 AsyncImage(url: movie.posterURL) { phase in
                     switch phase {
                     case .empty:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .aspectRatio(2/3, contentMode: .fill)
-                            .shimmer()
+                        Rectangle().fill(Color.gray.opacity(0.2)).aspectRatio(2/3, contentMode: .fill).shimmer()
                     case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(2/3, contentMode: .fill)
+                        image.resizable().aspectRatio(2/3, contentMode: .fill)
                     case .failure:
-                        // Fallback to YouTube thumbnail if poster fails to load
                         AsyncImage(url: movie.youtubeThumbURL) { fallbackPhase in
                             switch fallbackPhase {
                             case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(2/3, contentMode: .fill)
+                                image.resizable().aspectRatio(2/3, contentMode: .fill)
                             default:
-                                // If YouTube thumbnail also fails, show placeholder
                                 ZStack {
-                                    Rectangle()
-                                        .fill(Color.gray.opacity(0.3))
-                                        .aspectRatio(2/3, contentMode: .fill)
-                                    Image(systemName: "film.fill")
-                                        .font(.largeTitle)
-                                        .foregroundColor(.gray)
+                                    Rectangle().fill(Color.gray.opacity(0.3)).aspectRatio(2/3, contentMode: .fill)
+                                    Image(systemName: "film.fill").font(.largeTitle).foregroundColor(.gray)
                                 }
                             }
                         }
@@ -219,20 +194,12 @@ struct MovieDetailView: View {
                         EmptyView()
                     }
                 }
-                #if os(tvOS)
                 .frame(width: 250, height: 375)
                 .cornerRadius(16)
-                #else
-                .frame(width: 150, height: 225)
-                .cornerRadius(12)
-                #endif
                 .shadow(color: .black.opacity(0.5), radius: 20)
 
-                // Title (moved down with extra spacing)
                 VStack(alignment: .leading, spacing: 12) {
-                    Spacer()
-                        .frame(height: 40) // Extra spacing to move title down
-
+                    Spacer().frame(height: 40)
                     Text(movie.displayTitle)
                         .font(.system(size: titleSize, weight: .bold))
                         .foregroundColor(.white)
@@ -243,16 +210,95 @@ struct MovieDetailView: View {
 
                 Spacer()
             }
-            #if os(tvOS)
             .padding(.horizontal, 80)
             .padding(.bottom, 40)
-            #else
-            .padding(.horizontal, 20)
-            .padding(.bottom, 30)
-            #endif
         }
         .frame(maxWidth: .infinity)
-        #if !os(tvOS)
+        #else
+        // iOS landscape-optimized header
+        GeometryReader { geo in
+            let isLandscape = geo.size.width > geo.size.height
+            let headerHeight: CGFloat = isLandscape ? 180 : 350
+            let posterWidth: CGFloat = isLandscape ? 80 : 150
+            let posterHeight: CGFloat = isLandscape ? 120 : 225
+            let displayTitleSize: CGFloat = isLandscape ? 22 : titleSize
+
+            ZStack(alignment: .bottomLeading) {
+                Color.clear
+                AsyncImage(url: movie.backdropURL) { phase in
+                    switch phase {
+                    case .empty:
+                        Rectangle().fill(Color.gray.opacity(0.2)).shimmer()
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    case .failure:
+                        Rectangle().fill(Color.gray.opacity(0.3))
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: headerHeight)
+                .clipped()
+
+                LinearGradient(
+                    gradient: Gradient(stops: [
+                        .init(color: .clear, location: 0.0),
+                        .init(color: Color.black.opacity(0.4), location: 0.5),
+                        .init(color: Color.black, location: 1.0)
+                    ]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: headerHeight)
+
+                HStack(alignment: .bottom, spacing: 16) {
+                    AsyncImage(url: movie.posterURL) { phase in
+                        switch phase {
+                        case .empty:
+                            Rectangle().fill(Color.gray.opacity(0.2)).aspectRatio(2/3, contentMode: .fill).shimmer()
+                        case .success(let image):
+                            image.resizable().aspectRatio(2/3, contentMode: .fill)
+                        case .failure:
+                            AsyncImage(url: movie.youtubeThumbURL) { fallbackPhase in
+                                switch fallbackPhase {
+                                case .success(let image):
+                                    image.resizable().aspectRatio(2/3, contentMode: .fill)
+                                default:
+                                    ZStack {
+                                        Rectangle().fill(Color.gray.opacity(0.3)).aspectRatio(2/3, contentMode: .fill)
+                                        Image(systemName: "film.fill").font(.largeTitle).foregroundColor(.gray)
+                                    }
+                                }
+                            }
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                    .frame(width: posterWidth, height: posterHeight)
+                    .cornerRadius(10)
+                    .shadow(color: .black.opacity(0.5), radius: 10)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Spacer()
+                        Text(movie.displayTitle)
+                            .font(.system(size: displayTitleSize, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(isLandscape ? 2 : 3)
+                            .shadow(radius: 10)
+                    }
+                    .padding(.bottom, 12)
+
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, isLandscape ? 12 : 30)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: headerHeight)
+        }
+        .frame(height: 180)
         .ignoresSafeArea(edges: .top)
         #endif
     }
@@ -261,15 +307,12 @@ struct MovieDetailView: View {
 
     private var actionButtons: some View {
         VStack(spacing: 16) {
-            // Primary: Watch on YouTube button
+            // Primary: Watch on YouTube button — one tap, deep links straight
+            // into the YouTube app (falling back to the web/Safari if it
+            // isn't installed), using the same YouTubePlayerService call as
+            // the hero banner's context menu.
             Button {
-                // Track watch in LibraryManager
-                LibraryManager.shared.trackWatch(
-                    movieId: movie.id,
-                    movieTitle: movie.displayTitle,
-                    posterURL: movie.posterURL
-                )
-                showingVideoPlayer = true
+                watchOnYouTube()
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "play.rectangle.fill")
@@ -288,8 +331,12 @@ struct MovieDetailView: View {
                 .foregroundColor(.black)
                 .cornerRadius(12)
             }
+            #if os(tvOS)
+            .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 12)))
+            #else
             .buttonStyle(.plain)
             .shadow(radius: 8)
+            #endif
             .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
             .accessibilityHint("Opens video in YouTube app")
 
@@ -518,6 +565,30 @@ struct MovieDetailView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
         return formatter.string(from: date)
+    }
+
+    // MARK: - Playback
+
+    private func watchOnYouTube() {
+        #if os(iOS)
+        HapticFeedback.medium()
+        #endif
+
+        // Track watch in LibraryManager
+        LibraryManager.shared.trackWatch(
+            movieId: movie.id,
+            movieTitle: movie.displayTitle,
+            posterURL: movie.posterURL
+        )
+
+        // Same service call used by the hero banner and card context menu:
+        // deep-links into the native YouTube app first, falls back to the
+        // web browser if it isn't installed.
+        YouTubePlayerService.shared.playMovie(movie) { success in
+            if !success {
+                showYouTubeUnavailableAlert = true
+            }
+        }
     }
 }
 

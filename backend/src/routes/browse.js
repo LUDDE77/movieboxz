@@ -4,6 +4,12 @@ import { logger } from '../utils/logger.js'
 
 const router = express.Router()
 
+// Maximum items per page allowed on public list endpoints
+const MAX_LIMIT = 100
+
+// Cache-Control for public read-only endpoints
+const PUBLIC_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600'
+
 // =============================================================================
 // GET /api/browse/genres
 // List all genres with movie counts
@@ -14,6 +20,7 @@ router.get('/genres', async (req, res, next) => {
 
         const genres = await dbOperations.getGenresWithCounts()
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -57,6 +64,7 @@ router.get('/genres/:genreId/info', async (req, res, next) => {
             })
         }
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -81,7 +89,7 @@ router.get('/genres/:genreId', async (req, res, next) => {
     try {
         const { genreId } = req.params
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
         const sort = req.query.sort || 'popular' // popular, recent, rating
 
@@ -116,6 +124,7 @@ router.get('/genres/:genreId', async (req, res, next) => {
             sortConfig.sortOrder
         )
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {
@@ -148,7 +157,7 @@ router.get('/genres/:genreId', async (req, res, next) => {
 router.get('/uncategorized', async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1
-        const limit = parseInt(req.query.limit) || 20
+        const limit = Math.min(parseInt(req.query.limit) || 20, MAX_LIMIT)
         const offset = (page - 1) * limit
         const sort = req.query.sort || 'popular' // popular, recent, rating
 
@@ -171,6 +180,7 @@ router.get('/uncategorized', async (req, res, next) => {
             sortConfig.sortOrder
         )
 
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
             success: true,
             data: {

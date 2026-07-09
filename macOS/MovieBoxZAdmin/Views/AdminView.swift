@@ -22,6 +22,8 @@ struct AdminView: View {
                     .tag(4)
                 Label("Featured", systemImage: "star.fill")
                     .tag(5)
+                Label("Settings", systemImage: "gearshape.fill")
+                    .tag(6)
             }
             .navigationTitle("Admin")
             .frame(minWidth: 200)
@@ -40,6 +42,8 @@ struct AdminView: View {
                     TVSeriesView()
                 case 5:
                     FeaturedMoviesView()
+                case 6:
+                    AppSettingsView()
                 default:
                     Text("Select a section")
                 }

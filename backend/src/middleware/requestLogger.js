@@ -1,10 +1,11 @@
+import crypto from 'crypto'
 import { logger } from '../utils/logger.js'
 
 export const requestLogger = (req, res, next) => {
     const start = Date.now()
 
     // Generate unique request ID
-    req.id = Math.random().toString(36).substr(2, 9)
+    req.id = crypto.randomUUID()
 
     // Log request
     logger.info('Request received', {

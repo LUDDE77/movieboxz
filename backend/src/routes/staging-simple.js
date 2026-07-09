@@ -258,22 +258,37 @@ router.post('/import-playlist', async (req, res, next) => {
 })
 
 // GET /api/admin/staging/stats - Get staging statistics
+// Uses per-status count queries — selecting all rows caps at 1,000 and undercounts
 router.get('/stats', async (req, res, next) => {
     try {
-        // Get all staged movies
-        const { data: allMovies, error } = await supabase
-            .from('staged_movies')
-            .select('approval_status, tmdb_id, imdb_id')
+        const countStaged = async (applyFilters) => {
+            let query = supabase
+                .from('staged_movies')
+                .select('*', { count: 'exact', head: true })
+            if (applyFilters) {
+                query = applyFilters(query)
+            }
+            const { count, error } = await query
+            if (error) throw error
+            return count || 0
+        }
 
-        if (error) throw error
+        const [total, pending, approved, rejected, enriched, unenriched] = await Promise.all([
+            countStaged(),
+            countStaged(q => q.eq('approval_status', 'pending')),
+            countStaged(q => q.eq('approval_status', 'approved')),
+            countStaged(q => q.eq('approval_status', 'rejected')),
+            countStaged(q => q.or('tmdb_id.not.is.null,imdb_id.not.is.null')),
+            countStaged(q => q.is('tmdb_id', null).is('imdb_id', null))
+        ])
 
         const stats = {
-            total_staged: allMovies.length,
-            pending: allMovies.filter(m => m.approval_status === 'pending').length,
-            approved: allMovies.filter(m => m.approval_status === 'approved').length,
-            rejected: allMovies.filter(m => m.approval_status === 'rejected').length,
-            enriched: allMovies.filter(m => m.tmdb_id || m.imdb_id).length,
-            unenriched: allMovies.filter(m => !m.tmdb_id && !m.imdb_id).length
+            total_staged: total,
+            pending,
+            approved,
+            rejected,
+            enriched,
+            unenriched
         }
 
         res.json({
@@ -820,6 +835,27 @@ function mapToContentCategory(category) {
     return null
 }
 
+// Reset rows stuck in 'publishing' for more than 15 minutes back to 'approved'.
+// Prevents rows orphaned by a mid-publish crash/redeploy from vanishing forever.
+export async function resetStuckPublishing() {
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+
+    const { data, error } = await supabase
+        .from('staged_movies')
+        .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
+        .eq('approval_status', 'publishing')
+        .lt('updated_at', cutoff)
+        .select('id')
+
+    if (error) throw error
+
+    const resetCount = data?.length || 0
+    if (resetCount > 0) {
+        logger.warn(`[Staging] Reset ${resetCount} stuck 'publishing' row(s) back to 'approved'`)
+    }
+    return resetCount
+}
+
 // POST /api/admin/staging/publish - Publish approved movies
 router.post('/publish', async (req, res, next) => {
     try {
@@ -829,12 +865,19 @@ router.post('/publish', async (req, res, next) => {
         const movieIds = []
         const errors = []
 
-        // If specific IDs provided, approve them first
+        // Recover rows orphaned in 'publishing' by a previous crash/redeploy
+        await resetStuckPublishing().catch(err => {
+            logger.error('[Staging] Stuck-publishing reaper failed:', err)
+        })
+
+        // If specific IDs provided, approve them first.
+        // Guard on current status so rejected/published rows are never force-approved.
         if (ids && ids.length > 0) {
             await supabase
                 .from('staged_movies')
                 .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
                 .in('id', ids)
+                .in('approval_status', ['pending', 'approved'])
         }
 
         // Atomically claim movies for publishing: transition approved -> publishing.
@@ -848,19 +891,31 @@ router.post('/publish', async (req, res, next) => {
             claimQuery = claimQuery.in('id', ids)
         }
 
-        await claimQuery
+        // Only process the rows THIS request claimed — a concurrent publish may
+        // hold other rows in 'publishing' at the same time.
+        const { data: claimedRows, error: claimError } = await claimQuery.select('id')
 
-        // Get movies we just claimed (status is now 'publishing')
-        let query = supabase
-            .from('staged_movies')
-            .select('*')
-            .eq('approval_status', 'publishing')
+        if (claimError) throw claimError
 
-        if (ids && ids.length > 0) {
-            query = query.in('id', ids)
+        const claimedIds = (claimedRows || []).map(r => r.id)
+
+        if (claimedIds.length === 0) {
+            return res.json({
+                success: true,
+                data: {
+                    published: 0,
+                    failed: 0,
+                    movieIds: [],
+                    errors: undefined
+                }
+            })
         }
 
-        const { data: stagedMovies, error } = await query.order('created_at')
+        const { data: stagedMovies, error } = await supabase
+            .from('staged_movies')
+            .select('*')
+            .in('id', claimedIds)
+            .order('created_at')
 
         if (error) throw error
 
@@ -905,7 +960,11 @@ router.post('/publish', async (req, res, next) => {
                         is_tv_show: stagedMovie.is_tv_show,
                         is_tv_series: stagedMovie.is_tv_series,
                         is_kids_content: stagedMovie.is_kids_content,
+                        tv_series_id: stagedMovie.tv_series_id,
+                        season_number: stagedMovie.season_number,
+                        episode_number: stagedMovie.episode_number,
                         category: mapToContentCategory(stagedMovie.category),
+                        region_restrictions: stagedMovie.region_restrictions || null,
                         enrichment_source: stagedMovie.enrichment_source,
                         enrichment_confidence: enrichmentConfidence,
                         is_available: true
@@ -1101,6 +1160,7 @@ async function processEnrichmentBatch(batchId, movieIds, priority) {
                     tmdb_id: enrichResult.metadata?.tmdb_id,
                     imdb_id: enrichResult.metadata?.imdb_id,
                     enrichment_confidence: enrichResult.confidence,
+                    enriched_at: new Date().toISOString(),
                     poster_path: enrichResult.preview.poster_path,
                     backdrop_path: enrichResult.preview.backdrop_path,
                     description: enrichResult.preview.description,

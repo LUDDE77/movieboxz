@@ -50,3 +50,100 @@ struct DetailRow: View {
         }
     }
 }
+
+// MARK: - App Settings
+
+struct AppSettingsView: View {
+    @AppStorage("apiBaseURL") private var apiBaseURL = "https://movieboxz-backend-production.up.railway.app"
+    @AppStorage("adminAPIKey") private var adminAPIKey = ""
+    @State private var showKey = false
+    @State private var isTesting = false
+    @State private var testResult: String?
+    @State private var testSucceeded = false
+
+    var body: some View {
+        Form {
+            Section("Backend") {
+                TextField("Backend URL", text: $apiBaseURL)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    if showKey {
+                        TextField("Admin API Key", text: $adminAPIKey)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        SecureField("Admin API Key", text: $adminAPIKey)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    Button(showKey ? "Hide" : "Show") {
+                        showKey.toggle()
+                    }
+                }
+            }
+
+            Section {
+                HStack {
+                    Button {
+                        Task { await testConnection() }
+                    } label: {
+                        if isTesting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Test Connection", systemImage: "bolt.fill")
+                        }
+                    }
+                    .disabled(isTesting)
+
+                    if let testResult {
+                        Label(testResult, systemImage: testSucceeded ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(testSucceeded ? .green : .red)
+                    }
+                }
+
+                Text("Changes are saved automatically. Switch to another section and back for views to pick up a new key.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .frame(minWidth: 500)
+    }
+
+    private func testConnection() async {
+        isTesting = true
+        testResult = nil
+
+        defer { isTesting = false }
+
+        // Verify the admin key against a protected endpoint, not just /health
+        guard let url = URL(string: "\(apiBaseURL)/api/admin/staging/stats") else {
+            testSucceeded = false
+            testResult = "Invalid URL"
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue(adminAPIKey, forHTTPHeaderField: "x-admin-api-key")
+        request.timeoutInterval = 10
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            switch status {
+            case 200:
+                testSucceeded = true
+                testResult = "Connected — key is valid"
+            case 401:
+                testSucceeded = false
+                testResult = "Backend reachable, but the API key was rejected"
+            default:
+                testSucceeded = false
+                testResult = "Unexpected response (\(status))"
+            }
+        } catch {
+            testSucceeded = false
+            testResult = "Could not reach backend"
+        }
+    }
+}

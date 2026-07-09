@@ -95,6 +95,36 @@ class YouTubeService {
         }
     }
 
+    /**
+     * Check quota BEFORE making an API call. Resets counters daily, and if the
+     * current key cannot cover the cost, tries to switch keys. Throws an error
+     * with code 'quotaExceeded' if the daily budget would be exceeded.
+     */
+    ensureQuota(cost = 1) {
+        // Daily reset per key
+        const now = new Date()
+        this.quotaPerKey.forEach((quota, index) => {
+            if (now.getDate() !== quota.lastReset.getDate()) {
+                this.quotaPerKey[index].used = 0
+                this.quotaPerKey[index].lastReset = now
+            }
+        })
+
+        if (this.quotaPerKey[this.currentKeyIndex].used + cost <= this.dailyQuota) {
+            return
+        }
+
+        // Current key can't cover the cost — try switching to another key
+        const switched = this.switchToNextKey()
+        if (switched && this.quotaPerKey[this.currentKeyIndex].used + cost <= this.dailyQuota) {
+            return
+        }
+
+        const error = new Error(`YouTube API daily quota (${this.dailyQuota} units/key) would be exceeded by this call (cost: ${cost}). Quota resets at midnight Pacific time.`)
+        error.code = 'quotaExceeded'
+        throw error
+    }
+
     updateQuotaUsage(cost) {
         this.quotaPerKey[this.currentKeyIndex].used += cost
         const currentUsed = this.quotaPerKey[this.currentKeyIndex].used
@@ -124,6 +154,7 @@ class YouTubeService {
         try {
             logger.info(`Fetching YouTube video info: ${videoId}`)
 
+            this.ensureQuota(1)
             const response = await this.youtube.videos.list({
                 part: ['snippet', 'contentDetails', 'status', 'statistics'],
                 id: [videoId]
@@ -225,6 +256,7 @@ class YouTubeService {
             logger.info(`Fetching up to ${maxResults} videos from channel: ${channelId} (via uploads playlist)`)
 
             // Step 1: Get the channel's uploads playlist ID — costs 1 unit (was 100 with search.list)
+            this.ensureQuota(1)
             const channelResponse = await this.youtube.channels.list({
                 part: ['contentDetails'],
                 id: [channelId]
@@ -249,6 +281,7 @@ class YouTubeService {
                 pageCount++
                 const pageSize = Math.min(50, maxResults - totalFetched)
 
+                this.ensureQuota(1)
                 const playlistResponse = await this.youtube.playlistItems.list({
                     part: ['contentDetails', 'snippet'],
                     playlistId: uploadsPlaylistId,
@@ -285,6 +318,7 @@ class YouTubeService {
                 }
 
                 // Step 3: Get full video details — costs 1 unit per page of 50
+                this.ensureQuota(1)
                 const videosResponse = await this.youtube.videos.list({
                     part: ['snippet', 'contentDetails', 'status', 'statistics'],
                     id: videoIds
@@ -350,123 +384,51 @@ class YouTubeService {
         }
     }
 
-    async resolveChannelIdentifier(identifier) {
-        const startTime = Date.now()
-
-        try {
-            logger.info(`Resolving channel identifier: ${identifier}`)
-
-            // Case 1: Direct channel ID (starts with UC)
-            if (identifier.match(/^UC[\w-]{22}$/)) {
-                logger.info('Identifier is a direct channel ID')
-                return identifier
-            }
-
-            // Case 2: Full URL - extract channel ID or username
-            if (identifier.startsWith('http')) {
-                const url = new URL(identifier)
-
-                // Format: youtube.com/channel/UC...
-                if (url.pathname.startsWith('/channel/')) {
-                    const channelId = url.pathname.split('/channel/')[1].split('/')[0]
-                    logger.info(`Extracted channel ID from URL: ${channelId}`)
-                    return channelId
-                }
-
-                // Format: youtube.com/@username
-                if (url.pathname.startsWith('/@')) {
-                    const username = url.pathname.split('/@')[1].split('/')[0]
-                    logger.info(`Extracted username from URL: @${username}`)
-                    identifier = username // Continue to search by username
-                }
-
-                // Format: youtube.com/c/username or youtube.com/user/username
-                if (url.pathname.startsWith('/c/') || url.pathname.startsWith('/user/')) {
-                    const username = url.pathname.split('/')[2].split('/')[0]
-                    logger.info(`Extracted username from URL: ${username}`)
-                    identifier = username // Continue to search by username
-                }
-            }
-
-            // Case 3: Username or @username - search for channel
-            const username = identifier.startsWith('@') ? identifier.substring(1) : identifier
-
-            logger.info(`Searching for channel by username: ${username}`)
-
-            const searchResponse = await this.youtube.search.list({
-                part: ['snippet'],
-                q: username,
-                type: 'channel',
-                maxResults: 5
-            })
-
-            this.updateQuotaUsage(100) // search.list costs 100 units
-
-            await dbOperations.logApiUsage(
-                'youtube',
-                'search.list',
-                'GET',
-                100,
-                200,
-                Date.now() - startTime
-            )
-
-            if (!searchResponse.data.items || searchResponse.data.items.length === 0) {
-                throw new Error(`No channel found matching: ${identifier}`)
-            }
-
-            // Try to find exact match first
-            const exactMatch = searchResponse.data.items.find(item => {
-                const channelTitle = item.snippet.title.toLowerCase()
-                const customUrl = item.snippet.customUrl?.toLowerCase() || ''
-                const searchTerm = username.toLowerCase()
-
-                return channelTitle === searchTerm ||
-                       customUrl === searchTerm ||
-                       customUrl === `@${searchTerm}`
-            })
-
-            const channel = exactMatch || searchResponse.data.items[0]
-            const channelId = channel.id.channelId
-
-            logger.info(`Resolved to channel: ${channel.snippet.title} (${channelId})`)
-
-            return channelId
-
-        } catch (error) {
-            logger.error(`Error resolving channel identifier ${identifier}:`, error.message)
-
-            await dbOperations.logApiUsage(
-                'youtube',
-                'resolveChannelIdentifier',
-                'GET',
-                100,
-                error.response?.status || 500,
-                Date.now() - startTime,
-                error.message
-            )
-
-            throw error
-        }
-    }
-
     /**
      * Resolve channel identifier to channel ID
-     * Supports: channel IDs (UC...), @handles, custom URLs
+     * Supports: channel IDs (UC...), @handles, and pasted URLs
+     * (youtube.com/channel/UC..., youtube.com/@handle, youtube.com/c/name, youtube.com/user/name)
      */
     async resolveChannelIdentifier(identifier) {
+        let cleanIdentifier = String(identifier).trim()
+
+        // Full URL — extract the channel ID or handle before hitting the API
+        if (cleanIdentifier.startsWith('http')) {
+            const url = new URL(cleanIdentifier)
+
+            // Format: youtube.com/channel/UC...
+            if (url.pathname.startsWith('/channel/')) {
+                const channelId = url.pathname.split('/channel/')[1].split('/')[0]
+                logger.info(`Extracted channel ID from URL: ${channelId}`)
+                return channelId
+            }
+
+            // Format: youtube.com/@handle
+            if (url.pathname.startsWith('/@')) {
+                cleanIdentifier = url.pathname.split('/@')[1].split('/')[0]
+                logger.info(`Extracted handle from URL: @${cleanIdentifier}`)
+            } else if (url.pathname.startsWith('/c/') || url.pathname.startsWith('/user/')) {
+                // Format: youtube.com/c/name or youtube.com/user/name
+                cleanIdentifier = url.pathname.split('/')[2]
+                logger.info(`Extracted username from URL: ${cleanIdentifier}`)
+            }
+        }
+
         // Remove any leading @ symbol
-        const cleanIdentifier = identifier.startsWith('@') ? identifier.substring(1) : identifier
+        if (cleanIdentifier.startsWith('@')) {
+            cleanIdentifier = cleanIdentifier.substring(1)
+        }
 
         // If it looks like a channel ID (starts with UC), return as-is
         if (cleanIdentifier.startsWith('UC')) {
             return cleanIdentifier
         }
 
-        // Otherwise, treat as handle and look up
+        // Otherwise, treat as handle and look up (channels.list = 1 unit, never search.list)
         logger.info(`Resolving @${cleanIdentifier} to channel ID`)
 
         try {
+            this.ensureQuota(1)
             const response = await this.youtube.channels.list({
                 part: ['id'],
                 forHandle: cleanIdentifier,
@@ -497,6 +459,7 @@ class YouTubeService {
             // Resolve handle to channel ID if needed
             const channelId = await this.resolveChannelIdentifier(channelIdOrHandle)
 
+            this.ensureQuota(1)
             const response = await this.youtube.channels.list({
                 part: ['snippet', 'statistics', 'status', 'brandingSettings'],
                 id: [channelId]
@@ -534,7 +497,7 @@ class YouTubeService {
                 isVerified: channel.status?.isLinked || false
             }
         } catch (error) {
-            logger.error(`Error fetching channel ${channelId}:`, error.message)
+            logger.error(`Error fetching channel ${channelIdOrHandle}:`, error.message)
 
             await dbOperations.logApiUsage(
                 'youtube',
@@ -586,6 +549,7 @@ class YouTubeService {
 
                 logger.info(`Fetching playlist page ${pageCount} (${pageSize} items)...`)
 
+                this.ensureQuota(1)
                 const playlistResponse = await this.youtube.playlistItems.list(playlistParams)
                 this.updateQuotaUsage(1) // playlistItems.list costs 1 unit
                 totalQuotaUsed += 1
@@ -601,6 +565,7 @@ class YouTubeService {
                     .filter(Boolean)
 
                 // Get detailed video information
+                this.ensureQuota(1)
                 const videosResponse = await this.youtube.videos.list({
                     part: ['snippet', 'contentDetails', 'status', 'statistics'],
                     id: videoIds

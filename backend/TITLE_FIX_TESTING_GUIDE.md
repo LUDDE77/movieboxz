@@ -54,7 +54,7 @@ Wait for Railway auto-deployment to complete (check Railway dashboard).
 ```bash
 curl -X POST https://movieboxz-backend-production.up.railway.app/api/admin/movies/fix-titles \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: ec0b5a7e29843665384070f90a9b873f04c63b06b0b0a26269a166a05db7daa9" \
+  -H "x-admin-api-key: <ROTATED — set ADMIN_API_KEY env var>" \
   -d '{
     "dryRun": true,
     "limit": 10
@@ -87,7 +87,7 @@ curl -X POST https://movieboxz-backend-production.up.railway.app/api/admin/movie
 ```bash
 curl -X POST https://movieboxz-backend-production.up.railway.app/api/admin/movies/fix-titles \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: ec0b5a7e29843665384070f90a9b873f04c63b06b0b0a26269a166a05db7daa9" \
+  -H "x-admin-api-key: <ROTATED — set ADMIN_API_KEY env var>" \
   -d '{
     "dryRun": false,
     "limit": 10
@@ -119,7 +119,7 @@ curl -s "https://movieboxz-backend-production.up.railway.app/api/movies/popular?
 ```bash
 curl -X POST https://movieboxz-backend-production.up.railway.app/api/admin/movies/fix-titles \
   -H "Content-Type: application/json" \
-  -H "x-admin-api-key: ec0b5a7e29843665384070f90a9b873f04c63b06b0b0a26269a166a05db7daa9" \
+  -H "x-admin-api-key: <ROTATED — set ADMIN_API_KEY env var>" \
   -d '{
     "dryRun": false
   }'

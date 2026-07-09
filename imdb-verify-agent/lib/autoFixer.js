@@ -11,7 +11,7 @@ export async function applyImdbFix({ backendUrl, adminApiKey, movieId, imdbId, m
     try {
         return await callEnrichManualImdb({ backendUrl, adminApiKey, movieId, imdbId, mode })
     } catch (err) {
-        if (err.message.includes('500')) {
+        if (err.message.includes('500') || err.message.includes('404')) {
             console.log(`   ⚠️  Server enrichment failed for ${imdbId} — using local Playwright fallback`)
             return await applyWithPlaywrightFallback({ backendUrl, adminApiKey, movieId, imdbId, mode })
         }

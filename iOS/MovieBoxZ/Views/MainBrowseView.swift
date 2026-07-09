@@ -3,18 +3,19 @@ import AVKit
 import AVFoundation
 
 struct MainBrowseView: View {
-    @StateObject private var movieService = MovieService()
-    @State private var featuredMovies: [Movie] = []
-    @State private var trendingMovies: [Movie] = []
-    @State private var popularMovies: [Movie] = []
-    @State private var recentMovies: [Movie] = []
+    @EnvironmentObject private var movieService: MovieService
 
-    // Dynamic Genre Categories
-    @State private var genreCategories: [(genre: Genre, movies: [Movie])] = []
-    @State private var uncategorizedMovies: [Movie] = []
+    // Browse data (featured/trending/popular/recent/genres/uncategorized/all)
+    // lives on the shared MovieService so it survives tab switches instead
+    // of being refetched (and re-skeletoned) every time this view reappears.
+    private var featuredMovies: [Movie] { movieService.featuredMovies }
+    private var trendingMovies: [Movie] { movieService.trendingMovies }
+    private var popularMovies: [Movie] { movieService.popularMovies }
+    private var recentMovies: [Movie] { movieService.recentMovies }
+    private var genreCategories: [(genre: Genre, movies: [Movie])] { movieService.genreCategories }
+    private var uncategorizedMovies: [Movie] { movieService.uncategorizedMovies }
+    private var allMovies: [Movie] { movieService.allBrowseMovies }
 
-    // All Movies & TV Series
-    @State private var allMovies: [Movie] = []
     @State private var tvSeries: [Movie] = [] // Placeholder for TV series
 
     @State private var isLoading = false
@@ -344,15 +345,22 @@ struct MainBrowseView: View {
                         }
                     }
                     .background(.clear)
+                    .refreshable {
+                        await refreshMovies()
+                    }
                 }
                 #endif
             }
         }
         .onAppear {
-            if featuredMovies.isEmpty {
-                loadMovies()
-            } else {
+            if movieService.hasLoadedBrowseData {
+                // Data already cached from a previous appearance (or the
+                // splash-screen preload) — just resume the hero carousel,
+                // no refetch, no skeleton.
+                currentHeroIndex = min(currentHeroIndex, max(featuredMovies.count - 1, 0))
                 startHeroTimer()
+            } else {
+                loadMovies()
             }
         }
         .onDisappear {
@@ -393,52 +401,10 @@ struct MainBrowseView: View {
                 isLoading = true
                 errorMessage = nil
 
-                // Load featured movies (admin-curated, up to 5)
-                async let featuredResult = movieService.fetchFeaturedMovies()
-                // Load popular and recent in parallel
-                async let popularResult = movieService.fetchPopularMovies(page: 1, limit: 10)
-                async let recentResult = movieService.fetchRecentMovies(page: 1, limit: 50)
+                try await movieService.loadBrowseData()
 
-                let (fetchedFeatured, fetchedPopular, allMovies) = try await (featuredResult, popularResult, recentResult)
-
-                featuredMovies = fetchedFeatured.isEmpty ? Array(allMovies.prefix(3)) : fetchedFeatured
-                popularMovies = fetchedPopular
-                trendingMovies = allMovies.filter { $0.trending }
-                recentMovies = allMovies
                 currentHeroIndex = 0
                 startHeroTimer()
-
-                // Fetch all genres from backend
-                let genres = try await movieService.fetchAllGenres()
-
-                // Filter to only genres with movies
-                let genresWithMovies = genres.filter { ($0.movieCount ?? 0) > 0 }
-
-                // Fetch genre movies, allMovies, and uncategorized in parallel
-                async let allMoviesResult = movieService.fetchAllMovies(sort: "popularity", limit: 50)
-                async let uncategorizedResult = movieService.fetchUncategorizedMovies(limit: 10)
-
-                var genreResults: [(genre: Genre, movies: [Movie])] = []
-                await withTaskGroup(of: (Genre, [Movie]).self) { group in
-                    for genre in genresWithMovies {
-                        group.addTask {
-                            let movies = (try? await self.movieService.fetchMoviesByGenre(genreId: genre.id, limit: 10)) ?? []
-                            return (genre, movies)
-                        }
-                    }
-                    for await (genre, movies) in group {
-                        genreResults.append((genre: genre, movies: movies))
-                    }
-                }
-                genreResults.sort { $0.genre.name < $1.genre.name }
-
-                // Wait for all fetches to complete
-                let (allMoviesData, uncategorizedData) = try await (allMoviesResult, uncategorizedResult)
-
-                // Assign results
-                self.genreCategories = genreResults
-                self.allMovies = allMoviesData
-                self.uncategorizedMovies = uncategorizedData
 
                 // TODO: TV Series - Backend endpoint doesn't exist yet
                 // When backend adds /api/series endpoint, add:
@@ -451,6 +417,19 @@ struct MainBrowseView: View {
                 errorMessage = "Unable to load movies. Please check your internet connection."
                 showError = true
             }
+        }
+    }
+
+    /// Manual reload path for pull-to-refresh — bypasses the cache.
+    private func refreshMovies() async {
+        do {
+            try await movieService.loadBrowseData(force: true)
+            currentHeroIndex = 0
+            startHeroTimer()
+        } catch {
+            print("❌ Error refreshing movies: \(error)")
+            errorMessage = "Unable to refresh movies. Please check your internet connection."
+            showError = true
         }
     }
 
@@ -648,8 +627,8 @@ struct FeaturedMovieBanner: View {
                                 onPlayVideo(movie.youtubeVideoId)
                             } label: {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "play.rectangle.fill").foregroundColor(.red)
-                                    Text("Watch on YouTube")
+                                    Image(systemName: "info.circle.fill").foregroundColor(.white)
+                                    Text("More Info")
                                 }
                                 .font(.system(size: bodyTextSize, weight: .semibold))
                                 .foregroundColor(.white)
@@ -658,9 +637,13 @@ struct FeaturedMovieBanner: View {
                                 .background(Color.black.opacity(0.6))
                                 .cornerRadius(10)
                             }
+                            #if os(tvOS)
+                            .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 10)))
+                            #else
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
-                            .accessibilityHint("Opens YouTube app to play the movie")
+                            #endif
+                            .accessibilityLabel("More info about \(movie.displayTitle)")
+                            .accessibilityHint("Opens movie details")
 
                             Button {
                                 LibraryManager.shared.toggleFavorite(movie.id)
@@ -677,7 +660,11 @@ struct FeaturedMovieBanner: View {
                                 .background(Color.white.opacity(0.15))
                                 .cornerRadius(10)
                             }
+                            #if os(tvOS)
+                            .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 10)))
+                            #else
                             .buttonStyle(.plain)
+                            #endif
                             .accessibilityLabel(movie.isFavorite ? "Remove from My List" : "Add to My List")
                         }
 
@@ -777,8 +764,8 @@ struct FeaturedMovieBanner: View {
                             onPlayVideo(movie.youtubeVideoId)
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "play.rectangle.fill").foregroundColor(.red)
-                                Text("Watch on YouTube")
+                                Image(systemName: "info.circle.fill").foregroundColor(.white)
+                                Text("More Info")
                             }
                             .font(.system(size: bodyTextSize, weight: .semibold))
                             .foregroundColor(.white)
@@ -788,7 +775,8 @@ struct FeaturedMovieBanner: View {
                             .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Watch \(movie.displayTitle) on YouTube")
+                        .accessibilityLabel("More info about \(movie.displayTitle)")
+                        .accessibilityHint("Opens movie details")
 
                         Button {
                             LibraryManager.shared.toggleFavorite(movie.id)
@@ -1082,6 +1070,9 @@ struct MovieCard: View {
     private var contextMenuContent: some View {
         // Add to / Remove from Favorites
         Button {
+            #if os(iOS)
+            HapticFeedback.light()
+            #endif
             LibraryManager.shared.toggleFavorite(movie.id)
         } label: {
             Label(
@@ -1090,8 +1081,11 @@ struct MovieCard: View {
             )
         }
 
-        // Open in YouTube app
+        // Open in YouTube app — same service call used everywhere else
         Button {
+            #if os(iOS)
+            HapticFeedback.medium()
+            #endif
             YouTubePlayerService.shared.playMovie(movie) { _ in }
         } label: {
             Label("Watch on YouTube", systemImage: "play.rectangle")
@@ -1101,5 +1095,6 @@ struct MovieCard: View {
 
 #Preview {
     MainBrowseView()
+        .environmentObject(MovieService())
         .preferredColorScheme(.dark)
 }

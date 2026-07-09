@@ -166,7 +166,7 @@ struct WelcomeView: View {
                             .cornerRadius(12)
                         }
                         #if os(tvOS)
-                        .buttonStyle(.card)
+                        .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 12)))
                         #endif
                         .focused($buttonFocused)  // Attach focus state for tvOS
                         .shadow(radius: 10)
