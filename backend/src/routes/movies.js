@@ -213,9 +213,20 @@ router.get('/trending', async (req, res, next) => {
 
         logger.info(`Fetching trending movies - page ${page}`)
 
-        const result = await dbOperations.getMovies({
+        let result = await dbOperations.getMovies({
             trending: true
         }, limit, offset)
+
+        // No movies are flagged trending — fall back to most viewed so the
+        // apps' Trending row always has content
+        let usedFallback = false
+        if (result.total === 0) {
+            usedFallback = true
+            result = await dbOperations.getMovies({
+                sortBy: 'view_count',
+                sortOrder: 'desc'
+            }, limit, offset)
+        }
 
         res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
         res.json({
@@ -229,7 +240,9 @@ router.get('/trending', async (req, res, next) => {
                     pages: Math.ceil(result.total / limit)
                 }
             },
-            message: `Retrieved ${result.movies.length} trending movies`
+            message: usedFallback
+                ? `Retrieved ${result.movies.length} trending movies (most-viewed fallback)`
+                : `Retrieved ${result.movies.length} trending movies`
         })
     } catch (error) {
         next(error)
