@@ -463,7 +463,12 @@ class TMDBService {
         return {
             name: show.name,
             seasons: regularSeasons.length,
-            episodes
+            episodes,
+            poster_path: show.poster_path || null,
+            backdrop_path: show.backdrop_path || null,
+            overview: show.overview || null,
+            first_air_date: show.first_air_date || null,
+            last_air_date: show.last_air_date || null
         }
     }
 

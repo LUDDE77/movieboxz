@@ -204,13 +204,42 @@ router.post('/tv-series/:id/episode-guide', async (req, res, next) => {
 
         if (upsertError) throw upsertError
 
+        // Backfill series presentation metadata from the TMDB show (fill-only:
+        // never overwrite values an admin already set)
+        const { data: fullSeries } = await supabase
+            .from('tv_series')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        const seriesUpdate = {}
+        if (fullSeries) {
+            if (!fullSeries.poster_path && guide.poster_path) seriesUpdate.poster_path = guide.poster_path
+            if ('backdrop_path' in fullSeries && !fullSeries.backdrop_path && guide.backdrop_path) seriesUpdate.backdrop_path = guide.backdrop_path
+            if (!fullSeries.description && guide.overview) seriesUpdate.description = guide.overview
+            if (!fullSeries.year_start && guide.first_air_date) seriesUpdate.year_start = parseInt(guide.first_air_date.slice(0, 4))
+            if (!fullSeries.year_end && guide.last_air_date) seriesUpdate.year_end = parseInt(guide.last_air_date.slice(0, 4))
+        }
+        if (Object.keys(seriesUpdate).length > 0) {
+            const { error: metaError } = await supabase
+                .from('tv_series')
+                .update(seriesUpdate)
+                .eq('id', id)
+            if (metaError) {
+                logger.warn(`Episode guide stored but series metadata backfill failed for ${id}: ${metaError.message}`)
+            } else {
+                logger.info(`Backfilled series metadata for "${series.title}": ${Object.keys(seriesUpdate).join(', ')}`)
+            }
+        }
+
         logger.info(`Stored episode guide for "${series.title}" (${id}): ${guide.episodes.length} episodes, ${guide.seasons} seasons (tmdb ${tmdbId})`)
 
         res.json({
             success: true,
             data: {
                 episodesCount: guide.episodes.length,
-                seasons: guide.seasons
+                seasons: guide.seasons,
+                seriesMetadataUpdated: Object.keys(seriesUpdate)
             }
         })
     } catch (error) {

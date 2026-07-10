@@ -1114,8 +1114,22 @@ router.post('/publish', async (req, res, next) => {
 
         if (error) throw error
 
+        let skippedNoPoster = 0
         for (const stagedMovie of stagedMovies || []) {
             try {
+                // Publish gate: movies (not episodes) must have a poster before
+                // they reach the consumer apps. Episodes fall back to YouTube
+                // thumbnails by design, so they are exempt.
+                if (!stagedMovie.poster_path && !stagedMovie.is_tv_series) {
+                    await supabase
+                        .from('staged_movies')
+                        .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
+                        .eq('id', stagedMovie.id)
+                    skippedNoPoster++
+                    logger.info(`[Publish] Skipped "${stagedMovie.title}" — no poster (stays approved)`)
+                    continue
+                }
+
                 // Insert into movies table
                 // Convert enrichment_confidence from 0-100 scale to 0-1 scale if needed
                 let enrichmentConfidence = stagedMovie.enrichment_confidence
@@ -1230,6 +1244,7 @@ router.post('/publish', async (req, res, next) => {
             data: {
                 published,
                 failed,
+                skippedNoPoster: skippedNoPoster > 0 ? skippedNoPoster : undefined,
                 movieIds,
                 errors: errors.length > 0 ? errors : undefined
             }
