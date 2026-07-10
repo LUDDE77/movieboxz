@@ -26,6 +26,7 @@ import duplicatesAdminRouter from './routes/duplicatesAdmin.js'
 import validationAdminRouter from './routes/validationAdmin.js'
 import { tvSeriesAdminRouter } from './routes/tvSeriesAdmin.js'
 import seriesRouter from './routes/series.js'
+import genresAdminRouter from './routes/genresAdmin.js'
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js'
@@ -118,6 +119,7 @@ app.use('/api/admin/channel-management', channelManagementRouter)
 app.use('/api/admin/staging', stagingRouter)
 app.use('/api/admin/duplicates', duplicatesAdminRouter)
 app.use('/api/admin/validation', validationAdminRouter)
+app.use('/api/admin/genres', genresAdminRouter)
 app.use('/api/admin', tvSeriesAdminRouter)
 app.use('/api/admin', adminRouter)
 

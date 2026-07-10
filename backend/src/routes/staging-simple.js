@@ -6,6 +6,7 @@ import { youtubeService } from '../services/youtubeService.js'
 import omdbService from '../services/omdbService.js'
 import { logger } from '../utils/logger.js'
 import { adminAuth } from '../middleware/adminAuth.js'
+import { normalizeGenreEntries, mapGenreEntriesToIds } from '../utils/genreMapping.js'
 
 const router = express.Router()
 
@@ -618,13 +619,20 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
 
         if (enrichmentResult.success) {
             // genres is a relation (movie_genres), not a staged_movies column —
-            // spreading it into the update makes Supabase 500
+            // spreading it into the update makes Supabase 500. Capture it into
+            // the genre_data JSONB column instead so publish can map it to
+            // movie_genres (migration 035).
             const { genres: _genres, ...previewColumns } = enrichmentResult.preview || {}
             const updateData = {
                 ...previewColumns,
                 enrichment_source: enrichmentResult.source,
                 enrichment_confidence: enrichmentResult.confidence,
                 updated_at: new Date().toISOString()
+            }
+
+            const capturedGenres = normalizeGenreEntries(_genres)
+            if (capturedGenres) {
+                updateData.genre_data = capturedGenres
             }
 
             const { data: updated, error: updateError } = await supabase
@@ -865,6 +873,7 @@ router.post('/movies/:id/clear-enrichment', async (req, res, next) => {
             country: null,
             is_tv_show: null,
             category: null,
+            genre_data: null,
 
             // Clear enrichment metadata
             enrichment_source: null,
@@ -1054,6 +1063,32 @@ export async function resetStuckPublishing() {
     return resetCount
 }
 
+// Map a staged row's captured genre_data onto the freshly published movie via
+// the atomic update_movie_genres RPC. NEVER fatal — a genre mapping error must
+// not fail a publish, so all failures are logged and swallowed.
+async function applyStagedGenreData(movieId, stagedMovie, getGenreRows) {
+    if (!stagedMovie.genre_data) return
+    try {
+        const genreRows = await getGenreRows()
+        const { genreIds, matched, unmatched } = mapGenreEntriesToIds(stagedMovie.genre_data, genreRows)
+
+        if (unmatched.length > 0) {
+            logger.warn(`[Publish] Unmatched genre(s) for "${stagedMovie.title}": ${unmatched.join(', ')}`)
+        }
+        if (genreIds.length === 0) return
+
+        const { error: rpcError } = await supabase.rpc('update_movie_genres', {
+            p_movie_id: movieId,
+            p_genre_ids: genreIds
+        })
+        if (rpcError) throw rpcError
+
+        logger.info(`[Publish] Applied ${genreIds.length} genre(s) to "${stagedMovie.title}": ${matched.join(', ')}`)
+    } catch (error) {
+        logger.error(`[Publish] Genre mapping failed for movie ${movieId} ("${stagedMovie.title}") — publish unaffected:`, error)
+    }
+}
+
 // POST /api/admin/staging/publish - Publish approved movies
 router.post('/publish', async (req, res, next) => {
     try {
@@ -1062,6 +1097,18 @@ router.post('/publish', async (req, res, next) => {
         let failed = 0
         const movieIds = []
         const errors = []
+
+        // Genres table cache — loaded at most once per publish request
+        let genreRowsCache = null
+        const getGenreRows = async () => {
+            if (genreRowsCache) return genreRowsCache
+            const { data, error } = await supabase
+                .from('genres')
+                .select('id, name, tmdb_id')
+            if (error) throw error
+            genreRowsCache = data || []
+            return genreRowsCache
+        }
 
         // Recover rows orphaned in 'publishing' by a previous crash/redeploy
         await resetStuckPublishing().catch(err => {
@@ -1212,6 +1259,9 @@ router.post('/publish', async (req, res, next) => {
 
                 const movieId = insertedMovie.id
                 movieIds.push(movieId)
+
+                // Map captured enrichment genres to movie_genres (non-fatal)
+                await applyStagedGenreData(movieId, stagedMovie, getGenreRows)
 
                 // Update staged movie: mark as published and record production movie ID
                 await supabase
@@ -1391,7 +1441,12 @@ async function processEnrichmentBatch(batchId, movieIds, priority) {
                     actors: enrichResult.preview.actors,
                     language: enrichResult.preview.language,
                     country: enrichResult.preview.country,
-                    category: enrichResult.preview.category
+                    category: enrichResult.preview.category,
+                    // genres is not a staged_movies column — capture into the
+                    // genre_data JSONB column for mapping at publish time.
+                    // normalizeGenreEntries returns null for no data; `?? undefined`
+                    // lets the undefined-cleanup below drop the key entirely.
+                    genre_data: normalizeGenreEntries(enrichResult.preview.genres) ?? undefined
                 }
 
                 // Remove undefined values
@@ -1527,6 +1582,10 @@ router.post('/movies/:id/enrich-from-data', async (req, res, next) => {
         if (description && !movie.description) updateData.description = description
         if (year && !movie.release_date) updateData.release_date = `${year}-01-01`
         if (type) updateData.is_tv_show = type === 'TVSeries'
+
+        // Capture scraped genre names for mapping to movie_genres at publish
+        const scrapedGenres = normalizeGenreEntries(genres)
+        if (scrapedGenres) updateData.genre_data = scrapedGenres
 
         const { data: updated, error: updateError } = await supabase
             .from('staged_movies')

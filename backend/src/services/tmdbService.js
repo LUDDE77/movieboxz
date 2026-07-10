@@ -257,6 +257,44 @@ class TMDBService {
         }
     }
 
+    /**
+     * Lightweight genre lookup for a single movie — plain /movie/{id} call
+     * (no append_to_response), so it is much cheaper than getMovieDetails.
+     * Uses the standard rate limiting + 10s timeout via makeRequest.
+     * Throws on request failure so callers can count it as a failure
+     * (an empty array means "TMDB has no genres for this movie").
+     *
+     * @param {number|string} movieId - TMDB movie id
+     * @returns {Promise<Array<{id: number, name: string}>>}
+     */
+    async getMovieGenres(movieId) {
+        const data = await this.makeRequest(`/movie/${movieId}`)
+        return data.genres || []
+    }
+
+    /**
+     * Lightweight genre lookup for a TV show — plain /tv/{id} call.
+     * Same semantics as getMovieGenres.
+     *
+     * @param {number|string} seriesId - TMDB TV show id
+     * @returns {Promise<Array<{id: number, name: string}>>}
+     */
+    async getTVShowGenres(seriesId) {
+        const data = await this.makeRequest(`/tv/${seriesId}`)
+        return data.genres || []
+    }
+
+    /**
+     * Resolve an external id via TMDB /find (e.g. an IMDB id -> TMDB entries).
+     * Returns the raw find response: { movie_results, tv_results, ... }.
+     *
+     * @param {string} imdbId - e.g. 'tt0133093'
+     * @returns {Promise<Object>}
+     */
+    async findByImdbId(imdbId) {
+        return this.makeRequest(`/find/${imdbId}`, { external_source: 'imdb_id' })
+    }
+
     // =============================================================================
     // TV SERIES OPERATIONS
     // =============================================================================
