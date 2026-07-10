@@ -1104,9 +1104,10 @@ router.post('/publish', async (req, res, next) => {
             if (genreRowsCache) return genreRowsCache
             const { data, error } = await supabase
                 .from('genres')
-                .select('id, name, tmdb_id')
+                .select('id, name')
             if (error) throw error
-            genreRowsCache = data || []
+            // genres.id doubles as the TMDB genre id in this schema
+            genreRowsCache = (data || []).map(g => ({ ...g, tmdb_id: g.id }))
             return genreRowsCache
         }
 

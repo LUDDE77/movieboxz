@@ -86,7 +86,7 @@ function candidatesForScope(scope, buckets) {
 async function buildRunContext(candidates) {
     const { data: genreRows, error: genresError } = await supabase
         .from('genres')
-        .select('id, name, tmdb_id')
+        .select('id, name')
     if (genresError) throw genresError
 
     const episodeCandidates = candidates.filter(c => c.kind === 'episodes')
@@ -124,7 +124,8 @@ async function buildRunContext(candidates) {
     }
 
     return {
-        genreRows: genreRows || [],
+        // genres.id doubles as the TMDB genre id in this schema
+        genreRows: (genreRows || []).map(g => ({ ...g, tmdb_id: g.id })),
         guideBySeries,
         kidsChannelIds,
         seriesGenreCache: new Map() // tv_series_id -> normalized entries (per run)
