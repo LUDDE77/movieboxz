@@ -101,12 +101,13 @@ Use `#if os(tvOS)` / `#if os(iOS)` throughout. Both platforms are built from the
 ## macOS Admin app — key rules
 
 ### API key setup
-New contributors: open the app → Preferences (Cmd+,) → enter the `ADMIN_API_KEY` and backend URL. The key is **never** stored in source code.
+New contributors: open the app → **Settings** in the sidebar (or Cmd+,) → enter the `ADMIN_API_KEY` and backend URL, then use **Test Connection** to verify. The key is **never** stored in source code.
 
 ### Architecture
 - Each view has its own `@StateObject private var apiService = AdminAPIService()`
 - `AdminAPIService` reads `apiBaseURL` and `adminAPIKey` from `UserDefaults` at init
-- If you change the key in Preferences, restart the app for all views to pick it up
+- If you change the key in Settings, switch to another section and back (or restart the app) for views to pick it up
+- Sidebar sections: Dashboard, Movies, Staging, Verification, Duplicates, Channel Setup, Genres, TV Series, Series Matching, Featured, Settings
 
 ### Multi-user safety
 - Delete staged movie: requires confirmation dialog
