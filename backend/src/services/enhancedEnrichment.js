@@ -544,6 +544,16 @@ class EnhancedEnrichment {
                 mediaHint: actorHints.mediaHint
             })
 
+            // A manually cleaned staged title beats pattern extraction: when the
+            // caller passes a title that differs from both the raw YouTube title
+            // and the extraction, an admin set it deliberately — search with it.
+            if (movie.title &&
+                movie.title !== movie.youtube_video_title &&
+                movie.title !== actorHints.title) {
+                logger.info(`🎬 [EnhancedEnrichment] Using manually set title "${movie.title}" instead of extraction "${actorHints.title}"`)
+                actorHints.title = movie.title
+            }
+
             const publishYear = new Date(movie.published_at).getFullYear()
             logger.info(`🎬 [EnhancedEnrichment] Publish year: ${publishYear}`)
 

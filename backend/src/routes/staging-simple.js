@@ -617,8 +617,11 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
         })
 
         if (enrichmentResult.success) {
+            // genres is a relation (movie_genres), not a staged_movies column —
+            // spreading it into the update makes Supabase 500
+            const { genres: _genres, ...previewColumns } = enrichmentResult.preview || {}
             const updateData = {
-                ...enrichmentResult.preview,
+                ...previewColumns,
                 enrichment_source: enrichmentResult.source,
                 enrichment_confidence: enrichmentResult.confidence,
                 updated_at: new Date().toISOString()
