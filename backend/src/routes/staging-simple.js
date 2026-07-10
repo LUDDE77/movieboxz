@@ -24,7 +24,8 @@ const enrichmentProgress = new Map()
 const DEFAULT_LOW_CONFIDENCE_THRESHOLD = 50
 
 // enrichment confidence appears on both 0-1 and 0-100 scales — normalize to 0-100
-function confidenceAsPercent(confidence) {
+// (exported for reuse by channelManagement's auto-enrich import path)
+export function confidenceAsPercent(confidence) {
     const value = parseFloat(confidence)
     if (Number.isNaN(value)) return null
     return value <= 1 ? value * 100 : value
@@ -45,7 +46,8 @@ async function getAutoApproveThreshold(channelId) {
 
 // Auto-approve a pending staged movie when its enrichment confidence clears the
 // channel's auto_approve_threshold. Returns true when the row was approved.
-async function maybeAutoApprove(movie, confidencePercent, threshold) {
+// (exported for reuse by channelManagement's auto-enrich import path)
+export async function maybeAutoApprove(movie, confidencePercent, threshold) {
     if (!movie?.id || threshold == null || confidencePercent == null) return false
     if (movie.approval_status !== 'pending') return false
     if (confidencePercent < threshold) return false
@@ -1400,6 +1402,16 @@ async function processEnrichmentBatch(batchId, movieIds, priority) {
             } else {
                 logger.warn(`⚠️ [Batch Enrich ${batchId}] No enrichment data for ${movie.title}: ${enrichResult.message}`)
                 progress.skipped++
+
+                // Mark the attempt (same as the single-enrich path) so repeat
+                // batch runs don't re-attempt the same unmatchable rows forever
+                await supabase
+                    .from('staged_movies')
+                    .update({
+                        enrichment_confidence: confidenceAsPercent(enrichResult.confidence) ?? 30,
+                        enriched_at: new Date().toISOString()
+                    })
+                    .eq('id', movieId)
 
                 // No match — feed the manual verification queue
                 await handlePostEnrichment(movie, enrichResult)

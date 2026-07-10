@@ -1,5 +1,6 @@
 import cron from 'node-cron'
 import linkValidatorService from '../services/linkValidatorService.js'
+import { runChannelAutoSync } from './channelAutoSync.js'
 import { logger } from '../utils/logger.js'
 
 /**
@@ -7,6 +8,7 @@ import { logger } from '../utils/logger.js'
  *
  * Manages all scheduled background jobs:
  * - Daily link validation (3 AM UTC)
+ * - Daily channel auto-sync (5 AM UTC, after validation)
  * - Weekly cleanup tasks (Sunday 2 AM UTC)
  * - Monthly analytics (1st of month, 1 AM UTC)
  */
@@ -32,12 +34,40 @@ class JobScheduler {
                     validated: result.validatedCount,
                     failed: result.failedCount,
                     failovers: result.failoverCount,
+                    resurrected: result.resurrected,
                     quota_used: result.quotaUsed,
                     duration_seconds: result.durationSeconds
                 })
 
             } catch (error) {
                 logger.error('❌ Daily validation failed:', error)
+            }
+        }, {
+            scheduled: true,
+            timezone: 'UTC'
+        })
+
+        // Daily channel auto-sync at 5 AM UTC (after link validation) — imports
+        // the latest videos from every auto_import_enabled channel, sequentially,
+        // with a quota guard
+        this.jobs.channelAutoSync = cron.schedule('0 5 * * *', async () => {
+            logger.info('🔄 Running scheduled channel auto-sync')
+
+            try {
+                const result = await runChannelAutoSync()
+
+                logger.info('✅ Channel auto-sync completed:', {
+                    channels_eligible: result.channelsEligible,
+                    channels_processed: result.channelsProcessed,
+                    imported: result.imported,
+                    skipped: result.skipped,
+                    failed: result.failed,
+                    stopped_for_quota: result.stoppedForQuota,
+                    duration_seconds: result.durationSeconds
+                })
+
+            } catch (error) {
+                logger.error('❌ Channel auto-sync failed:', error)
             }
         }, {
             scheduled: true,
@@ -77,6 +107,7 @@ class JobScheduler {
 
         logger.info('✅ Scheduler started:', {
             daily_validation: '3:00 AM UTC',
+            channel_auto_sync: '5:00 AM UTC',
             weekly_cleanup: 'Sunday 2:00 AM UTC',
             monthly_stats: '1st of month 1:00 AM UTC'
         })
@@ -110,6 +141,9 @@ class JobScheduler {
         switch (jobName) {
             case 'dailyValidation':
                 return await linkValidatorService.runDailyValidation()
+
+            case 'channelAutoSync':
+                return await runChannelAutoSync()
 
             case 'weeklyCleanup':
                 return await this.cleanupOldData()

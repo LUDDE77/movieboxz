@@ -7,6 +7,8 @@ import { logger } from '../utils/logger.js'
 import { adminAuth } from '../middleware/adminAuth.js'
 import { buildDurationFilter, VALID_IMPORT_SORTS } from '../utils/importHelpers.js'
 import { proposeEpisodeMatch } from '../utils/episodeMatcher.js'
+import { maybeAutoApprove, confidenceAsPercent } from './staging-simple.js'
+import { normalizeAutoApproveThreshold, parsePositiveIntOrNull } from '../utils/syncValidationHelpers.js'
 
 const router = express.Router()
 
@@ -165,11 +167,13 @@ router.put('/:channelId/settings', async (req, res, next) => {
 // =============================================================================
 
 /**
- * Shared import starter used by import-all, import-latest and reimport.
- * Creates the import_history record and kicks off processImport in the
- * background. Returns null if the channel does not exist.
+ * Shared import starter used by import-all, import-latest, reimport and the
+ * daily channel auto-sync job. Creates the import_history record and kicks off
+ * processImport in the background (or awaits it when waitForCompletion is true,
+ * so the auto-sync sweep can run channels sequentially).
+ * Returns null if the channel does not exist.
  */
-async function startChannelImport(channelId, { limit = null, sortOrder = 'latest', applySettings = true, autoEnrich = false } = {}) {
+export async function startChannelImport(channelId, { limit = null, sortOrder = 'latest', applySettings = true, autoEnrich = false, waitForCompletion = false } = {}) {
     // Reject unsupported sort orders (e.g. the old fake 'rating') — fall back to 'latest'
     if (!VALID_IMPORT_SORTS.includes(sortOrder)) {
         logger.warn(`[Bulk Import] Unsupported sortOrder '${sortOrder}', falling back to 'latest'`)
@@ -220,17 +224,64 @@ async function startChannelImport(channelId, { limit = null, sortOrder = 'latest
 
     if (importError) throw importError
 
-    // Start import process asynchronously
-    processImport(importRecord.id, channelId, channel.title, limit, sortOrder, channelSettings, autoEnrich, channel.pattern_source)
+    // Start import process — asynchronously by default, awaited when the caller
+    // (channel auto-sync) needs strictly sequential imports
+    const importPromise = processImport(importRecord.id, channelId, channel.title, limit, sortOrder, channelSettings, autoEnrich, channel.pattern_source)
         .catch(error => {
             logger.error('[Bulk Import] Process error:', error)
         })
+
+    if (waitForCompletion) {
+        await importPromise
+    }
 
     return {
         batchId: importRecord.id,
         channelTitle: channel.title
     }
 }
+
+/**
+ * POST /api/admin/channel-management/sync-all
+ * Body: { limit? }
+ *
+ * Trigger the daily channel auto-sync sweep on demand: for every channel with
+ * channel_settings.auto_import_enabled = true, import the latest N videos
+ * (default 25) with settings applied and auto-enrichment on. Fire-and-forget —
+ * each channel writes its own import_history row (the summary handle), exactly
+ * like manual imports.
+ *
+ * Response: { success, data: { started: true, channels: n } }
+ */
+router.post('/sync-all', async (req, res, next) => {
+    try {
+        // Dynamic import avoids a static circular dependency
+        // (jobs/channelAutoSync.js imports startChannelImport from this module)
+        const { runChannelAutoSync, getAutoSyncChannels } = await import('../jobs/channelAutoSync.js')
+
+        const limit = parsePositiveIntOrNull(req.body?.limit)
+        const channels = await getAutoSyncChannels()
+
+        // Fire-and-forget: channels are processed sequentially in the background
+        runChannelAutoSync(limit ? { limit } : {})
+            .catch(error => {
+                logger.error('[Auto-Sync] On-demand sweep failed:', error)
+            })
+
+        logger.info(`[Auto-Sync] On-demand sweep started for ${channels.length} channel(s)${limit ? ` (limit ${limit})` : ''}`)
+
+        res.json({
+            success: true,
+            data: {
+                started: true,
+                channels: channels.length
+            }
+        })
+    } catch (error) {
+        logger.error('[Auto-Sync] sync-all error:', error)
+        next(error)
+    }
+})
 
 /**
  * POST /api/admin/channels/:channelId/import-all
@@ -1075,6 +1126,18 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                                     logger.info(`✅ [Import] Database update SUCCESS!`)
                                     logger.info(`✅ [Import] Auto-enriched: ${movieData.title}`)
                                     logger.info(`✅ [Import] Enriched ${enrichResult.fieldsEnriched?.length || 0} fields from ${enrichResult.source}`)
+
+                                    // Apply the channel's auto-approve threshold, same as
+                                    // the staging enrich endpoints do post-enrichment
+                                    const autoApproveThreshold = normalizeAutoApproveThreshold(channelSettings?.auto_approve_threshold)
+                                    if (autoApproveThreshold != null) {
+                                        await maybeAutoApprove(
+                                            { id: insertedMovie.id, title: movieData.title, approval_status: 'pending' },
+                                            confidenceAsPercent(enrichResult.confidence),
+                                            autoApproveThreshold
+                                        )
+                                    }
+
                                     logger.info(`🔍 [Import] ========== AUTO-ENRICHMENT COMPLETE ==========`)
                                 }
                             } else {

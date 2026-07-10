@@ -10,6 +10,7 @@ import helmet from 'helmet'
 import compression from 'compression'
 import rateLimit from 'express-rate-limit'
 import slowDown from 'express-slow-down'
+import crypto from 'crypto'
 
 // Import routes
 import moviesRouter from './routes/movies.js'
@@ -22,6 +23,7 @@ import adminRouter from './routes/admin.js'
 import healthRouter from './routes/health.js'
 import stagingRouter from './routes/staging-simple.js'
 import duplicatesAdminRouter from './routes/duplicatesAdmin.js'
+import validationAdminRouter from './routes/validationAdmin.js'
 import { tvSeriesAdminRouter } from './routes/tvSeriesAdmin.js'
 import seriesRouter from './routes/series.js'
 
@@ -61,7 +63,19 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 // Logging (single structured request logger — morgan removed to avoid duplicate log lines)
 app.use(requestLogger)
 
-// Rate limiting
+// Rate limiting.
+// Requests carrying the CORRECT admin key are exempt — admin automation (bulk
+// enrichment, imports) legitimately exceeds consumer limits. Invalid keys stay
+// rate-limited here and are also throttled by adminAuth's failed-attempt guard.
+const hasValidAdminKey = (req) => {
+    const provided = req.get('x-admin-api-key')
+    const expected = process.env.ADMIN_API_KEY
+    if (!provided || !expected) return false
+    const a = crypto.createHash('sha256').update(provided).digest()
+    const b = crypto.createHash('sha256').update(expected).digest()
+    return crypto.timingSafeEqual(a, b)
+}
+
 const limiter = rateLimit({
     windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
     max: parseInt(process.env.API_RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
@@ -70,7 +84,8 @@ const limiter = rateLimit({
         code: 'RATE_LIMIT_EXCEEDED'
     },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skip: hasValidAdminKey
 })
 
 const speedLimiter = slowDown({
@@ -78,6 +93,7 @@ const speedLimiter = slowDown({
     delayAfter: 50, // allow 50 requests per 15 minutes, then...
     delayMs: () => 500, // add a flat 500ms of delay per request above 50 (express-slow-down v2 API)
     maxDelayMs: 20000, // maximum delay of 20 seconds
+    skip: hasValidAdminKey
 })
 
 app.use('/api', limiter)
@@ -101,6 +117,7 @@ app.use('/api/admin/channels', channelsAdminRouter)
 app.use('/api/admin/channel-management', channelManagementRouter)
 app.use('/api/admin/staging', stagingRouter)
 app.use('/api/admin/duplicates', duplicatesAdminRouter)
+app.use('/api/admin/validation', validationAdminRouter)
 app.use('/api/admin', tvSeriesAdminRouter)
 app.use('/api/admin', adminRouter)
 

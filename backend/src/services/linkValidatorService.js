@@ -1,6 +1,7 @@
 import { supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import duplicateDetector from './duplicateDetector.js'
+import { RESURRECTION_BATCH_LIMIT } from '../utils/syncValidationHelpers.js'
 
 /**
  * LinkValidatorService
@@ -32,41 +33,125 @@ class LinkValidatorService {
     /**
      * Run daily validation job
      *
-     * Main entry point called by cron scheduler
+     * Main entry point called by cron scheduler. Creates a trackable
+     * validation_runs row and validates the whole catalog, including the
+     * resurrection pass for currently-unavailable movies.
      */
     async runDailyValidation() {
-        const startTime = Date.now()
-        logger.info('🔍 Starting daily link validation job')
+        const runId = await this.createRun({ scope: 'all', trigger: 'scheduled' })
+        return await this.runValidation({ runId })
+    }
 
-        try {
-            // Get movies that need validation (oldest first)
-            const { data: movies, error } = await supabase
-                .from('movies')
-                .select('id, youtube_video_id, title, movie_group_id, is_primary, last_validated')
-                .eq('is_available', true)
-                .order('last_validated', { ascending: true, nullsFirst: true })
-                .limit(this.MAX_DAILY_CHECKS)
+    /**
+     * Create a validation_runs row in 'running' state and return its id.
+     *
+     * Falls back to a legacy (pre-migration-034) insert if the extended
+     * columns don't exist yet, so validation keeps working either way.
+     *
+     * @param {Object} options
+     * @param {string} options.scope - 'all' or 'channel'
+     * @param {string|null} options.channelId - channel id when scope is 'channel'
+     * @param {string} options.trigger - 'scheduled' or 'manual'
+     * @returns {Promise<string|null>} run id (null only if even the legacy insert fails)
+     */
+    async createRun({ scope = 'all', channelId = null, trigger = 'scheduled' } = {}) {
+        const now = new Date().toISOString()
+
+        let { data, error } = await supabase
+            .from('validation_runs')
+            .insert({
+                run_date: now,
+                started_at: now,
+                status: 'running',
+                scope,
+                channel_id: channelId,
+                triggered_by: trigger
+            })
+            .select('id')
+            .single()
+
+        if (error) {
+            logger.warn(`validation_runs extended insert failed (migration 034 applied?): ${error.message} — falling back to legacy columns`)
+            ;({ data, error } = await supabase
+                .from('validation_runs')
+                .insert({ run_date: now })
+                .select('id')
+                .single())
 
             if (error) {
-                throw error
+                logger.error('Failed to create validation run row:', error)
+                return null
+            }
+        }
+
+        return data.id
+    }
+
+    /**
+     * Core validation pass. Checks:
+     * 1. Available movies (oldest-validated first) — marks dead ones unavailable
+     *    and attempts failover for primaries.
+     * 2. RESURRECTION PASS: currently-unavailable movies (capped at
+     *    RESURRECTION_BATCH_LIMIT per run) — when a dead video is alive again,
+     *    flips is_available back to true.
+     *
+     * Updates the validation_runs row (if runId given) on completion/failure.
+     *
+     * @param {Object} options
+     * @param {string|null} options.runId - validation_runs row to update
+     * @param {string|null} options.channelId - limit the run to one channel
+     * @param {number|null} options.limit - max available movies to check (defaults to MAX_DAILY_CHECKS)
+     */
+    async runValidation({ runId = null, channelId = null, limit = null } = {}) {
+        const startTime = Date.now()
+        const maxChecks = limit || this.MAX_DAILY_CHECKS
+        logger.info(`🔍 Starting link validation run${runId ? ` ${runId}` : ''}${channelId ? ` (channel ${channelId})` : ' (all channels)'}, limit ${maxChecks}`)
+
+        try {
+            // 1. Available movies that need validation (oldest first)
+            let activeQuery = supabase
+                .from('movies')
+                .select('id, youtube_video_id, title, movie_group_id, is_primary, last_validated, is_available')
+                .eq('is_available', true)
+                .order('last_validated', { ascending: true, nullsFirst: true })
+                .limit(maxChecks)
+            if (channelId) activeQuery = activeQuery.eq('channel_id', channelId)
+
+            const { data: activeMovies, error } = await activeQuery
+            if (error) throw error
+
+            // 2. Resurrection candidates: dead movies, oldest-checked first, capped
+            const resurrectionCap = Math.min(RESURRECTION_BATCH_LIMIT, maxChecks)
+            let deadQuery = supabase
+                .from('movies')
+                .select('id, youtube_video_id, title, movie_group_id, is_primary, last_validated, is_available')
+                .eq('is_available', false)
+                .order('last_validated', { ascending: true, nullsFirst: true })
+                .limit(resurrectionCap)
+            if (channelId) deadQuery = deadQuery.eq('channel_id', channelId)
+
+            const { data: deadMovies, error: deadError } = await deadQuery
+            if (deadError) {
+                logger.error('Failed to fetch resurrection candidates (continuing without):', deadError)
             }
 
-            if (!movies || movies.length === 0) {
+            const movies = [...(activeMovies || []), ...(deadMovies || [])]
+
+            if (movies.length === 0) {
                 logger.info('No movies to validate')
-                return {
-                    validatedCount: 0,
-                    failedCount: 0,
-                    failoverCount: 0,
-                    quotaUsed: 0
-                }
+                const emptyStats = { checked: 0, validatedCount: 0, failedCount: 0, failoverCount: 0, resurrected: 0, quotaUsed: 0, durationSeconds: 0 }
+                await this.finalizeRun(runId, emptyStats)
+                return emptyStats
             }
 
-            logger.info(`Found ${movies.length} movies to validate`)
+            logger.info(`Found ${movies.length} movies to validate (${(activeMovies || []).length} active, ${(deadMovies || []).length} resurrection candidates)`)
 
             let validatedCount = 0
             let failedCount = 0
             let failoverCount = 0
+            let resurrected = 0
             let quotaUsed = 0
+            let checked = 0
 
             // Process in batches of 50
             for (let i = 0; i < movies.length; i += this.BATCH_SIZE) {
@@ -81,9 +166,23 @@ class LinkValidatorService {
                     // Process each movie in the batch
                     for (const movie of batch) {
                         const videoData = results[movie.youtube_video_id]
+                        const isAlive = videoData && videoData.status !== 'unavailable'
+                        checked++
 
-                        if (!videoData || videoData.status === 'unavailable') {
-                            // Video is no longer available
+                        if (isAlive && movie.is_available === false) {
+                            // RESURRECTION: dead video is alive again
+                            await this.resurrectMovie(movie)
+                            resurrected++
+                        } else if (isAlive) {
+                            // Video is available - update last_validated
+                            await this.updateValidationTimestamp(movie.id)
+                            validatedCount++
+                        } else if (movie.is_available === false) {
+                            // Still dead — just bump last_validated so the
+                            // resurrection batch rotates (no duplicate failure logs)
+                            await this.updateValidationTimestamp(movie.id)
+                        } else {
+                            // Newly unavailable video
                             await this.handleUnavailableVideo(movie, videoData?.reason || 'unknown')
                             failedCount++
 
@@ -94,10 +193,6 @@ class LinkValidatorService {
                                     failoverCount++
                                 }
                             }
-                        } else {
-                            // Video is available - update last_validated
-                            await this.updateValidationTimestamp(movie.id)
-                            validatedCount++
                         }
                     }
 
@@ -118,27 +213,118 @@ class LinkValidatorService {
             }
 
             const duration = Math.round((Date.now() - startTime) / 1000)
-            logger.info(`✅ Validation complete in ${duration}s: ${validatedCount} valid, ${failedCount} failed, ${failoverCount} failovers`)
+            logger.info(`✅ Validation complete in ${duration}s: ${validatedCount} valid, ${failedCount} failed, ${failoverCount} failovers, ${resurrected} resurrected`)
 
-            // Log validation run to database
-            await this.logValidationRun({
+            const stats = {
+                checked,
                 validatedCount,
                 failedCount,
                 failoverCount,
-                quotaUsed
-            })
-
-            return {
-                validatedCount,
-                failedCount,
-                failoverCount,
+                resurrected,
                 quotaUsed,
                 durationSeconds: duration
             }
 
+            // Update the validation_runs row
+            await this.finalizeRun(runId, stats)
+
+            return stats
+
         } catch (error) {
-            logger.error('❌ Daily validation failed:', error)
+            logger.error('❌ Validation run failed:', error)
+            await this.markRunFailed(runId, error)
             throw error
+        }
+    }
+
+    /**
+     * Re-enable a movie whose YouTube video came back online.
+     *
+     * @param {Object} movie - Movie row (was is_available = false)
+     */
+    async resurrectMovie(movie) {
+        try {
+            const { error } = await supabase
+                .from('movies')
+                .update({
+                    is_available: true,
+                    validation_error: null,
+                    last_validated: new Date().toISOString()
+                })
+                .eq('id', movie.id)
+
+            if (error) throw error
+
+            logger.info(`🪄 Resurrected: "${movie.title}" — video is available again`, {
+                movie_id: movie.id,
+                youtube_video_id: movie.youtube_video_id
+            })
+        } catch (error) {
+            logger.error(`Error resurrecting movie ${movie.id}:`, error)
+        }
+    }
+
+    /**
+     * Mark a validation_runs row completed with final stats.
+     * Falls back to legacy columns if migration 034 isn't applied yet.
+     */
+    async finalizeRun(runId, stats) {
+        if (!runId) {
+            // No trackable row (legacy insert also failed) — keep the old behavior
+            await this.logValidationRun(stats)
+            return
+        }
+
+        const legacyFields = {
+            validated_count: stats.validatedCount,
+            failed_count: stats.failedCount,
+            failover_count: stats.failoverCount,
+            quota_used: stats.quotaUsed
+        }
+
+        const { error } = await supabase
+            .from('validation_runs')
+            .update({
+                ...legacyFields,
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+                checked: stats.checked,
+                unavailable_found: stats.failedCount,
+                resurrected: stats.resurrected
+            })
+            .eq('id', runId)
+
+        if (error) {
+            logger.warn(`validation_runs extended update failed (migration 034 applied?): ${error.message} — falling back to legacy columns`)
+            const { error: legacyError } = await supabase
+                .from('validation_runs')
+                .update(legacyFields)
+                .eq('id', runId)
+            if (legacyError) {
+                logger.error('Error finalizing validation run:', legacyError)
+            }
+        }
+    }
+
+    /**
+     * Mark a validation_runs row failed. Best-effort — never throws.
+     */
+    async markRunFailed(runId, error) {
+        if (!runId) return
+        try {
+            const { error: updateError } = await supabase
+                .from('validation_runs')
+                .update({
+                    status: 'failed',
+                    completed_at: new Date().toISOString(),
+                    error_message: error?.message || 'unknown error'
+                })
+                .eq('id', runId)
+            if (updateError) {
+                logger.error('Error marking validation run failed:', updateError)
+            }
+        } catch (e) {
+            logger.error('Error marking validation run failed:', e)
         }
     }
 
