@@ -64,13 +64,17 @@ struct FeaturedMoviesView: View {
             // Slots list (always show 5 rows)
             ScrollView {
                 VStack(spacing: 8) {
+                    // Move up/down is position-based on the sorted list so it
+                    // works even when featured_order values are non-contiguous
+                    // (e.g. 1, 3, 5 after a removal).
+                    let ordered = featuredMovies.sorted { $0.featuredOrder < $1.featuredOrder }
                     ForEach(1...5, id: \.self) { slot in
                         if let movie = featuredMovies.first(where: { $0.featuredOrder == slot }) {
                             FilledSlotRow(
                                 slot: slot,
                                 movie: movie,
-                                canMoveUp: slot > 1 && featuredMovies.contains(where: { $0.featuredOrder == slot - 1 }),
-                                canMoveDown: slot < featuredMovies.count,
+                                canMoveUp: ordered.first?.id != movie.id,
+                                canMoveDown: ordered.last?.id != movie.id,
                                 onMoveUp: { Task { await moveUp(movie) } },
                                 onMoveDown: { Task { await moveDown(movie) } },
                                 onRemove: { Task { await removeFeatured(movie) } }
@@ -78,6 +82,19 @@ struct FeaturedMoviesView: View {
                         } else {
                             EmptySlotRow(slot: slot)
                         }
+                    }
+                    // Rows whose featured_order fell outside 1...5 (non-contiguous
+                    // data) would otherwise be invisible and uneditable.
+                    ForEach(ordered.filter { $0.featuredOrder < 1 || $0.featuredOrder > 5 }) { movie in
+                        FilledSlotRow(
+                            slot: movie.featuredOrder,
+                            movie: movie,
+                            canMoveUp: ordered.first?.id != movie.id,
+                            canMoveDown: ordered.last?.id != movie.id,
+                            onMoveUp: { Task { await moveUp(movie) } },
+                            onMoveDown: { Task { await moveDown(movie) } },
+                            onRemove: { Task { await removeFeatured(movie) } }
+                        )
                     }
                 }
                 .padding()
@@ -164,7 +181,8 @@ struct FeaturedMoviesView: View {
 
     private func loadFeatured() async {
         isLoadingFeatured = true
-        errorMessage = nil
+        // Note: does not clear errorMessage — actions reset it themselves, and
+        // a resync reload after a failed action must not swallow the error text.
         do {
             featuredMovies = try await apiService.getFeaturedMovies()
         } catch {
@@ -203,10 +221,12 @@ struct FeaturedMoviesView: View {
         do {
             try await apiService.unfeatureMovie(movieId: item.id)
             successMessage = "\"\(item.title)\" removed from featured"
-            await loadFeatured()
         } catch {
+            // Surfaces the backend { error / message } text via localizedDescription.
             errorMessage = error.localizedDescription
         }
+        // Reload in both cases so the UI reflects actual server state.
+        await loadFeatured()
     }
 
     private func moveUp(_ item: FeaturedMovieItem) async {
@@ -227,10 +247,12 @@ struct FeaturedMoviesView: View {
         errorMessage = nil
         do {
             try await apiService.reorderFeaturedMovies(movieIds: ordered.map(\.id))
-            await loadFeatured()
         } catch {
+            // Surfaces the backend { error / message } text via localizedDescription.
             errorMessage = error.localizedDescription
         }
+        // Reload in both cases so the UI reflects actual server state.
+        await loadFeatured()
     }
 }
 
@@ -255,18 +277,8 @@ struct FilledSlotRow: View {
                 .foregroundColor(.white)
                 .clipShape(Circle())
 
-            // Poster thumbnail
-            AsyncImage(url: movie.posterURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(2/3, contentMode: .fill)
-                default:
-                    Rectangle().fill(Color.secondary.opacity(0.3))
-                }
-            }
-            .frame(width: 36, height: 54)
-            .cornerRadius(4)
-            .clipped()
+            // Poster thumbnail (handles nil, full OMDB URLs and TMDB paths)
+            PosterImage(path: movie.posterPath, width: 36, height: 54, cornerRadius: 4, tmdbSize: "w154")
 
             // Title
             Text(movie.title)
@@ -347,24 +359,10 @@ struct SearchResultRow: View {
     let isFull: Bool
     let onFeature: () -> Void
 
-    var posterURL: URL? {
-        guard let path = movie.posterPath else { return nil }
-        return URL(string: "https://image.tmdb.org/t/p/w92\(path)")
-    }
-
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: posterURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(2/3, contentMode: .fill)
-                default:
-                    Rectangle().fill(Color.secondary.opacity(0.3))
-                }
-            }
-            .frame(width: 30, height: 45)
-            .cornerRadius(4)
-            .clipped()
+            // Handles nil, full OMDB URLs and TMDB relative paths uniformly.
+            PosterImage(path: movie.posterPath, width: 30, height: 45, cornerRadius: 4, tmdbSize: "w92")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(movie.title)

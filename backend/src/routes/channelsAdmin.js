@@ -192,12 +192,32 @@ router.put('/:id/pattern', async (req, res, next) => {
             })
         }
 
-        // Validate pattern structure
+        // Validate pattern structure and that each regex compiles
         for (const pattern of patterns) {
             if (!pattern.regex || !pattern.parameters) {
                 return res.status(400).json({
                     success: false,
                     error: 'Each pattern must have "regex" and "parameters" fields'
+                })
+            }
+            try {
+                new RegExp(pattern.regex, 'i')
+            } catch (regexError) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Invalid regex "${pattern.regex}": ${regexError.message}`
+                })
+            }
+        }
+
+        // Validate the fallback regex if provided
+        if (fallbackPattern && fallbackPattern.regex) {
+            try {
+                new RegExp(fallbackPattern.regex, 'i')
+            } catch (regexError) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Invalid fallback regex "${fallbackPattern.regex}": ${regexError.message}`
                 })
             }
         }
@@ -254,10 +274,23 @@ router.delete('/:id/pattern', async (req, res, next) => {
 })
 
 // POST /api/admin/channels/:id/test-pattern - Test a pattern against sample videos
+// Body: { patterns, fallbackPattern, sampleCount (1-50, default 5),
+//         sampleMode: 'newest'|'oldest'|'random', sampleTitles: [strings] }
+// When sampleTitles is provided, the pattern is tested against those titles
+// instead of fetching videos from YouTube (saves quota).
 router.post('/:id/test-pattern', async (req, res, next) => {
     try {
         const { id } = req.params
-        const { patterns, fallbackPattern, sampleCount = 5 } = req.body
+        const {
+            patterns,
+            fallbackPattern,
+            sampleMode = 'newest',
+            sampleTitles = null
+        } = req.body
+
+        // Clamp sampleCount to 1-50 (default 5)
+        let sampleCount = parseInt(req.body.sampleCount) || 5
+        sampleCount = Math.max(1, Math.min(50, sampleCount))
 
         if (!patterns || !Array.isArray(patterns)) {
             return res.status(400).json({
@@ -266,34 +299,58 @@ router.post('/:id/test-pattern', async (req, res, next) => {
             })
         }
 
-        // Fetch sample videos from channel
-        logger.info(`[Channels Admin] Fetching ${sampleCount} sample videos for pattern testing`)
-        const videos = await youtubeService.getChannelVideos(id, {
-            maxResults: sampleCount,
-            fetchDetails: false
-        })
-
-        // Test pattern on each video
-        const results = []
-        for (const video of videos) {
-            const testPattern = {
+        // Compile the pattern regexes up front so a bad regex returns 400 (not 500)
+        let testPattern
+        try {
+            testPattern = {
                 patterns: patterns.map(p => ({
                     ...p,
                     regex: new RegExp(p.regex, 'i')
                 })),
                 fallback_pattern: fallbackPattern
             }
-
-            const extracted = channelPatternManager.extractMetadata(video.title, testPattern)
-
-            results.push({
-                youtubeTitle: video.title,
-                extracted: extracted || { error: 'No match' },
-                matched: !!extracted
+        } catch (regexError) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid regex: ${regexError.message}`
             })
         }
 
-        const matchRate = (results.filter(r => r.matched).length / results.length) * 100
+        // Determine the titles to test against
+        let titles
+        if (Array.isArray(sampleTitles) && sampleTitles.length > 0) {
+            // Test against caller-supplied titles — no YouTube fetch
+            titles = sampleTitles.slice(0, sampleCount)
+        } else {
+            logger.info(`[Channels Admin] Fetching ${sampleCount} sample videos (${sampleMode}) for pattern testing`)
+            const videos = await youtubeService.getChannelVideos(id, {
+                maxResults: sampleMode === 'random' ? Math.max(sampleCount * 4, 50) : sampleCount,
+                order: sampleMode === 'oldest' ? 'oldest' : null
+            })
+
+            let candidates = videos.map(v => v.title)
+            if (sampleMode === 'random') {
+                candidates = candidates
+                    .map(t => ({ t, r: Math.random() }))
+                    .sort((a, b) => a.r - b.r)
+                    .map(x => x.t)
+            }
+            titles = candidates.slice(0, sampleCount)
+        }
+
+        // Test pattern on each title
+        const results = titles.map(title => {
+            const extracted = channelPatternManager.extractMetadata(title, testPattern)
+            return {
+                youtubeTitle: title,
+                extracted: extracted || { error: 'No match' },
+                matched: !!extracted
+            }
+        })
+
+        const matchRate = results.length > 0
+            ? (results.filter(r => r.matched).length / results.length) * 100
+            : 0
 
         res.json({
             success: true,
@@ -350,6 +407,27 @@ router.put('/:id', async (req, res, next) => {
                 success: false,
                 error: 'Channel not found'
             })
+        }
+
+        // Keep channel_settings in sync — only channel_settings flags reach imported movies.
+        // channels.has_kids_content -> channel_settings.is_kids_content
+        // channels.has_series       -> channel_settings.is_tv_series_channel
+        const settingsSync = {}
+        if (updates.has_kids_content !== undefined) {
+            settingsSync.is_kids_content = updates.has_kids_content
+        }
+        if (updates.has_series !== undefined) {
+            settingsSync.is_tv_series_channel = updates.has_series
+        }
+        if (Object.keys(settingsSync).length > 0) {
+            const { error: settingsError } = await supabase
+                .from('channel_settings')
+                .upsert({ channel_id: id, ...settingsSync }, { onConflict: 'channel_id' })
+            if (settingsError) {
+                logger.error(`[Channels Admin] Failed to sync channel_settings for ${id}:`, settingsError)
+            } else {
+                logger.info(`[Channels Admin] Synced channel_settings flags for ${id}:`, settingsSync)
+            }
         }
 
         logger.info(`[Channels Admin] Updated channel ${id}:`, cleanUpdates)

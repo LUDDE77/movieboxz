@@ -242,18 +242,49 @@ class YouTubeService {
         }
     }
 
+    /**
+     * Fetch videos from a channel's uploads playlist.
+     *
+     * Supports fetch-before-filter semantics: pass a `filter` predicate and a
+     * `postFilterLimit` and the method pages through the uploads playlist,
+     * applying the filter as it goes, until `postFilterLimit` videos survive the
+     * filter or the channel is exhausted (or the `safetyCap` of fetched videos is
+     * hit). This prevents limited imports from under-delivering when many videos
+     * are filtered out.
+     *
+     * @param {string} channelId
+     * @param {object} options
+     * @param {number} [options.maxResults=500] Upper bound on videos fetched when no postFilterLimit is given
+     * @param {number|null} [options.postFilterLimit=null] Stop once this many videos survive the filter (ignored for order='oldest')
+     * @param {function} [options.filter=null] Predicate (video) => boolean applied as pages are fetched
+     * @param {string} [options.order=null] 'oldest' fetches everything (within safetyCap) then reverses; otherwise newest-first (playlist default)
+     * @param {number} [options.safetyCap=2000] Hard cap on videos fetched before giving up
+     * @param {string|null} [options.publishedAfter=null]
+     * @param {string|null} [options.publishedBefore=null]
+     * @returns {Promise<Array>} Array of video objects. A boolean `.truncated` property is attached to the array indicating the fetch stopped at the safety cap while more videos remained.
+     */
     async getChannelVideos(channelId, options = {}) {
         const startTime = Date.now()
 
         try {
             const {
                 maxResults = 500,
-                // order param kept for API compatibility but ignored — playlist API doesn't support it
+                postFilterLimit = null,
+                filter = null,
+                order = null,
+                safetyCap = 2000,
                 publishedAfter = null,
                 publishedBefore = null
             } = options
 
-            logger.info(`Fetching up to ${maxResults} videos from channel: ${channelId} (via uploads playlist)`)
+            // For 'oldest' we must fetch the whole channel (within safetyCap) then reverse,
+            // so we cannot early-stop on postFilterLimit.
+            const isOldest = order === 'oldest'
+            // Upper bound on how many videos to fetch (pre-filter). When a post-filter
+            // limit or oldest ordering is requested, fetch up to the safety cap.
+            const fetchCeiling = (postFilterLimit || isOldest) ? safetyCap : Math.min(maxResults, safetyCap)
+
+            logger.info(`Fetching videos from channel: ${channelId} (via uploads playlist), ceiling: ${fetchCeiling}, postFilterLimit: ${postFilterLimit || 'none'}, order: ${order || 'newest'}`)
 
             // Step 1: Get the channel's uploads playlist ID — costs 1 unit (was 100 with search.list)
             this.ensureQuota(1)
@@ -271,15 +302,17 @@ class YouTubeService {
             logger.info(`Uploads playlist: ${uploadsPlaylistId}`)
 
             // Step 2: Fetch playlist pages — costs 1 unit/page (was 100 units/page with search.list)
-            let allVideos = []
+            let allVideos = []        // videos surviving the filter
             let nextPageToken = null
-            let totalFetched = 0
+            let totalFetched = 0      // pre-filter videos fetched
+            let collected = 0         // post-filter videos collected
             let pageCount = 0
             let totalQuotaUsed = 1 // channels.list above
+            let truncated = false
 
             do {
                 pageCount++
-                const pageSize = Math.min(50, maxResults - totalFetched)
+                const pageSize = Math.min(50, fetchCeiling - totalFetched)
 
                 this.ensureQuota(1)
                 const playlistResponse = await this.youtube.playlistItems.list({
@@ -292,6 +325,7 @@ class YouTubeService {
                 totalQuotaUsed += 1
 
                 if (!playlistResponse.data.items || playlistResponse.data.items.length === 0) {
+                    nextPageToken = null
                     break
                 }
 
@@ -312,8 +346,9 @@ class YouTubeService {
                     .map(item => item.contentDetails?.videoId)
                     .filter(Boolean)
 
+                nextPageToken = playlistResponse.data.nextPageToken
+
                 if (videoIds.length === 0) {
-                    nextPageToken = playlistResponse.data.nextPageToken
                     continue
                 }
 
@@ -344,17 +379,43 @@ class YouTubeService {
                     regionRestriction: video.contentDetails.regionRestriction || null
                 }))
 
-                allVideos.push(...videos)
                 totalFetched += videos.length
-                nextPageToken = playlistResponse.data.nextPageToken
 
-                logger.info(`Page ${pageCount}: ${videos.length} videos (total: ${totalFetched}, quota: ${totalQuotaUsed} units)`)
+                // Apply the caller's filter as we go so limited imports don't under-deliver
+                for (const video of videos) {
+                    if (filter && !filter(video)) continue
+                    allVideos.push(video)
+                    collected++
+                }
+
+                logger.info(`Page ${pageCount}: fetched ${videos.length} (kept ${allVideos.length}/${totalFetched}, quota: ${totalQuotaUsed} units)`)
+
+                // Early-stop once enough videos survive the filter (not for 'oldest', which needs the full set)
+                if (!isOldest && postFilterLimit && collected >= postFilterLimit) {
+                    break
+                }
 
                 await new Promise(resolve => setTimeout(resolve, 100))
 
-            } while (nextPageToken && totalFetched < maxResults)
+            } while (nextPageToken && totalFetched < fetchCeiling)
 
-            logger.info(`✅ Fetched ${totalFetched} videos in ${pageCount} page(s) using ${totalQuotaUsed} quota units (was ~${pageCount * 101} with search.list)`)
+            // Stopped at the safety cap while more videos remained on the channel
+            if (nextPageToken && totalFetched >= fetchCeiling) {
+                truncated = true
+                logger.warn(`⚠️ Stopped at safety cap of ${fetchCeiling} fetched videos for channel ${channelId} — channel not fully exhausted`)
+            }
+
+            // 'oldest' — uploads playlist is newest-first, so reverse to get oldest-first
+            if (isOldest) {
+                allVideos.reverse()
+            }
+
+            // Apply the post-filter limit after ordering
+            if (postFilterLimit && allVideos.length > postFilterLimit) {
+                allVideos = allVideos.slice(0, postFilterLimit)
+            }
+
+            logger.info(`✅ Fetched ${totalFetched} videos in ${pageCount} page(s), kept ${allVideos.length}, using ${totalQuotaUsed} quota units (was ~${pageCount * 101} with search.list)`)
 
             await dbOperations.logApiUsage(
                 'youtube',
@@ -365,6 +426,8 @@ class YouTubeService {
                 Date.now() - startTime
             )
 
+            // Attach truncation flag to the array (non-breaking for callers that ignore it)
+            allVideos.truncated = truncated
             return allVideos
 
         } catch (error) {

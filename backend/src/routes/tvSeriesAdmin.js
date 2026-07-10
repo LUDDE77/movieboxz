@@ -2,6 +2,7 @@ import express from 'express'
 import { supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import { adminAuth } from '../middleware/adminAuth.js'
+import { tmdbService } from '../services/tmdbService.js'
 
 const router = express.Router()
 
@@ -137,6 +138,117 @@ router.post('/tv-series', async (req, res, next) => {
         res.status(201).json({
             success: true,
             data: series
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// POST /api/admin/tv-series/:id/episode-guide
+// Fetch a series' full episode guide from TMDB and store/upsert it in
+// episode_guides as [{ season, episode, name, air_date }]
+// Body: { tmdbId: number }
+// =============================================================================
+router.post('/tv-series/:id/episode-guide', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const tmdbId = parseInt(req.body?.tmdbId)
+
+        if (!tmdbId || tmdbId <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'tmdbId (positive integer) is required'
+            })
+        }
+
+        const { data: series, error: seriesError } = await supabase
+            .from('tv_series')
+            .select('id, title')
+            .eq('id', id)
+            .single()
+
+        if (seriesError || !series) {
+            return res.status(404).json({ success: false, error: 'TV series not found' })
+        }
+
+        let guide
+        try {
+            guide = await tmdbService.getTVEpisodeGuide(tmdbId)
+        } catch (tmdbError) {
+            if (String(tmdbError.message).includes('404')) {
+                return res.status(404).json({
+                    success: false,
+                    error: `No TV show found on TMDB with id ${tmdbId}`
+                })
+            }
+            throw tmdbError
+        }
+
+        if (!guide.episodes.length) {
+            return res.status(404).json({
+                success: false,
+                error: `TMDB show ${tmdbId} ("${guide.name}") has no episodes`
+            })
+        }
+
+        const { error: upsertError } = await supabase
+            .from('episode_guides')
+            .upsert({
+                tv_series_id: id,
+                source: 'tmdb',
+                source_id: String(tmdbId),
+                episodes: guide.episodes,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'tv_series_id' })
+
+        if (upsertError) throw upsertError
+
+        logger.info(`Stored episode guide for "${series.title}" (${id}): ${guide.episodes.length} episodes, ${guide.seasons} seasons (tmdb ${tmdbId})`)
+
+        res.json({
+            success: true,
+            data: {
+                episodesCount: guide.episodes.length,
+                seasons: guide.seasons
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// GET /api/admin/tv-series/:id/episode-guide
+// Returns the stored episode guide for a series (404 if none)
+// =============================================================================
+router.get('/tv-series/:id/episode-guide', async (req, res, next) => {
+    try {
+        const { id } = req.params
+
+        const { data: guide, error } = await supabase
+            .from('episode_guides')
+            .select('source, source_id, episodes, updated_at')
+            .eq('tv_series_id', id)
+            .single()
+
+        if (error && error.code !== 'PGRST116') throw error
+
+        if (!guide) {
+            return res.status(404).json({
+                success: false,
+                error: 'No episode guide stored for this series'
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                source: guide.source,
+                sourceId: guide.source_id,
+                updatedAt: guide.updated_at,
+                episodes: guide.episodes
+            }
         })
     } catch (error) {
         next(error)

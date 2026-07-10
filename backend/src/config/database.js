@@ -67,7 +67,11 @@ export const dbOperations = {
                 channels(id, title, thumbnail_url),
                 movie_genres(genres(id, name))
             `, { count: 'exact' })
-            .eq('is_available', true)
+
+        // Public callers only ever see available movies; admin can opt in to all
+        if (!filters.includeUnavailable) {
+            query = query.eq('is_available', true)
+        }
 
         // Apply filters
         if (filters.category) {

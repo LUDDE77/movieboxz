@@ -24,6 +24,62 @@ struct StatusBadge: View {
     }
 }
 
+// MARK: - Poster Image
+/// Uniformly renders a poster from a nil path, a full http(s) URL (OMDB), or a
+/// TMDB relative path. Shows a placeholder for missing/failed images.
+struct PosterImage: View {
+    let path: String?
+    var width: CGFloat = 60
+    var height: CGFloat = 90
+    var cornerRadius: CGFloat = 6
+    /// TMDB size segment (e.g. w92, w154, w300) used for relative TMDB paths.
+    var tmdbSize: String = "w300"
+
+    private var url: URL? {
+        guard let path = path, !path.isEmpty else { return nil }
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            return URL(string: path)
+        }
+        return URL(string: "https://image.tmdb.org/t/p/\(tmdbSize)\(path)")
+    }
+
+    var body: some View {
+        Group {
+            if let url = url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    case .failure:
+                        placeholder
+                    case .empty:
+                        ZStack {
+                            Color.gray.opacity(0.15)
+                            ProgressView().controlSize(.small)
+                        }
+                    @unknown default:
+                        placeholder
+                    }
+                }
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+
+    private var placeholder: some View {
+        ZStack {
+            Color.gray.opacity(0.25)
+            Image(systemName: "photo")
+                .foregroundColor(.white.opacity(0.7))
+        }
+    }
+}
+
 // MARK: - Detail Row
 struct DetailRow: View {
     let label: String

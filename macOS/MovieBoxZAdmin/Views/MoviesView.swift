@@ -1,5 +1,27 @@
 import SwiftUI
 
+// MARK: - Sort options (raw values are the backend sort whitelist keys)
+
+enum MovieSortOption: String, CaseIterable, Identifiable {
+    case viewCount = "view_count"
+    case rating = "vote_average"
+    case recentlyPublished = "published_at"
+    case recentlyAdded = "created_at"
+    case title = "title"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .viewCount: return "View Count"
+        case .rating: return "Rating"
+        case .recentlyPublished: return "Recently Published"
+        case .recentlyAdded: return "Recently Added"
+        case .title: return "Title"
+        }
+    }
+}
+
 struct MoviesView: View {
     @StateObject private var apiService = AdminAPIService()
     @State private var movies: [Movie] = []
@@ -14,6 +36,12 @@ struct MoviesView: View {
 
     // Filter state
     @State private var showNeedsVerification = false
+    @State private var includeUnavailable = true
+    @State private var sortOption: MovieSortOption = .recentlyAdded
+
+    // Tools state
+    @State private var showFixTitlesSheet = false
+    @State private var showEnrichSheet = false
 
     // In-flight load task (cancelled on pagination to prevent races)
     @State private var loadTask: Task<Void, Never>?
@@ -63,6 +91,16 @@ struct MoviesView: View {
                 }
             )
         }
+        .sheet(isPresented: $showFixTitlesSheet) {
+            FixTitlesSheet(apiService: apiService, onApplied: {
+                Task { await loadMovies() }
+            })
+        }
+        .sheet(isPresented: $showEnrichSheet) {
+            EnrichChannelSheet(apiService: apiService, onFinished: {
+                Task { await loadMovies() }
+            })
+        }
         .task {
             await loadMovies()
         }
@@ -96,13 +134,35 @@ struct MoviesView: View {
             HStack(spacing: 12) {
                 TextField("Search movies...", text: $searchText)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 250)
+                    .frame(width: 220)
                     .onSubmit {
                         Task {
                             currentPage = 1
                             await loadMovies()
                         }
                     }
+
+                Picker("Sort", selection: $sortOption) {
+                    ForEach(MovieSortOption.allCases) { option in
+                        Text(option.displayName).tag(option)
+                    }
+                }
+                .frame(width: 200)
+                .onChange(of: sortOption) { _, _ in
+                    currentPage = 1
+                    Task { await loadMovies() }
+                }
+
+                toggleButton(
+                    label: "Include Unavailable",
+                    icon: "link.badge.plus",
+                    isOn: includeUnavailable,
+                    color: .red
+                ) {
+                    includeUnavailable.toggle()
+                    Task { currentPage = 1; await loadMovies() }
+                }
+                .help("Show movies whose YouTube link is dead (is_available = false)")
 
                 toggleButton(
                     label: "Needs Verification",
@@ -122,6 +182,22 @@ struct MoviesView: View {
                 ) {
                     showOriginal.toggle()
                 }
+
+                Menu {
+                    Button {
+                        showFixTitlesSheet = true
+                    } label: {
+                        Label("Fix Titles (Preview)…", systemImage: "textformat.abc")
+                    }
+                    Button {
+                        showEnrichSheet = true
+                    } label: {
+                        Label("Re-enrich Channel…", systemImage: "sparkles")
+                    }
+                } label: {
+                    Label("Tools", systemImage: "wrench.and.screwdriver")
+                }
+                .frame(width: 100)
 
                 Button(action: { Task { await loadMovies() } }) {
                     Label("Refresh", systemImage: "arrow.clockwise")
@@ -200,6 +276,30 @@ struct MoviesView: View {
                                 }
                             }
                         )
+                        .contextMenu {
+                            Button {
+                                Task {
+                                    await updateMovieWithChanges(movie, updates: ["is_available": !movie.isAvailable])
+                                }
+                            } label: {
+                                Label(
+                                    movie.isAvailable ? "Mark Unavailable" : "Mark Available",
+                                    systemImage: movie.isAvailable ? "link.badge.plus" : "checkmark.circle"
+                                )
+                            }
+                            Button {
+                                editingMovie = movie
+                            } label: {
+                                Label("Edit…", systemImage: "pencil")
+                            }
+                            if let url = movie.youtubeURL {
+                                Button {
+                                    NSWorkspace.shared.open(url)
+                                } label: {
+                                    Label("Open on YouTube", systemImage: "play.circle")
+                                }
+                            }
+                        }
                     }
                 }
                 .padding()
@@ -376,6 +476,9 @@ struct MoviesView: View {
                             }
 
                             HStack(spacing: 8) {
+                                if !movie.isAvailable {
+                                    StatusBadge(text: "Unavailable", color: .red)
+                                }
                                 if movie.needsVerification == true {
                                     StatusBadge(text: "Needs Verification", color: .orange)
                                 }
@@ -481,6 +584,19 @@ struct MoviesView: View {
                 }
                 .buttonStyle(.bordered)
             }
+
+            Button(action: {
+                Task {
+                    await updateMovieWithChanges(movie, updates: ["is_available": !movie.isAvailable])
+                }
+            }) {
+                Label(
+                    movie.isAvailable ? "Mark Unavailable" : "Mark Available",
+                    systemImage: movie.isAvailable ? "link.badge.plus" : "checkmark.circle"
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(movie.isAvailable ? .red : .green)
         }
     }
 
@@ -508,12 +624,26 @@ struct MoviesView: View {
             errorMessage = nil
 
             do {
-                let data = try await apiService.getMovies(
-                    page: currentPage,
-                    limit: itemsPerPage,
-                    search: searchText.isEmpty ? nil : searchText,
-                    needsVerification: showNeedsVerification
-                )
+                // The admin endpoint supports include_unavailable + sort but not
+                // the needs_verification filter, so that filter still uses the
+                // public listing (which accepts needs_verification).
+                let data: MoviesData
+                if showNeedsVerification {
+                    data = try await apiService.getMovies(
+                        page: currentPage,
+                        limit: itemsPerPage,
+                        search: searchText.isEmpty ? nil : searchText,
+                        needsVerification: true
+                    )
+                } else {
+                    data = try await apiService.getAdminMovies(
+                        includeUnavailable: includeUnavailable,
+                        page: currentPage,
+                        limit: itemsPerPage,
+                        sort: sortOption.rawValue,
+                        search: searchText.isEmpty ? nil : searchText
+                    )
+                }
                 if !Task.isCancelled {
                     movies = data.movies
                     totalPages = data.pagination.pages ?? 1
@@ -536,7 +666,10 @@ struct MoviesView: View {
 
     func updateMovieWithChanges(_ movie: Movie, updates: [String: Any]) async {
         do {
-            let _ = try await apiService.updateProductionMovie(movieId: movie.id, updates: updates)
+            let updated = try await apiService.updateProductionMovie(movieId: movie.id, updates: updates)
+            if selectedMovie?.id == updated.id {
+                selectedMovie = updated
+            }
             await loadMovies()
         } catch {
             errorMessage = "Failed to update movie: \(error.localizedDescription)"
@@ -569,6 +702,7 @@ struct ProductionMovieRow: View {
             if let year = movie.releaseYear {
                 Text("\(year)").font(.caption).foregroundColor(.secondary)
             }
+            if !movie.isAvailable { StatusBadge(text: "Unavailable", color: .red) }
             if movie.isTvSeries == true { StatusBadge(text: "TV Series", color: .purple) }
             if movie.isKidsContent == true { StatusBadge(text: "Kids", color: .green) }
             if let rating = movie.imdbRating {
@@ -703,8 +837,262 @@ struct InfoRow: View {
     }
 }
 
-// MARK: - Helper Views
+// MARK: - Fix Titles Sheet
 
+/// Previews title fixes (dryRun: true) and applies them on confirmation.
+struct FixTitlesSheet: View {
+    let apiService: AdminAPIService
+    let onApplied: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var isRunning = false
+    @State private var result: FixTitlesResult?
+    @State private var didApply = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(didApply ? "Fix Titles — Applied" : "Fix Titles — Preview")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+
+            if isRunning {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(didApply ? "Applying title fixes…" : "Running preview (no changes applied)…")
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = errorMessage {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                    Button("Retry Preview") {
+                        Task { await runPreview() }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let result = result {
+                HStack(spacing: 16) {
+                    summaryStat("Scanned", result.total, .secondary)
+                    summaryStat(didApply ? "Updated" : "Would update", result.updated, .blue)
+                    summaryStat("Unchanged", result.unchanged, .secondary)
+                    summaryStat("Failed", result.failed, result.failed > 0 ? .red : .secondary)
+                }
+
+                if let changes = result.changes, !changes.isEmpty {
+                    List(changes) { change in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(change.oldTitle)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .strikethrough()
+                            Text(change.newTitle)
+                                .font(.body)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .listStyle(.bordered)
+                } else {
+                    Text(didApply ? "Titles updated." : "No titles need fixing.")
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+
+            HStack {
+                Spacer()
+                if !didApply, let result = result, result.updated > 0 {
+                    Button {
+                        Task { await apply() }
+                    } label: {
+                        Label("Apply \(result.updated) Change\(result.updated == 1 ? "" : "s")", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isRunning)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 560, height: 520)
+        .task { await runPreview() }
+    }
+
+    private func summaryStat(_ label: String, _ value: Int, _ color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.title3)
+                .fontWeight(.semibold)
+                .foregroundColor(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(minWidth: 80)
+    }
+
+    private func runPreview() async {
+        isRunning = true
+        errorMessage = nil
+        do {
+            result = try await apiService.fixTitles(dryRun: true)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isRunning = false
+    }
+
+    private func apply() async {
+        isRunning = true
+        errorMessage = nil
+        didApply = true
+        do {
+            result = try await apiService.fixTitles(dryRun: false)
+            onApplied()
+        } catch {
+            didApply = false
+            errorMessage = error.localizedDescription
+        }
+        isRunning = false
+    }
+}
+
+// MARK: - Re-enrich Channel Sheet
+
+/// Runs POST /api/admin/enrich-enhanced for a chosen channel (or all channels).
+struct EnrichChannelSheet: View {
+    let apiService: AdminAPIService
+    let onFinished: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var channels: [Channel] = []
+    @State private var selectedChannelId: String = ""   // "" = all channels
+    @State private var limitText: String = "100"
+    @State private var onlyUnenriched = true
+    @State private var isRunning = false
+    @State private var result: EnrichEnhancedResult?
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Re-enrich Channel")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+
+            Picker("Channel", selection: $selectedChannelId) {
+                Text("All channels").tag("")
+                ForEach(channels) { channel in
+                    Text(channel.title).tag(channel.id)
+                }
+            }
+
+            HStack {
+                Text("Limit")
+                TextField("100", text: $limitText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 80)
+                Text("movies")
+                    .foregroundColor(.secondary)
+            }
+
+            Toggle("Only movies without enrichment (no TMDB ID)", isOn: $onlyUnenriched)
+
+            Text("Uses enhanced actor-based matching + IMDB scraping. This can take a while for large limits.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if let error = errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+
+            if let result = result {
+                GroupBox {
+                    HStack(spacing: 20) {
+                        Label("\(result.total) processed", systemImage: "film")
+                        Label("\(result.enriched) enriched", systemImage: "sparkles")
+                            .foregroundColor(.green)
+                        Label("\(result.failed) failed", systemImage: "xmark.circle")
+                            .foregroundColor(result.failed > 0 ? .red : .secondary)
+                    }
+                    .font(.callout)
+                    .padding(6)
+                }
+            }
+
+            Spacer()
+
+            HStack {
+                Spacer()
+                Button {
+                    Task { await run() }
+                } label: {
+                    if isRunning {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Enriching…")
+                        }
+                    } else {
+                        Label("Run Enrichment", systemImage: "sparkles")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isRunning || Int(limitText.trimmingCharacters(in: .whitespaces)) == nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 460, height: 380)
+        .task { await loadChannels() }
+    }
+
+    private func loadChannels() async {
+        do {
+            channels = try await apiService.getChannels(page: 1, limit: 200).channels
+                .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        } catch {
+            // Non-fatal: the "All channels" option still works.
+            errorMessage = "Could not load channel list: \(error.localizedDescription)"
+        }
+    }
+
+    private func run() async {
+        guard let limit = Int(limitText.trimmingCharacters(in: .whitespaces)), limit > 0 else {
+            errorMessage = "Limit must be a positive number"
+            return
+        }
+        isRunning = true
+        errorMessage = nil
+        result = nil
+        do {
+            result = try await apiService.enrichEnhanced(
+                channelId: selectedChannelId.isEmpty ? nil : selectedChannelId,
+                limit: limit,
+                onlyUnenriched: onlyUnenriched
+            )
+            onFinished()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isRunning = false
+    }
+}
 
 #Preview {
     MoviesView()

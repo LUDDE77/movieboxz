@@ -424,8 +424,44 @@ struct ProductionMovieEditView: View {
     }
 
     func saveChanges() async {
-        isSaving = true
         errorMessage = nil
+
+        // Parse numeric fields up front so invalid input aborts before any request.
+        // Empty field = clear the value; only changed values are sent.
+        let runtimeText = runtime.trimmingCharacters(in: .whitespaces)
+        let newRuntime: Int?
+        if runtimeText.isEmpty {
+            newRuntime = nil
+        } else if let value = Int(runtimeText), value > 0 {
+            newRuntime = value
+        } else {
+            errorMessage = "Runtime must be a positive whole number of minutes (or blank)"
+            return
+        }
+
+        let ratingText = imdbRating.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        let newRating: Double?
+        if ratingText.isEmpty {
+            newRating = nil
+        } else if let value = Double(ratingText), (0.0...10.0).contains(value) {
+            newRating = value
+        } else {
+            errorMessage = "IMDB Rating must be a number between 0.0 and 10.0 (or blank)"
+            return
+        }
+
+        let votesText = imdbVotes.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "")
+        let newVotes: Int?
+        if votesText.isEmpty {
+            newVotes = nil
+        } else if let value = Int(votesText), value >= 0 {
+            newVotes = value
+        } else {
+            errorMessage = "IMDB Votes must be a whole number (or blank)"
+            return
+        }
+
+        isSaving = true
 
         do {
             // Step 1: Update basic fields
@@ -445,6 +481,17 @@ struct ProductionMovieEditView: View {
             }
             if actors != (movie.actors ?? "") {
                 updates["actors"] = actors
+            }
+            // Compare against the field's initial text so the %.1f display
+            // formatting of the rating never registers as a phantom change.
+            if runtimeText != (movie.runtimeMinutes.map { String($0) } ?? "") {
+                updates["runtime_minutes"] = newRuntime ?? NSNull()
+            }
+            if ratingText != (movie.imdbRating.map { String(format: "%.1f", $0) } ?? "") {
+                updates["imdb_rating"] = newRating ?? NSNull()
+            }
+            if votesText != (movie.imdbVotes.map { String($0) } ?? "") {
+                updates["imdb_votes"] = newVotes ?? NSNull()
             }
             if isTvSeries != (movie.isTvSeries ?? false) {
                 updates["is_tv_series"] = isTvSeries

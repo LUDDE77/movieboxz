@@ -23,6 +23,9 @@
 		1A000011000000000000005 /* ProductionMovieEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000012000000000000005 /* ProductionMovieEditView.swift */; };
 		1A000001000000000000006 /* TVSeriesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000006 /* TVSeriesView.swift */; };
 		1A000001000000000000007 /* FeaturedMoviesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002000000000000007 /* FeaturedMoviesView.swift */; };
+		AD00000200000000000000A1 /* VerificationQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD00000100000000000000A1 /* VerificationQueueView.swift */; };
+		AD00000400000000000000A2 /* DuplicateManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD00000300000000000000A2 /* DuplicateManagerView.swift */; };
+		AD00000600000000000000A3 /* SeriesMatchingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD00000500000000000000A3 /* SeriesMatchingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +47,9 @@
 		1A000012000000000000005 /* ProductionMovieEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionMovieEditView.swift; sourceTree = "<group>"; };
 		1A000002000000000000006 /* TVSeriesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSeriesView.swift; sourceTree = "<group>"; };
 		1A000002000000000000007 /* FeaturedMoviesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedMoviesView.swift; sourceTree = "<group>"; };
+		AD00000100000000000000A1 /* VerificationQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationQueueView.swift; sourceTree = "<group>"; };
+		AD00000300000000000000A2 /* DuplicateManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateManagerView.swift; sourceTree = "<group>"; };
+		AD00000500000000000000A3 /* SeriesMatchingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesMatchingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +107,9 @@
 				1A000010000000000000004 /* SharedComponents.swift */,
 				1A000002000000000000006 /* TVSeriesView.swift */,
 				1A000002000000000000007 /* FeaturedMoviesView.swift */,
+				AD00000100000000000000A1 /* VerificationQueueView.swift */,
+				AD00000300000000000000A2 /* DuplicateManagerView.swift */,
+				AD00000500000000000000A3 /* SeriesMatchingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -205,6 +214,9 @@
 				1A00000F000000000000004 /* SharedComponents.swift in Sources */,
 				1A000001000000000000006 /* TVSeriesView.swift in Sources */,
 				1A000001000000000000007 /* FeaturedMoviesView.swift in Sources */,
+				AD00000200000000000000A1 /* VerificationQueueView.swift in Sources */,
+				AD00000400000000000000A2 /* DuplicateManagerView.swift in Sources */,
+				AD00000600000000000000A3 /* SeriesMatchingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

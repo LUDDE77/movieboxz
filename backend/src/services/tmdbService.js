@@ -433,6 +433,40 @@ class TMDBService {
         }
     }
 
+    /**
+     * Fetch a flat episode guide for a TV show: every episode of every regular
+     * season (specials/season 0 excluded). Uses makeRequest, so each call gets
+     * the standard 10s timeout and rate limiting.
+     *
+     * @param {number} seriesId - TMDB TV show id
+     * @returns {{ name: string, seasons: number, episodes: Array<{season, episode, name, air_date}> }}
+     */
+    async getTVEpisodeGuide(seriesId) {
+        logger.debug(`Getting TMDB episode guide for TV series: ${seriesId}`)
+
+        const show = await this.makeRequest(`/tv/${seriesId}`)
+        const regularSeasons = (show.seasons || []).filter(s => s.season_number > 0)
+
+        const episodes = []
+        for (const seasonSummary of regularSeasons) {
+            const season = await this.makeRequest(`/tv/${seriesId}/season/${seasonSummary.season_number}`)
+            for (const ep of season.episodes || []) {
+                episodes.push({
+                    season: ep.season_number,
+                    episode: ep.episode_number,
+                    name: ep.name,
+                    air_date: ep.air_date || null
+                })
+            }
+        }
+
+        return {
+            name: show.name,
+            seasons: regularSeasons.length,
+            episodes
+        }
+    }
+
     async getTVGenres() {
         try {
             const data = await this.makeRequest('/genre/tv/list')

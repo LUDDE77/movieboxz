@@ -7,9 +7,9 @@ import { titleFixer } from '../scripts/fixMovieTitles.js'
 import { enhancedEnrichment } from '../services/enhancedEnrichment.js'
 import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
-import channelPatternManager from '../services/channelPatternManager.js'
 import manualEnrichmentQueue from '../services/manualEnrichmentQueue.js'
 import { adminAuth } from '../middleware/adminAuth.js'
+import { sumQuotaUnits, YOUTUBE_DAILY_BUDGET } from '../utils/importHelpers.js'
 
 const router = express.Router()
 
@@ -34,25 +34,19 @@ router.post('/curate/all', (req, res) => {
 })
 
 // =============================================================================
-// POST /api/admin/curate/channel/:channelId
-// Curate movies from specific channel
+// POST /api/admin/curate/channel/:channelId — DISABLED
+// This inserted directly into the movies table, bypassing the staging/approval
+// pipeline. Use the per-channel staging import endpoints instead
+// (POST /api/admin/channel-management/channels/:channelId/import-all).
 // =============================================================================
-router.post('/curate/channel/:channelId', async (req, res, next) => {
-    try {
-        const { channelId } = req.params
+router.post('/curate/channel/:channelId', (req, res) => {
+    logger.warn('Admin called deprecated endpoint: POST /api/admin/curate/channel/:channelId')
 
-        logger.info(`Admin triggered curation for channel: ${channelId}`)
-
-        const results = await movieCurator.curateChannelMovies(channelId)
-
-        res.json({
-            success: true,
-            data: results,
-            message: `Channel curation completed: ${results.moviesAdded}/${results.moviesFound} movies added`
-        })
-    } catch (error) {
-        next(error)
-    }
+    res.status(410).json({
+        success: false,
+        error: 'Endpoint Removed',
+        message: 'Direct channel curation has been removed because it bypassed the staging/approval pipeline. Import channels via the staging workflow (POST /api/admin/channel-management/channels/:channelId/import-all) instead.'
+    })
 })
 
 // =============================================================================
@@ -1204,129 +1198,25 @@ router.post('/movies/:movieId/fix-title', async (req, res, next) => {
 // was removed.
 
 // =============================================================================
-// CHANNEL PATTERN MANAGEMENT ROUTES
+// CHANNEL PATTERN MANAGEMENT ROUTES — DISABLED (410 Gone)
+// The canonical pattern API lives in channelsAdmin.js and is mounted at
+// /api/admin/channels/:id/pattern (GET/PUT/DELETE) plus /:id/test-pattern.
+// This duplicate /channel-patterns block is retired to avoid two divergent
+// pattern APIs. Verified no macOS/iOS client references /channel-patterns.
 // =============================================================================
+function channelPatternsGone(req, res) {
+    logger.warn(`Admin called retired endpoint: ${req.method} ${req.originalUrl}`)
+    res.status(410).json({
+        success: false,
+        error: 'Endpoint Removed',
+        message: 'Use the canonical channel pattern API at /api/admin/channels/:id/pattern (GET/PUT/DELETE) and /api/admin/channels/:id/test-pattern instead.'
+    })
+}
 
-// =============================================================================
-// GET /api/admin/channel-patterns
-// Get all channel patterns
-// =============================================================================
-router.get('/channel-patterns', async (req, res, next) => {
-    try {
-        logger.info('Admin requested all channel patterns')
-
-        const patterns = await channelPatternManager.getAllPatterns()
-
-        res.json({
-            success: true,
-            data: {
-                patterns: patterns.map(p => ({
-                    id: p.id,
-                    channelId: p.channel_id,
-                    channelName: p.channel_name,
-                    patternCount: p.patterns.length,
-                    hasFallback: !!p.fallback_pattern,
-                    isActive: p.is_active,
-                    createdAt: p.created_at,
-                    updatedAt: p.updated_at
-                }))
-            },
-            message: `Retrieved ${patterns.length} channel patterns`
-        })
-
-    } catch (error) {
-        next(error)
-    }
-})
-
-// =============================================================================
-// GET /api/admin/channel-patterns/:channelId
-// Get pattern configuration for a specific channel
-// =============================================================================
-router.get('/channel-patterns/:channelId', async (req, res, next) => {
-    try {
-        const { channelId } = req.params
-
-        logger.info(`Admin requested pattern for channel: ${channelId}`)
-
-        const pattern = await channelPatternManager.getPattern(channelId)
-
-        if (!pattern) {
-            return res.status(404).json({
-                success: false,
-                error: 'Pattern Not Found',
-                message: `No pattern configured for channel: ${channelId}`
-            })
-        }
-
-        res.json({
-            success: true,
-            data: { pattern },
-            message: 'Channel pattern retrieved successfully'
-        })
-
-    } catch (error) {
-        next(error)
-    }
-})
-
-// =============================================================================
-// POST /api/admin/channel-patterns
-// Create or update channel pattern configuration
-// =============================================================================
-router.post('/channel-patterns', async (req, res, next) => {
-    try {
-        const { channelId, channelName, patterns, fallbackPattern } = req.body
-
-        if (!channelId || !channelName || !patterns) {
-            return res.status(400).json({
-                success: false,
-                error: 'Bad Request',
-                message: 'channelId, channelName, and patterns are required'
-            })
-        }
-
-        logger.info(`Admin saving pattern for channel: ${channelName}`)
-
-        const result = await channelPatternManager.savePattern(
-            channelId,
-            channelName,
-            patterns,
-            fallbackPattern
-        )
-
-        res.json({
-            success: true,
-            data: { pattern: result },
-            message: `Channel pattern saved for: ${channelName}`
-        })
-
-    } catch (error) {
-        next(error)
-    }
-})
-
-// =============================================================================
-// DELETE /api/admin/channel-patterns/:channelId
-// Delete channel pattern configuration
-// =============================================================================
-router.delete('/channel-patterns/:channelId', async (req, res, next) => {
-    try {
-        const { channelId } = req.params
-
-        logger.info(`Admin deleting pattern for channel: ${channelId}`)
-
-        await channelPatternManager.deletePattern(channelId)
-
-        res.json({
-            success: true,
-            message: `Channel pattern deleted for: ${channelId}`
-        })
-
-    } catch (error) {
-        next(error)
-    }
-})
+router.get('/channel-patterns', channelPatternsGone)
+router.get('/channel-patterns/:channelId', channelPatternsGone)
+router.post('/channel-patterns', channelPatternsGone)
+router.delete('/channel-patterns/:channelId', channelPatternsGone)
 
 // =============================================================================
 // MANUAL ENRICHMENT QUEUE ROUTES
@@ -1501,8 +1391,113 @@ router.delete('/manual-enrichment-queue/:queueId', async (req, res, next) => {
 })
 
 // =============================================================================
+// QUOTA
+// =============================================================================
+
+// sumQuotaUnits and YOUTUBE_DAILY_BUDGET are pure helpers imported from
+// ../utils/importHelpers.js (unit tested without a DB connection).
+
+/**
+ * GET /api/admin/quota
+ * Summarize today's YouTube API quota usage from the api_usage table.
+ */
+router.get('/quota', async (req, res, next) => {
+    try {
+        // Start of the current UTC day
+        const now = new Date()
+        const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+        const date = dayStart.toISOString().slice(0, 10) // YYYY-MM-DD
+
+        const { data, error } = await supabase
+            .from('api_usage')
+            .select('quota_cost')
+            .eq('service', 'youtube')
+            .gte('created_at', dayStart.toISOString())
+
+        if (error) throw error
+
+        const used = sumQuotaUnits(data)
+
+        res.json({
+            success: true,
+            data: {
+                date,
+                used,
+                budget: YOUTUBE_DAILY_BUDGET,
+                remaining: Math.max(0, YOUTUBE_DAILY_BUDGET - used)
+            }
+        })
+    } catch (error) {
+        logger.error('[Quota] Error:', error)
+        next(error)
+    }
+})
+
+// =============================================================================
 // PRODUCTION MOVIE MANAGEMENT
 // =============================================================================
+
+// Admin movie list sort whitelist -> DB columns
+const ADMIN_MOVIE_SORTS = {
+    view_count: 'view_count',
+    vote_average: 'vote_average',
+    published_at: 'published_at',
+    created_at: 'created_at',
+    title: 'title'
+}
+
+/**
+ * GET /api/admin/movies
+ * Admin-grade movie list. Same flattened shape as public GET /api/movies but
+ * supports include_unavailable=true and a wider sort whitelist.
+ * Query params: page, limit, sort, order (asc|desc), search, channel, include_unavailable
+ */
+router.get('/movies', async (req, res, next) => {
+    try {
+        const {
+            page = 1,
+            limit = 20,
+            sort = 'created_at',
+            order = 'desc',
+            search,
+            channel,
+            include_unavailable
+        } = req.query
+
+        const pageNum = parseInt(page) || 1
+        const limitNum = Math.min(parseInt(limit) || 20, 100)
+        const offset = (pageNum - 1) * limitNum
+
+        const sortBy = ADMIN_MOVIE_SORTS[sort] || 'created_at'
+        const sortOrder = order === 'asc' ? 'asc' : 'desc'
+
+        const filters = {
+            sortBy,
+            sortOrder,
+            includeUnavailable: include_unavailable === 'true'
+        }
+        if (channel) filters.channelId = channel
+        if (search) filters.search = search
+
+        const result = await dbOperations.getMovies(filters, limitNum, offset)
+
+        res.json({
+            success: true,
+            data: {
+                movies: result.movies,
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total: result.total,
+                    pages: Math.ceil((result.total || 0) / limitNum)
+                }
+            }
+        })
+    } catch (error) {
+        logger.error('[Admin Movies] List error:', error)
+        next(error)
+    }
+})
 
 /**
  * PATCH /api/admin/movies/:id
@@ -1518,7 +1513,8 @@ router.patch('/movies/:id', async (req, res, next) => {
         // Allowed fields for update
         const allowedFields = [
             'title', 'description', 'release_date', 'director', 'actors',
-            'is_tv_series', 'is_kids_content', 'is_available', 'needs_verification'
+            'is_tv_series', 'is_kids_content', 'is_available', 'needs_verification',
+            'runtime_minutes', 'imdb_rating', 'imdb_votes'
         ]
 
         const cleanUpdates = {}

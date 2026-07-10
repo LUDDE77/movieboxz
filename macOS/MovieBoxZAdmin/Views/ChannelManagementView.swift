@@ -16,6 +16,8 @@ struct ChannelManagementView: View {
     @State private var showAddChannel = false
     @State private var newChannelId = ""
     @State private var isAddingChannel = false
+    @State private var addedChannel: ChannelWithPattern?
+    @State private var addChannelError: String?
 
     // Pattern editor
     @State private var editingPattern = false
@@ -27,6 +29,10 @@ struct ChannelManagementView: View {
     // Pattern testing
     @State private var testResults: PatternTestData?
     @State private var isTestingPattern = false
+    @State private var testSampleCount = 5
+    @State private var testSampleMode = "newest"
+    @State private var testTitleSource = "channel" // "channel" | "pasted"
+    @State private var testPastedTitles = ""
 
     // Tab selection
     @State private var selectedTab = 0
@@ -188,6 +194,10 @@ struct ChannelManagementView: View {
                         fallbackType: $fallbackType,
                         fallbackDivider: $fallbackDivider,
                         testResults: $testResults,
+                        testSampleCount: $testSampleCount,
+                        testSampleMode: $testSampleMode,
+                        testTitleSource: $testTitleSource,
+                        testPastedTitles: $testPastedTitles,
                         onSavePattern: savePattern,
                         onTestPattern: testPattern,
                         onDeletePattern: deletePattern,
@@ -208,7 +218,7 @@ struct ChannelManagementView: View {
                         .tag(1)
 
                     // Import Tab
-                    BulkImportView(channel: channel)
+                    BulkImportView(channel: channel, onReviewMovies: { selectedTab = 3 })
                         .tabItem {
                             Label("Import", systemImage: "arrow.down.circle")
                         }
@@ -245,8 +255,15 @@ struct ChannelManagementView: View {
             AddChannelSheet(
                 channelId: $newChannelId,
                 isAdding: $isAddingChannel,
+                addedChannel: $addedChannel,
+                errorMessage: $addChannelError,
                 onAdd: addChannel,
-                onCancel: { showAddChannel = false }
+                onClose: {
+                    showAddChannel = false
+                    addedChannel = nil
+                    addChannelError = nil
+                    newChannelId = ""
+                }
             )
         }
         .task {
@@ -289,14 +306,17 @@ struct ChannelManagementView: View {
         guard !newChannelId.isEmpty else { return }
 
         isAddingChannel = true
+        addChannelError = nil
 
         do {
+            // The backend resolves channel URLs, @handles, and raw channel IDs.
             let newChannel = try await apiService.addChannel(channelId: newChannelId.trimmingCharacters(in: .whitespacesAndNewlines))
             channels.append(newChannel)
+            // Keep the sheet open and show the resolved channel as confirmation.
+            addedChannel = newChannel
             newChannelId = ""
-            showAddChannel = false
         } catch {
-            self.error = "Failed to add channel: \(error.localizedDescription)"
+            addChannelError = error.localizedDescription
         }
 
         isAddingChannel = false
@@ -311,11 +331,11 @@ struct ChannelManagementView: View {
         print("💾 [Pattern] Starting save for channel: \(channel.id) - \(channel.title)")
         print("💾 [Pattern] Pattern rules count: \(patternRules.count)")
 
-        // Validate that all patterns have a regex
+        // Validate that all patterns have a regex that compiles
         for (index, rule) in patternRules.enumerated() {
             print("💾 [Pattern] Rule #\(index + 1) regex: '\(rule.regex)'")
-            if rule.regex.trimmingCharacters(in: .whitespaces).isEmpty {
-                let errorMsg = "Pattern #\(index + 1) is missing a regular expression. Please fill in the 'Regular expression' field."
+            if let compileError = regexCompileError(rule.regex) {
+                let errorMsg = "Pattern #\(index + 1): \(compileError)"
                 print("❌ [Pattern] Validation failed: \(errorMsg)")
                 self.error = errorMsg
                 return
@@ -326,21 +346,7 @@ struct ChannelManagementView: View {
         error = nil
 
         do {
-            // Convert EditablePatternRule to API format
-            let patterns = patternRules.map { rule in
-                var params: [String: Any] = [:]
-                for (key, value) in rule.parameters {
-                    if let intVal = Int(value) {
-                        params[key] = intVal
-                    } else {
-                        params[key] = value
-                    }
-                }
-                return [
-                    "regex": rule.regex,
-                    "parameters": params
-                ] as [String: Any]
-            }
+            let patterns = patternRulesAsPayload(patternRules)
 
             let fallback: [String: String] = [
                 "type": fallbackType,
@@ -351,12 +357,19 @@ struct ChannelManagementView: View {
             print("💾 [Pattern] Patterns: \(patterns)")
             print("💾 [Pattern] Fallback: \(fallback)")
 
-            let savedPattern = try await apiService.updateChannelPattern(
-                channelId: channel.id,
-                channelName: channel.title,
-                patterns: patterns,
-                fallbackPattern: fallback
+            // Sent via the direct helper (not AdminAPIService.updateChannelPattern)
+            // so a backend 400 regex-compile error surfaces its message instead of
+            // a bare "HTTP error: 400".
+            let data = try await ChannelAdminDirectAPI.send(
+                path: "/channels/\(channel.id)/pattern",
+                method: "PUT",
+                body: [
+                    "channelName": channel.title,
+                    "patterns": patterns,
+                    "fallbackPattern": fallback
+                ]
             )
+            let savedPattern = try ChannelAdminDirectAPI.decode(ChannelPattern.self, from: data)
 
             print("✅ [Pattern] Pattern saved successfully")
             print("✅ [Pattern] Saved pattern ID: \(savedPattern.id)")
@@ -422,41 +435,73 @@ struct ChannelManagementView: View {
 
         isTestingPattern = true
         testResults = nil
+        error = nil
 
         do {
-            let patterns = patternRules.map { rule in
-                var params: [String: Any] = [:]
-                for (key, value) in rule.parameters {
-                    if let intVal = Int(value) {
-                        params[key] = intVal
-                    } else {
-                        params[key] = value
-                    }
-                }
-                return [
-                    "regex": rule.regex,
-                    "parameters": params
-                ] as [String: Any]
-            }
+            let patterns = patternRulesAsPayload(patternRules)
 
             let fallback: [String: String] = [
                 "type": fallbackType,
                 "divider": fallbackDivider
             ]
 
-            let results = try await apiService.testChannelPattern(
-                channelId: channel.id,
-                patterns: patterns,
-                fallbackPattern: fallback,
-                sampleCount: 5
-            )
+            // Built via the direct helper because AdminAPIService.testChannelPattern
+            // does not yet expose sampleMode/sampleTitles (backend supports both),
+            // and it also surfaces backend 400 regex errors properly.
+            var body: [String: Any] = [
+                "patterns": patterns,
+                "fallbackPattern": fallback
+            ]
 
-            testResults = results
+            if testTitleSource == "pasted" {
+                let titles = testPastedTitles
+                    .split(whereSeparator: \.isNewline)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                guard !titles.isEmpty else {
+                    self.error = "Paste at least one video title to test against."
+                    isTestingPattern = false
+                    return
+                }
+                body["sampleTitles"] = Array(titles.prefix(50))
+                body["sampleCount"] = min(max(titles.count, 1), 50)
+            } else {
+                body["sampleCount"] = testSampleCount
+                body["sampleMode"] = testSampleMode
+            }
+
+            let data = try await ChannelAdminDirectAPI.send(
+                path: "/channels/\(channel.id)/test-pattern",
+                method: "POST",
+                body: body
+            )
+            testResults = try ChannelAdminDirectAPI.decode(PatternTestData.self, from: data)
         } catch {
             self.error = "Failed to test pattern: \(error.localizedDescription)"
         }
 
         isTestingPattern = false
+    }
+
+    /// Convert editable rules to the API payload shape, converting capture-group
+    /// numbers to Ints and dropping parameters left empty.
+    private func patternRulesAsPayload(_ rules: [EditablePatternRule]) -> [[String: Any]] {
+        rules.map { rule in
+            var params: [String: Any] = [:]
+            for (key, value) in rule.parameters {
+                let trimmed = value.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { continue }
+                if let intVal = Int(trimmed) {
+                    params[key] = intVal
+                } else {
+                    params[key] = trimmed
+                }
+            }
+            return [
+                "regex": rule.regex,
+                "parameters": params
+            ] as [String: Any]
+        }
     }
 
     func deletePattern() async {
@@ -585,6 +630,10 @@ struct ChannelPatternView: View {
     @Binding var fallbackType: String
     @Binding var fallbackDivider: String
     @Binding var testResults: PatternTestData?
+    @Binding var testSampleCount: Int
+    @Binding var testSampleMode: String
+    @Binding var testTitleSource: String
+    @Binding var testPastedTitles: String
 
     let onSavePattern: () async -> Void
     let onTestPattern: () async -> Void
@@ -592,6 +641,11 @@ struct ChannelPatternView: View {
     let onDeleteChannel: () async -> Void
     let isSavingPattern: Bool
     let isTestingPattern: Bool
+
+    /// All rules present and every regex compiles client-side.
+    var allPatternsValid: Bool {
+        !patternRules.isEmpty && patternRules.allSatisfy { regexCompileError($0.regex) == nil }
+    }
 
     var body: some View {
         ScrollView {
@@ -673,7 +727,7 @@ struct ChannelPatternView: View {
                                     Task { await onSavePattern() }
                                 }
                                 .buttonStyle(.borderedProminent)
-                                .disabled(isSavingPattern)
+                                .disabled(isSavingPattern || !allPatternsValid)
 
                                 Button(role: .destructive, action: {
                                     Task { await onDeletePattern() }
@@ -732,42 +786,95 @@ struct ChannelPatternView: View {
                             fallbackDivider: $fallbackDivider
                         )
 
-                        // Action Buttons
-                        VStack(spacing: 12) {
-                            // Test Pattern Button
+                        // Pattern Testing Controls
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Test Pattern")
+                                .font(.headline)
+
+                            Picker("Test against", selection: $testTitleSource) {
+                                Text("Channel videos").tag("channel")
+                                Text("Pasted titles").tag("pasted")
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(maxWidth: 300)
+
+                            if testTitleSource == "channel" {
+                                HStack(spacing: 20) {
+                                    Stepper(value: $testSampleCount, in: 5...50, step: 5) {
+                                        Text("Sample size: \(testSampleCount)")
+                                    }
+                                    .frame(width: 200, alignment: .leading)
+
+                                    Picker("Sample", selection: $testSampleMode) {
+                                        Text("Newest").tag("newest")
+                                        Text("Oldest").tag("oldest")
+                                        Text("Random").tag("random")
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 250)
+                                }
+                            } else {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Paste sample video titles (one per line, max 50):")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    TextEditor(text: $testPastedTitles)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .frame(height: 120)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                }
+                            }
+
                             HStack {
                                 Spacer()
                                 Button(action: {
                                     Task { await onTestPattern() }
                                 }) {
-                                    Label("Test Pattern on Sample Videos", systemImage: "play.circle")
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(isTestingPattern || patternRules.isEmpty)
-                                Spacer()
-                            }
-
-                            // Save Pattern Button
-                            HStack {
-                                Spacer()
-                                Button(action: {
-                                    Task { await onSavePattern() }
-                                }) {
-                                    if isSavingPattern {
+                                    if isTestingPattern {
                                         HStack {
                                             ProgressView()
                                                 .scaleEffect(0.8)
-                                            Text("Saving...")
+                                            Text("Testing...")
                                         }
                                     } else {
-                                        Label("Save Pattern", systemImage: "checkmark.circle.fill")
+                                        Label(testTitleSource == "pasted"
+                                              ? "Test Pattern on Pasted Titles"
+                                              : "Test Pattern on Sample Videos",
+                                              systemImage: "play.circle")
                                     }
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
-                                .disabled(isSavingPattern || patternRules.isEmpty)
+                                .buttonStyle(.bordered)
+                                .disabled(isTestingPattern || !allPatternsValid)
                                 Spacer()
                             }
+                        }
+                        .padding()
+                        .background(Color.gray.opacity(0.05))
+                        .cornerRadius(8)
+
+                        // Save Pattern Button
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                Task { await onSavePattern() }
+                            }) {
+                                if isSavingPattern {
+                                    HStack {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                        Text("Saving...")
+                                    }
+                                } else {
+                                    Label("Save Pattern", systemImage: "checkmark.circle.fill")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .disabled(isSavingPattern || !allPatternsValid)
+                            Spacer()
                         }
                         .padding(.top)
                     }
@@ -817,14 +924,34 @@ struct ChannelPatternView: View {
 
 // MARK: - Pattern Editor
 
+/// Client-side regex validation. Returns nil when the pattern compiles,
+/// otherwise a human-readable error. The backend (JS RegExp) remains the
+/// authority — its 400 compile errors are surfaced on save/test too.
+func regexCompileError(_ pattern: String) -> String? {
+    let trimmed = pattern.trimmingCharacters(in: .whitespaces)
+    if trimmed.isEmpty {
+        return "Regular expression is required"
+    }
+    do {
+        _ = try NSRegularExpression(pattern: pattern)
+        return nil
+    } catch {
+        let nsError = error as NSError
+        if let reason = nsError.userInfo[NSLocalizedFailureReasonErrorKey] as? String {
+            return "Invalid regex: \(reason)"
+        }
+        return "Invalid regular expression"
+    }
+}
+
 struct EditablePatternRule: Identifiable {
+    /// Parameter keys the extractor understands (channelPatternManager.extractMetadata).
+    static let knownParameterKeys = ["title", "actors", "genre", "year", "episode_name", "season", "episode"]
+
     let id = UUID()
     var regex: String = ""
     var parameters: [String: String] = [
-        "title": "1",
-        "actors": "",
-        "genre": "",
-        "year": ""
+        "title": "1"
     ]
 }
 
@@ -900,6 +1027,25 @@ struct PatternRuleEditor: View {
     @Binding var rule: EditablePatternRule
     let onDelete: () -> Void
 
+    @State private var customKeyName = ""
+
+    /// Keys ordered: known keys first (in canonical order), then custom keys alphabetically.
+    private var orderedParameterKeys: [String] {
+        let known = EditablePatternRule.knownParameterKeys.filter { rule.parameters.keys.contains($0) }
+        let custom = rule.parameters.keys
+            .filter { !EditablePatternRule.knownParameterKeys.contains($0) }
+            .sorted()
+        return known + custom
+    }
+
+    private var availableKnownKeys: [String] {
+        EditablePatternRule.knownParameterKeys.filter { !rule.parameters.keys.contains($0) }
+    }
+
+    private var regexError: String? {
+        regexCompileError(rule.regex)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -915,10 +1061,14 @@ struct PatternRuleEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .fontDesign(.monospaced)
 
-            if rule.regex.trimmingCharacters(in: .whitespaces).isEmpty {
-                Text("⚠️ Regular expression is required")
+            if let regexError = regexError {
+                Label(regexError, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundColor(.red)
+            } else {
+                Label("Regex compiles", systemImage: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundColor(.green)
             }
 
             Text("Parameters (capture group numbers or static values)")
@@ -926,17 +1076,54 @@ struct PatternRuleEditor: View {
                 .foregroundColor(.secondary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(Array(rule.parameters.keys.sorted()), id: \.self) { key in
+                ForEach(orderedParameterKeys, id: \.self) { key in
                     HStack {
-                        Text(key.capitalized + ":")
-                            .frame(width: 60, alignment: .trailing)
+                        Text(parameterLabel(key) + ":")
+                            .frame(width: 90, alignment: .trailing)
                         TextField("Group # or value", text: Binding(
                             get: { rule.parameters[key] ?? "" },
                             set: { rule.parameters[key] = $0 }
                         ))
                         .textFieldStyle(.roundedBorder)
+
+                        Button(action: { rule.parameters.removeValue(forKey: key) }) {
+                            Image(systemName: "minus.circle")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Remove this parameter")
                     }
                 }
+            }
+
+            // Add parameter controls
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(availableKnownKeys, id: \.self) { key in
+                        Button(parameterLabel(key)) {
+                            rule.parameters[key] = ""
+                        }
+                    }
+                } label: {
+                    Label("Add Parameter", systemImage: "plus.circle")
+                }
+                .frame(width: 160)
+                .disabled(availableKnownKeys.isEmpty)
+
+                TextField("Custom key", text: $customKeyName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 140)
+
+                Button("Add Custom") {
+                    let key = customKeyName
+                        .trimmingCharacters(in: .whitespaces)
+                        .lowercased()
+                        .replacingOccurrences(of: " ", with: "_")
+                    guard !key.isEmpty, rule.parameters[key] == nil else { return }
+                    rule.parameters[key] = ""
+                    customKeyName = ""
+                }
+                .disabled(customKeyName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding()
@@ -944,8 +1131,17 @@ struct PatternRuleEditor: View {
         .cornerRadius(8)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                .stroke(regexError == nil ? Color.gray.opacity(0.3) : Color.red.opacity(0.5), lineWidth: 1)
         )
+    }
+
+    private func parameterLabel(_ key: String) -> String {
+        switch key {
+        case "episode_name": return "Episode Name"
+        case "season": return "Season #"
+        case "episode": return "Episode #"
+        default: return key.capitalized
+        }
     }
 }
 
@@ -1071,7 +1267,7 @@ struct TestResultRow: View {
             }
         }
         .padding()
-        .background(Color.white.opacity(0.5))
+        .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(8)
     }
 }
@@ -1081,8 +1277,10 @@ struct TestResultRow: View {
 struct AddChannelSheet: View {
     @Binding var channelId: String
     @Binding var isAdding: Bool
+    @Binding var addedChannel: ChannelWithPattern?
+    @Binding var errorMessage: String?
     let onAdd: () async -> Void
-    let onCancel: () -> Void
+    let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
@@ -1090,30 +1288,94 @@ struct AddChannelSheet: View {
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text("Enter the YouTube channel ID to add")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            if let added = addedChannel {
+                // Success confirmation with the resolved channel
+                VStack(spacing: 12) {
+                    if let thumbnailUrl = added.thumbnailUrl, let url = URL(string: thumbnailUrl) {
+                        AsyncImage(url: url) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.gray.opacity(0.2)
+                        }
+                        .frame(width: 72, height: 72)
+                        .clipShape(Circle())
+                    } else {
+                        Image(systemName: "tv.circle.fill")
+                            .font(.system(size: 56))
+                            .foregroundColor(.blue)
+                    }
 
-            TextField("Channel ID (e.g., UC6A_LC-A5NVJ2vw9A0OjCug)", text: $channelId)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 400)
+                    Label("Channel added", systemImage: "checkmark.circle.fill")
+                        .font(.headline)
+                        .foregroundColor(.green)
 
-            HStack(spacing: 12) {
-                Button("Cancel", action: onCancel)
-                    .buttonStyle(.bordered)
+                    Text(added.title)
+                        .font(.title3)
+                        .fontWeight(.semibold)
 
-                Button("Add Channel") {
-                    Task {
-                        await onAdd()
+                    if let videos = added.videoCount {
+                        Text("\(videos) videos")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(channelId.isEmpty || isAdding)
-            }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.green.opacity(0.08))
+                .cornerRadius(12)
 
-            if isAdding {
-                ProgressView("Adding channel...")
-                    .padding()
+                HStack(spacing: 12) {
+                    Button("Add Another") {
+                        addedChannel = nil
+                        errorMessage = nil
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Done", action: onClose)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                }
+            } else {
+                Text("Enter a channel URL, @handle, or channel ID")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                TextField("Channel URL, @handle, or ID", text: $channelId)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 400)
+
+                Text("Accepts youtube.com/channel/UC…, youtube.com/@handle, a bare @handle, or a raw channel ID — the server resolves them all.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 400)
+
+                if let errorMessage = errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .frame(width: 400)
+                }
+
+                HStack(spacing: 12) {
+                    Button("Cancel", action: onClose)
+                        .buttonStyle(.bordered)
+
+                    Button("Add Channel") {
+                        Task {
+                            await onAdd()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(channelId.isEmpty || isAdding)
+                }
+
+                if isAdding {
+                    ProgressView("Resolving channel...")
+                        .padding()
+                }
             }
         }
         .padding(30)
@@ -1274,6 +1536,67 @@ struct FilterButton: View {
             .cornerRadius(6)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Direct Admin API Helper
+
+/// Thin request helper for admin endpoints/parameters that `AdminAPIService`
+/// does not expose yet (pattern testing with sampleMode/sampleTitles, pattern
+/// save with backend-error surfacing, reimport with force, import-history
+/// extras). Reads the same UserDefaults configuration as `AdminAPIService`
+/// and parses backend `{ error / message }` bodies into
+/// `APIError.server(status:message:)` so `localizedDescription` carries the
+/// backend message (e.g. regex compile errors, reimport 409 refusals).
+enum ChannelAdminDirectAPI {
+    static func send(path: String, method: String = "POST", body: [String: Any]? = nil) async throws -> Data {
+        let baseURL = UserDefaults.standard.string(forKey: "apiBaseURL") ?? ""
+        let apiKey = UserDefaults.standard.string(forKey: "adminAPIKey") ?? ""
+
+        guard let url = URL(string: "\(baseURL)/api/admin\(path)") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue(apiKey, forHTTPHeaderField: "x-admin-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let body = body {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
+                throw APIError.unauthorized
+            }
+            var message = "Request failed (HTTP \(httpResponse.statusCode))"
+            if let decoded = try? JSONDecoder().decode(BasicResponse.self, from: data),
+               let backendMessage = decoded.error ?? decoded.message,
+               !backendMessage.isEmpty {
+                message = backendMessage
+            } else if let raw = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !raw.isEmpty, raw.count < 300 {
+                message = raw
+            }
+            throw APIError.server(status: httpResponse.statusCode, message: message)
+        }
+
+        return data
+    }
+
+    /// Decode the `data` payload of a standard `{ success, data }` envelope.
+    static func decode<T: Codable>(_ type: T.Type, from data: Data) throws -> T {
+        do {
+            return try JSONDecoder().decode(APIResponse<T>.self, from: data).data
+        } catch {
+            throw APIError.decodingError(error.localizedDescription)
+        }
     }
 }
 

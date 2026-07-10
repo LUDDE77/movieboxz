@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct StagingView: View {
     @StateObject private var apiService = AdminAPIService()
@@ -7,14 +8,29 @@ struct StagingView: View {
     @State private var channels: [Channel] = []
 
     // UI State
-    @State private var selectedFilter: MovieFilter = .unenriched
+    @State private var selectedStatus: StatusFilter = .pending
+    @State private var selectedChannelId: String = ""      // "" == all channels
+    @State private var searchText: String = ""
     @State private var selectedMovie: StagedMovie?
     @State private var isLoading = false
+    @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var showImportSheet = false
-    @State private var showEnrichmentSheet = false
     @State private var showEditSheet = false
     @State private var showPublishAlert = false
+
+    // Pagination
+    @State private var currentPage = 1
+    @State private var totalPages = 1
+    @State private var totalCount = 0
+    private let pageSize = 100
+
+    // Search debounce
+    @State private var searchDebounceTask: Task<Void, Never>?
+
+    // Toast / status banner
+    @State private var toast: ToastMessage?
+    @State private var toastDismissTask: Task<Void, Never>?
 
     // TV Series state
     @State private var tvSeriesList: [TvSeries] = []
@@ -39,185 +55,55 @@ struct StagingView: View {
     @State private var editDescription = ""
     @State private var editReleaseDate = ""
 
-    // Selection
+    // Multi-selection (bulk operations)
     @State private var selectedMovieIds: Set<String> = []
+
+    // Bulk reject sheet
+    @State private var showBulkRejectSheet = false
+    @State private var bulkRejectReason = ""
+
+    // Batch enrichment progress
+    @State private var batchProgress: BatchEnrichmentProgress?
+    @State private var showBatchProgressSheet = false
+    @State private var batchPollTask: Task<Void, Never>?
 
     // Delete confirmation
     @State private var movieToDelete: StagedMovie?
     @State private var showDeleteConfirmation = false
 
-    // Reject sheet
+    // Reject sheet (single)
     @State private var movieForRejection: StagedMovie?
     @State private var showRejectSheet = false
     @State private var rejectReason = ""
 
-    enum MovieFilter: String, CaseIterable {
-        case unenriched = "Unenriched"
-        case enriched = "Ready"
+    enum StatusFilter: String, CaseIterable {
+        case pending = "Pending"
+        case enriched = "Enriched"
         case approved = "Approved"
+        case rejected = "Rejected"
 
         var approvalStatus: ApprovalStatus? {
             switch self {
-            case .unenriched, .enriched: return .pending
+            case .pending: return .pending
+            case .enriched: return nil     // handled via filter param
             case .approved: return .approved
+            case .rejected: return .rejected
             }
         }
 
         var filterParam: String? {
             switch self {
-            case .unenriched: return "unenriched"
             case .enriched: return "enriched"
-            case .approved: return nil
+            default: return nil
             }
         }
     }
 
     var body: some View {
         NavigationSplitView {
-            // Sidebar - Movie List
-            VStack(spacing: 0) {
-                // Stats Header
-                if let stats = stats {
-                    statsHeader(stats: stats)
-                }
-
-                // Toolbar
-                HStack {
-                    Button(action: { showImportSheet = true }) {
-                        Label("Import", systemImage: "square.and.arrow.down")
-                    }
-
-                    Spacer()
-
-                    Button(action: { showPublishAlert = true }) {
-                        Label("Publish", systemImage: "arrow.up.circle")
-                    }
-                    .disabled(stats?.approved ?? 0 == 0)
-
-                    Button(action: { Task { await loadMovies() } }) {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-                .padding()
-
-                // Filter Tabs
-                Picker("Filter", selection: $selectedFilter) {
-                    ForEach(MovieFilter.allCases, id: \.self) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                Divider()
-
-                // Movie List
-                if isLoading && stagedMovies.isEmpty {
-                    ProgressView("Loading movies...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if stagedMovies.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "tray")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        Text("No movies in staging")
-                            .font(.headline)
-                        Text("Import movies from a channel to get started")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List(stagedMovies, selection: $selectedMovie) { movie in
-                        MovieRow(
-                            movie: movie,
-                            isSelected: selectedMovieIds.contains(movie.id),
-                            tvSeriesList: tvSeriesList,
-                            onDelete: {
-                                movieToDelete = movie
-                                showDeleteConfirmation = true
-                            },
-                            onAssignSeries: {
-                                movieForSeriesAssignment = movie
-                                showSeriesSheet = true
-                            }
-                        )
-                        .tag(movie)
-                        .contextMenu {
-                            Button("Approve") {
-                                Task { await approveMovie(movie) }
-                            }
-                            Button("Reject") {
-                                movieForRejection = movie
-                                rejectReason = ""
-                                showRejectSheet = true
-                            }
-                            Divider()
-                            Button("Delete", role: .destructive) {
-                                movieToDelete = movie
-                                showDeleteConfirmation = true
-                            }
-                        }
-                    }
-                }
-
-                // Error message
-                if let errorMessage = errorMessage {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle")
-                        Text(errorMessage)
-                        Spacer()
-                        Button("Dismiss") {
-                            self.errorMessage = nil
-                        }
-                    }
-                    .padding()
-                    .background(Color.red.opacity(0.1))
-                }
-            }
+            sidebar
         } detail: {
-            // Detail - Movie Preview & Actions
-            if let movie = selectedMovie {
-                MovieDetailView(
-                    movie: movie,
-                    enrichmentPreview: enrichmentPreview,
-                    enrichmentPriority: $enrichmentPriority,
-                    isPreviewingEnrichment: isPreviewingEnrichment,
-                    isApplyingEnrichment: isApplyingEnrichment,
-                    onPreviewEnrichment: { priority in
-                        Task { await previewEnrichment(movie: movie, priority: priority) }
-                    },
-                    onApplyEnrichment: { priority in
-                        Task { await applyEnrichment(movie: movie, priority: priority) }
-                    },
-                    onEdit: {
-                        showEditSheet = true
-                        editTitle = movie.title
-                        editDescription = movie.description ?? ""
-                        editReleaseDate = movie.releaseDate ?? ""
-                    },
-                    onApprove: {
-                        Task { await approveMovie(movie) }
-                    },
-                    onReject: {
-                        movieForRejection = movie
-                        rejectReason = ""
-                        showRejectSheet = true
-                    },
-                    onToggleTvSeries: { isTvSeries in
-                        Task { await toggleTvSeries(movie: movie, isTvSeries: isTvSeries) }
-                    }
-                )
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "film")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    Text("Select a movie to preview")
-                        .font(.headline)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            detailPane
         }
         .sheet(isPresented: $showImportSheet) {
             ImportSheet(
@@ -273,6 +159,36 @@ struct StagingView: View {
                 )
             }
         }
+        .sheet(isPresented: $showBulkRejectSheet) {
+            BulkRejectSheet(
+                count: selectedMovieIds.count,
+                reason: $bulkRejectReason,
+                onReject: {
+                    Task {
+                        await rejectSelected(reason: bulkRejectReason.isEmpty ? "Bulk rejection" : bulkRejectReason)
+                        showBulkRejectSheet = false
+                        bulkRejectReason = ""
+                    }
+                },
+                onCancel: {
+                    showBulkRejectSheet = false
+                    bulkRejectReason = ""
+                }
+            )
+        }
+        .sheet(isPresented: $showBatchProgressSheet) {
+            BatchProgressSheet(
+                progress: batchProgress,
+                onClose: {
+                    showBatchProgressSheet = false
+                    batchPollTask?.cancel()
+                    Task {
+                        await loadStats()
+                        await loadMovies(reset: true)
+                    }
+                }
+            )
+        }
         .alert("Publish Movies", isPresented: $showPublishAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Publish All Approved") {
@@ -322,8 +238,262 @@ struct StagingView: View {
         .task {
             await loadInitialData()
         }
-        .onChange(of: selectedFilter) {
-            Task { await loadMovies() }
+        .onChange(of: selectedStatus) {
+            Task { await loadMovies(reset: true) }
+        }
+        .onChange(of: selectedChannelId) {
+            Task { await loadMovies(reset: true) }
+        }
+        .onChange(of: searchText) {
+            scheduleSearch()
+        }
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            if let stats = stats {
+                statsHeader(stats: stats)
+            }
+
+            // Toolbar
+            HStack {
+                Button(action: { showImportSheet = true }) {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+
+                Spacer()
+
+                Button(action: { showPublishAlert = true }) {
+                    Label("Publish", systemImage: "arrow.up.circle")
+                }
+                .disabled((stats?.approved ?? 0) == 0)
+
+                Button(action: { Task { await loadStats(); await loadMovies(reset: true) } }) {
+                    Image(systemName: "arrow.clockwise")
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            // Search + channel filter
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search titles…", text: $searchText)
+                        .textFieldStyle(.plain)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(6)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(6)
+
+                Picker("Channel", selection: $selectedChannelId) {
+                    Text("All channels").tag("")
+                    ForEach(channels) { channel in
+                        Text(channel.title).tag(channel.id)
+                    }
+                }
+                .labelsHidden()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            // Status filter
+            Picker("Status", selection: $selectedStatus) {
+                ForEach(StatusFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            // Bulk action bar
+            if !selectedMovieIds.isEmpty {
+                bulkActionBar
+            }
+
+            Divider()
+
+            movieList
+
+            // Load more + count
+            footerBar
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = toast {
+                ToastBannerView(toast: toast) { self.toast = nil }
+                    .padding()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    private var bulkActionBar: some View {
+        HStack(spacing: 8) {
+            Text("\(selectedMovieIds.count) selected")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Button("Approve") { Task { await approveSelected() } }
+                .help("Approve selected")
+            Button("Reject") { showBulkRejectSheet = true }
+                .help("Reject selected with a shared reason")
+            Button("Enrich") { Task { await batchEnrichSelected() } }
+                .help("Batch enrich selected")
+            Button("Clear") { selectedMovieIds.removeAll() }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.08))
+    }
+
+    private var movieList: some View {
+        Group {
+            if isLoading && stagedMovies.isEmpty {
+                ProgressView("Loading movies…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if stagedMovies.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "tray")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("No movies in staging")
+                        .font(.headline)
+                    Text("Import movies from a channel to get started")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(stagedMovies, selection: $selectedMovie) { movie in
+                    MovieRow(
+                        movie: movie,
+                        isChecked: selectedMovieIds.contains(movie.id),
+                        onToggleCheck: { toggleCheck(movie) },
+                        tvSeriesList: tvSeriesList,
+                        onDelete: {
+                            movieToDelete = movie
+                            showDeleteConfirmation = true
+                        },
+                        onAssignSeries: {
+                            movieForSeriesAssignment = movie
+                            showSeriesSheet = true
+                        }
+                    )
+                    .tag(movie)
+                    .contextMenu {
+                        Button("Approve") { Task { await approveAndAdvance(movie) } }
+                        Button("Reject") {
+                            movieForRejection = movie
+                            rejectReason = ""
+                            showRejectSheet = true
+                        }
+                        Button("Enrich") { Task { await applyEnrichment(movie: movie, priority: enrichmentPriority) } }
+                        Divider()
+                        Button("Open on YouTube") { openYouTube(movie) }
+                        Divider()
+                        Button("Delete", role: .destructive) {
+                            movieToDelete = movie
+                            showDeleteConfirmation = true
+                        }
+                    }
+                }
+                .onKeyPress { press in handleKeyPress(press) }
+            }
+        }
+    }
+
+    private var footerBar: some View {
+        HStack {
+            if let errorMessage = errorMessage {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundColor(.red)
+                Text(errorMessage)
+                    .font(.caption)
+                    .lineLimit(1)
+                Button("Dismiss") { self.errorMessage = nil }
+                    .buttonStyle(.borderless)
+            } else {
+                Text("Showing \(stagedMovies.count) of \(totalCount)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if currentPage < totalPages {
+                    Button(action: { Task { await loadMore() } }) {
+                        if isLoadingMore {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Load More")
+                        }
+                    }
+                    .disabled(isLoadingMore)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.05))
+    }
+
+    // MARK: - Detail Pane
+
+    private var detailPane: some View {
+        Group {
+            if let movie = selectedMovie {
+                MovieDetailView(
+                    movie: movie,
+                    enrichmentPreview: enrichmentPreview,
+                    enrichmentPriority: $enrichmentPriority,
+                    isPreviewingEnrichment: isPreviewingEnrichment,
+                    isApplyingEnrichment: isApplyingEnrichment,
+                    onPreviewEnrichment: { priority in
+                        Task { await previewEnrichment(movie: movie, priority: priority) }
+                    },
+                    onApplyEnrichment: { priority in
+                        Task { await applyEnrichment(movie: movie, priority: priority) }
+                    },
+                    onEdit: {
+                        showEditSheet = true
+                        editTitle = movie.title
+                        editDescription = movie.description ?? ""
+                        editReleaseDate = movie.releaseDate ?? ""
+                    },
+                    onApprove: { Task { await approveAndAdvance(movie) } },
+                    onReject: {
+                        movieForRejection = movie
+                        rejectReason = ""
+                        showRejectSheet = true
+                    },
+                    onOpenYouTube: { openYouTube(movie) },
+                    onToggleTvSeries: { isTvSeries in
+                        Task { await toggleTvSeries(movie: movie, isTvSeries: isTvSeries) }
+                    }
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "film")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Select a movie to preview")
+                        .font(.headline)
+                    Text("Keys: A approve · R reject · E enrich · J/K move · Space YouTube")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
@@ -333,10 +503,112 @@ struct StagingView: View {
         HStack(spacing: 20) {
             StatBadge(title: "Total", value: stats.totalStaged, color: .blue)
             StatBadge(title: "Pending", value: stats.pending, color: .orange)
+            StatBadge(title: "Enriched", value: stats.enriched, color: .yellow)
             StatBadge(title: "Approved", value: stats.approved, color: .green)
+            StatBadge(title: "Rejected", value: stats.rejected, color: .red)
         }
         .padding()
         .background(Color.secondary.opacity(0.1))
+    }
+
+    // MARK: - Selection helpers
+
+    private func toggleCheck(_ movie: StagedMovie) {
+        if selectedMovieIds.contains(movie.id) {
+            selectedMovieIds.remove(movie.id)
+        } else {
+            selectedMovieIds.insert(movie.id)
+        }
+    }
+
+    private var currentIndex: Int? {
+        guard let selected = selectedMovie else { return nil }
+        return stagedMovies.firstIndex(where: { $0.id == selected.id })
+    }
+
+    private func moveSelection(by delta: Int) {
+        guard !stagedMovies.isEmpty else { return }
+        let idx = currentIndex ?? -1
+        let next = max(0, min(stagedMovies.count - 1, idx + delta))
+        selectedMovie = stagedMovies[next]
+    }
+
+    /// Advance selection to the next row (used after approve/reject).
+    private func advanceSelection() {
+        guard let idx = currentIndex else { return }
+        if idx + 1 < stagedMovies.count {
+            selectedMovie = stagedMovies[idx + 1]
+        } else if idx - 1 >= 0 {
+            selectedMovie = stagedMovies[idx - 1]
+        } else {
+            selectedMovie = nil
+        }
+    }
+
+    private func handleKeyPress(_ press: KeyPress) -> KeyPress.Result {
+        switch press.key {
+        case .upArrow: moveSelection(by: -1); return .handled
+        case .downArrow: moveSelection(by: 1); return .handled
+        case .return:
+            // Return "opens" detail — selection already drives the detail pane.
+            return .handled
+        default:
+            break
+        }
+
+        switch press.characters.lowercased() {
+        case "j": moveSelection(by: 1); return .handled
+        case "k": moveSelection(by: -1); return .handled
+        case "a":
+            if let m = selectedMovie { Task { await approveAndAdvance(m) } }
+            return .handled
+        case "r":
+            if let m = selectedMovie {
+                movieForRejection = m
+                rejectReason = ""
+                showRejectSheet = true
+            }
+            return .handled
+        case "e":
+            if let m = selectedMovie { Task { await applyEnrichment(movie: m, priority: enrichmentPriority) } }
+            return .handled
+        case " ":
+            if let m = selectedMovie { openYouTube(m) }
+            return .handled
+        default:
+            return .ignored
+        }
+    }
+
+    private func openYouTube(_ movie: StagedMovie) {
+        if let url = movie.youtubeURL {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    // MARK: - Toast
+
+    private func showToast(_ message: String, isError: Bool = false) {
+        toastDismissTask?.cancel()
+        withAnimation { toast = ToastMessage(text: message, isError: isError) }
+        toastDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if !Task.isCancelled {
+                withAnimation { toast = nil }
+            }
+        }
+    }
+
+    // MARK: - Search debounce
+
+    private func scheduleSearch() {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if !Task.isCancelled {
+                await loadMovies(reset: true)
+            }
+        }
     }
 
     // MARK: - API Actions
@@ -344,13 +616,13 @@ struct StagingView: View {
     func loadInitialData() async {
         await loadChannels()
         await loadStats()
-        await loadMovies()
+        await loadMovies(reset: true)
         await loadTvSeries()
     }
 
     func loadTvSeries() async {
         do {
-            tvSeriesList = try await apiService.getTvSeriesList()
+            tvSeriesList = try await apiService.fetchAllTvSeries()
         } catch {
             errorMessage = "Failed to load TV series: \(error.localizedDescription)"
         }
@@ -373,22 +645,61 @@ struct StagingView: View {
         }
     }
 
-    func loadMovies() async {
-        isLoading = true
+    func loadMovies(reset: Bool) async {
+        if reset {
+            isLoading = true
+            currentPage = 1
+        }
         errorMessage = nil
 
         do {
             let data = try await apiService.getStagedMovies(
-                status: selectedFilter.approvalStatus,
-                filter: selectedFilter.filterParam,
-                limit: 400
+                status: selectedStatus.approvalStatus,
+                filter: selectedStatus.filterParam,
+                channelId: selectedChannelId.isEmpty ? nil : selectedChannelId,
+                search: searchText.isEmpty ? nil : searchText,
+                page: 1,
+                limit: pageSize
             )
             stagedMovies = data.movies
+            currentPage = data.pagination.page
+            totalPages = max(data.pagination.pages ?? 1, 1)
+            totalCount = data.pagination.total ?? 0
+            // Keep the current selection if it is still present.
+            if let sel = selectedMovie, !stagedMovies.contains(where: { $0.id == sel.id }) {
+                selectedMovie = nil
+            }
         } catch {
             errorMessage = "Failed to load movies: \(error.localizedDescription)"
         }
 
         isLoading = false
+    }
+
+    func loadMore() async {
+        guard currentPage < totalPages, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+
+        let nextPage = currentPage + 1
+        do {
+            let data = try await apiService.getStagedMovies(
+                status: selectedStatus.approvalStatus,
+                filter: selectedStatus.filterParam,
+                channelId: selectedChannelId.isEmpty ? nil : selectedChannelId,
+                search: searchText.isEmpty ? nil : searchText,
+                page: nextPage,
+                limit: pageSize
+            )
+            // Append, avoiding duplicates.
+            let existing = Set(stagedMovies.map(\.id))
+            stagedMovies.append(contentsOf: data.movies.filter { !existing.contains($0.id) })
+            currentPage = data.pagination.page
+            totalPages = max(data.pagination.pages ?? 1, 1)
+            totalCount = data.pagination.total ?? 0
+        } catch {
+            errorMessage = "Failed to load more: \(error.localizedDescription)"
+        }
     }
 
     func importMovies() async {
@@ -406,13 +717,12 @@ struct StagingView: View {
                 channelTitle: importChannelTitle,
                 limit: importLimit
             )
-
-            print("Imported \(result.imported) movies, skipped \(result.skipped)")
-
+            showToast("Imported \(result.imported), skipped \(result.skipped)")
             await loadStats()
-            await loadMovies()
+            await loadMovies(reset: true)
         } catch {
             errorMessage = "Import failed: \(error.localizedDescription)"
+            showToast("Import failed", isError: true)
         }
 
         isLoading = false
@@ -429,6 +739,7 @@ struct StagingView: View {
             )
         } catch {
             errorMessage = "Preview failed: \(error.localizedDescription)"
+            showToast("Preview failed", isError: true)
         }
 
         isPreviewingEnrichment = false
@@ -443,16 +754,12 @@ struct StagingView: View {
                 priority: priority,
                 applyFromPreview: enrichmentPreview != nil
             )
-
-            // Update movie in list
-            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
-                stagedMovies[index] = updated
-                selectedMovie = updated
-            }
-
+            replaceMovie(updated)
+            showToast("Enriched \"\(updated.title)\"")
             await loadStats()
         } catch {
             errorMessage = "Enrichment failed: \(error.localizedDescription)"
+            showToast("Enrichment failed", isError: true)
         }
 
         isApplyingEnrichment = false
@@ -466,52 +773,117 @@ struct StagingView: View {
         ]
 
         do {
-            let updated = try await apiService.updateStagedMovie(
-                movieId: movie.id,
-                updates: updates
-            )
-
-            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
-                stagedMovies[index] = updated
-                selectedMovie = updated
-            }
+            let updated = try await apiService.updateStagedMovie(movieId: movie.id, updates: updates)
+            replaceMovie(updated)
+            showToast("Saved changes")
         } catch {
             errorMessage = "Update failed: \(error.localizedDescription)"
+            showToast("Update failed", isError: true)
         }
     }
 
-    func approveMovie(_ movie: StagedMovie) async {
+    func approveAndAdvance(_ movie: StagedMovie) async {
         do {
-            let updated = try await apiService.approveStagedMovie(movieId: movie.id)
-
-            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
-                stagedMovies[index] = updated
-                selectedMovie = updated
-            }
-
+            _ = try await apiService.approveStagedMovie(movieId: movie.id)
+            // If we are viewing a non-approved filter, the row leaves the list.
+            advanceSelection()
+            removeMovieFromList(movie.id)
+            selectedMovieIds.remove(movie.id)
+            showToast("Approved \"\(movie.title)\"")
             await loadStats()
         } catch {
             errorMessage = "Approval failed: \(error.localizedDescription)"
+            showToast("Approval failed", isError: true)
         }
     }
 
     func rejectMovie(_ movie: StagedMovie, reason: String) async {
         do {
-            let updated = try await apiService.rejectStagedMovie(
-                movieId: movie.id,
-                reason: reason
-            )
-
-            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
-                stagedMovies[index] = updated
-                selectedMovie = updated
-            }
-
+            _ = try await apiService.rejectStagedMovie(movieId: movie.id, reason: reason)
+            advanceSelection()
+            removeMovieFromList(movie.id)
+            selectedMovieIds.remove(movie.id)
+            showToast("Rejected \"\(movie.title)\"")
             await loadStats()
         } catch {
             errorMessage = "Rejection failed: \(error.localizedDescription)"
+            showToast("Rejection failed", isError: true)
         }
     }
+
+    // MARK: - Bulk operations
+
+    func approveSelected() async {
+        let ids = Array(selectedMovieIds)
+        guard !ids.isEmpty else { return }
+        var succeeded = 0
+        var failed = 0
+        for id in ids {
+            do {
+                _ = try await apiService.approveStagedMovie(movieId: id)
+                removeMovieFromList(id)
+                succeeded += 1
+            } catch {
+                failed += 1
+            }
+        }
+        selectedMovieIds.removeAll()
+        showToast("Approved \(succeeded)\(failed > 0 ? ", \(failed) failed" : "")", isError: failed > 0)
+        await loadStats()
+    }
+
+    func rejectSelected(reason: String) async {
+        let ids = Array(selectedMovieIds)
+        guard !ids.isEmpty else { return }
+        var succeeded = 0
+        var failed = 0
+        for id in ids {
+            do {
+                _ = try await apiService.rejectStagedMovie(movieId: id, reason: reason)
+                removeMovieFromList(id)
+                succeeded += 1
+            } catch {
+                failed += 1
+            }
+        }
+        selectedMovieIds.removeAll()
+        showToast("Rejected \(succeeded)\(failed > 0 ? ", \(failed) failed" : "")", isError: failed > 0)
+        await loadStats()
+    }
+
+    func batchEnrichSelected() async {
+        let ids = Array(selectedMovieIds)
+        guard !ids.isEmpty else { return }
+        do {
+            let start = try await apiService.batchEnrich(movieIds: ids, priority: enrichmentPriority)
+            batchProgress = nil
+            showBatchProgressSheet = true
+            startPollingBatch(batchId: start.batchId)
+        } catch {
+            errorMessage = "Batch enrich failed: \(error.localizedDescription)"
+            showToast("Batch enrich failed", isError: true)
+        }
+    }
+
+    private func startPollingBatch(batchId: String) {
+        batchPollTask?.cancel()
+        batchPollTask = Task {
+            while !Task.isCancelled {
+                do {
+                    let progress = try await apiService.getBatchEnrichmentProgress(batchId: batchId)
+                    batchProgress = progress
+                    if progress.status == "completed" || progress.status == "failed" {
+                        break
+                    }
+                } catch {
+                    // Keep polling briefly on transient errors.
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+        }
+    }
+
+    // MARK: - Series / classification
 
     func toggleTvSeries(movie: StagedMovie, isTvSeries: Bool) async {
         do {
@@ -519,10 +891,7 @@ struct StagingView: View {
                 movieId: movie.id,
                 updates: ["is_tv_series": isTvSeries]
             )
-            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
-                stagedMovies[index] = updated
-                selectedMovie = updated
-            }
+            replaceMovie(updated)
         } catch {
             errorMessage = "Failed to update TV series flag: \(error.localizedDescription)"
         }
@@ -534,10 +903,7 @@ struct StagingView: View {
                 movieId: movie.id,
                 seriesId: series?.id
             )
-            if let index = stagedMovies.firstIndex(where: { $0.id == movie.id }) {
-                stagedMovies[index] = updated
-                if selectedMovie?.id == movie.id { selectedMovie = updated }
-            }
+            replaceMovie(updated)
         } catch {
             errorMessage = "Failed to assign series: \(error.localizedDescription)"
         }
@@ -561,10 +927,10 @@ struct StagingView: View {
     func deleteMovie(_ movie: StagedMovie) async {
         do {
             try await apiService.deleteStagedMovie(movieId: movie.id)
-            stagedMovies.removeAll { $0.id == movie.id }
-            if selectedMovie?.id == movie.id {
-                selectedMovie = nil
-            }
+            advanceSelection()
+            removeMovieFromList(movie.id)
+            selectedMovieIds.remove(movie.id)
+            showToast("Deleted \"\(movie.title)\"")
             await loadStats()
         } catch {
             errorMessage = "Delete failed: \(error.localizedDescription)"
@@ -576,24 +942,78 @@ struct StagingView: View {
 
         do {
             let result = try await apiService.publishStagedMovies()
-            var message = "Published \(result.published) movie\(result.published == 1 ? "" : "s")"
             if result.failed > 0 {
-                message += ", \(result.failed) failed"
+                var message = "Published \(result.published), \(result.failed) failed"
                 if let errors = result.errors, !errors.isEmpty {
                     let titles = errors.compactMap { $0.movieTitle }.prefix(3).joined(separator: ", ")
                     message += ": \(titles)"
                     if errors.count > 3 { message += " and \(errors.count - 3) more" }
                 }
                 errorMessage = message
+                showToast("Published \(result.published), \(result.failed) failed", isError: true)
+            } else {
+                showToast("Published \(result.published) movie\(result.published == 1 ? "" : "s")")
             }
 
             await loadStats()
-            await loadMovies()
+            await loadMovies(reset: true)
         } catch {
             errorMessage = "Publish failed: \(error.localizedDescription)"
+            showToast("Publish failed", isError: true)
         }
 
         isLoading = false
+    }
+
+    // MARK: - List mutation helpers
+
+    private func replaceMovie(_ updated: StagedMovie) {
+        if let index = stagedMovies.firstIndex(where: { $0.id == updated.id }) {
+            stagedMovies[index] = updated
+        }
+        if selectedMovie?.id == updated.id {
+            selectedMovie = updated
+        }
+    }
+
+    private func removeMovieFromList(_ id: String) {
+        stagedMovies.removeAll { $0.id == id }
+        totalCount = max(0, totalCount - 1)
+        if selectedMovie?.id == id {
+            selectedMovie = nil
+        }
+    }
+}
+
+// MARK: - Toast
+
+struct ToastMessage: Equatable {
+    let text: String
+    let isError: Bool
+}
+
+struct ToastBannerView: View {
+    let toast: ToastMessage
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: toast.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+            Text(toast.text)
+                .lineLimit(2)
+            Spacer(minLength: 8)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.borderless)
+        }
+        .font(.callout)
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(toast.isError ? Color.red : Color.green)
+        .cornerRadius(10)
+        .shadow(radius: 4)
     }
 }
 
@@ -619,7 +1039,8 @@ struct StatBadge: View {
 
 struct MovieRow: View {
     let movie: StagedMovie
-    let isSelected: Bool
+    var isChecked: Bool = false
+    var onToggleCheck: (() -> Void)? = nil
     var tvSeriesList: [TvSeries] = []
     var onDelete: (() -> Void)? = nil
     var onAssignSeries: (() -> Void)? = nil
@@ -631,36 +1052,15 @@ struct MovieRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Poster thumbnail
-            if let posterPath = movie.posterPath {
-                // Handle both full URLs (OMDB) and paths (TMDB)
-                let posterURL: URL? = {
-                    if posterPath.hasPrefix("http") {
-                        return URL(string: posterPath)
-                    } else {
-                        return URL(string: "https://image.tmdb.org/t/p/w92\(posterPath)")
-                    }
-                }()
-
-                AsyncImage(url: posterURL) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Color.gray.opacity(0.3)
-                }
-                .frame(width: 40, height: 60)
-                .cornerRadius(4)
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 40, height: 60)
-                    .cornerRadius(4)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.white)
-                    )
+            // Multi-select checkbox
+            Button(action: { onToggleCheck?() }) {
+                Image(systemName: isChecked ? "checkmark.square.fill" : "square")
+                    .foregroundColor(isChecked ? .accentColor : .secondary)
             }
+            .buttonStyle(.borderless)
+            .help("Select for bulk actions")
+
+            PosterImage(path: movie.posterPath, width: 40, height: 60, cornerRadius: 4, tmdbSize: "w92")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(movie.title)
@@ -668,23 +1068,17 @@ struct MovieRow: View {
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
-                    // Enrichment status
                     StatusBadge(
                         text: movie.enrichmentStatus,
                         color: movie.hasEnrichment ? .green : .gray
                     )
-
-                    // Approval status
                     StatusBadge(
                         text: movie.approvalStatus.rawValue.capitalized,
                         color: statusColor(movie.approvalStatus)
                     )
-
-                    // TV Series badge
                     if movie.isTvSeries == true {
                         StatusBadge(text: "TV Series", color: .purple)
                     }
-                    // Assigned series name
                     if let series = assignedSeries {
                         StatusBadge(text: series.title, color: .indigo)
                     }
@@ -693,7 +1087,6 @@ struct MovieRow: View {
 
             Spacer()
 
-            // Trailing action buttons
             HStack(spacing: 6) {
                 Button(action: { onAssignSeries?() }) {
                     Image(systemName: assignedSeries != nil ? "tv.fill" : "tv")
@@ -735,6 +1128,7 @@ struct MovieDetailView: View {
     let onEdit: () -> Void
     let onApprove: () -> Void
     let onReject: () -> Void
+    let onOpenYouTube: () -> Void
     let onToggleTvSeries: (Bool) -> Void
 
     var body: some View {
@@ -742,26 +1136,7 @@ struct MovieDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Header with poster
                 HStack(alignment: .top, spacing: 16) {
-                    if let posterPath = movie.posterPath {
-                        // Handle both full URLs (OMDB) and paths (TMDB)
-                        let posterURL: URL? = {
-                            if posterPath.hasPrefix("http") {
-                                return URL(string: posterPath)
-                            } else {
-                                return URL(string: "https://image.tmdb.org/t/p/w300\(posterPath)")
-                            }
-                        }()
-
-                        AsyncImage(url: posterURL) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } placeholder: {
-                            ProgressView()
-                        }
-                        .frame(width: 150)
-                        .cornerRadius(8)
-                    }
+                    PosterImage(path: movie.posterPath, width: 150, height: 220, cornerRadius: 8, tmdbSize: "w300")
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(movie.title)
@@ -787,6 +1162,12 @@ struct MovieDetailView: View {
                             StatusBadge(text: movie.enrichmentStatus, color: movie.hasEnrichment ? .green : .gray)
                             StatusBadge(text: movie.approvalStatus.rawValue.capitalized, color: statusColor(movie.approvalStatus))
                         }
+
+                        Button(action: onOpenYouTube) {
+                            Label("Open on YouTube", systemImage: "play.rectangle.fill")
+                        }
+                        .buttonStyle(.borderless)
+                        .padding(.top, 4)
                     }
                 }
 
@@ -815,8 +1196,7 @@ struct MovieDetailView: View {
                         HStack {
                             Button(action: { onPreviewEnrichment(enrichmentPriority) }) {
                                 if isPreviewingEnrichment {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
+                                    ProgressView().scaleEffect(0.8)
                                 } else {
                                     Text("Preview")
                                 }
@@ -825,8 +1205,7 @@ struct MovieDetailView: View {
 
                             Button(action: { onApplyEnrichment(enrichmentPriority) }) {
                                 if isApplyingEnrichment {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
+                                    ProgressView().scaleEffect(0.8)
                                 } else {
                                     Text("Apply Enrichment")
                                 }
@@ -835,38 +1214,9 @@ struct MovieDetailView: View {
                             .buttonStyle(.borderedProminent)
                         }
 
-                        // Preview results
                         if let preview = enrichmentPreview {
                             Divider()
-
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Preview Results")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                    Spacer()
-                                    if let confidence = preview.confidence {
-                                        Text("Confidence: \(Int(confidence * 100))%")
-                                            .font(.caption)
-                                            .foregroundColor(confidence > 0.8 ? .green : .orange)
-                                    }
-                                }
-
-                                if let source = preview.source {
-                                    Text("Source: \(source.uppercased())")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                if let fieldsEnriched = preview.fieldsEnriched, !fieldsEnriched.isEmpty {
-                                    Text("Fields to enrich: \(fieldsEnriched.joined(separator: ", "))")
-                                        .font(.caption)
-                                        .foregroundColor(.green)
-                                }
-                            }
-                            .padding(8)
-                            .background(Color.green.opacity(0.1))
-                            .cornerRadius(6)
+                            EnrichmentCompareView(movie: movie, preview: preview)
                         }
                     }
                 }
@@ -971,6 +1321,104 @@ struct MovieDetailView: View {
             return displayFormatter.string(from: date)
         }
         return dateString
+    }
+}
+
+// MARK: - Enrichment Compare (YouTube vs proposed match)
+
+struct EnrichmentCompareView: View {
+    let movie: StagedMovie
+    let preview: EnrichmentPreview
+
+    private func previewString(_ key: String) -> String? {
+        preview.preview?[key]?.value as? String
+    }
+
+    private var proposedTitle: String? {
+        previewString("title") ?? preview.metadata?.title
+    }
+    private var proposedPoster: String? { previewString("poster_path") }
+    private var proposedDescription: String? { previewString("description") }
+    private var proposedReleaseDate: String? { previewString("release_date") }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Match Comparison")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let confidence = preview.confidence {
+                    Text("Confidence: \(Int(confidence * 100))%")
+                        .font(.caption)
+                        .foregroundColor(confidence > 0.8 ? .green : .orange)
+                }
+            }
+
+            if let source = preview.source {
+                Text("Source: \(source.uppercased())")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            HStack(alignment: .top, spacing: 16) {
+                // YouTube (current)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("YouTube")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    AsyncImage(url: movie.youtubeThumbnailURL) { image in
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.gray.opacity(0.2)
+                    }
+                    .frame(width: 160, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Text(movie.youtubeVideoTitle)
+                        .font(.caption)
+                        .lineLimit(3)
+                        .frame(width: 160, alignment: .leading)
+                }
+
+                Image(systemName: "arrow.right")
+                    .foregroundColor(.secondary)
+                    .padding(.top, 40)
+
+                // Proposed match
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Proposed")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    PosterImage(path: proposedPoster, width: 90, height: 135, cornerRadius: 6, tmdbSize: "w185")
+                    Text(proposedTitle ?? "No match")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .lineLimit(3)
+                        .frame(width: 160, alignment: .leading)
+                    if let year = proposedReleaseDate?.prefix(4), !year.isEmpty {
+                        Text(String(year))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            if let plot = proposedDescription, !plot.isEmpty {
+                Text(plot)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(4)
+            }
+
+            if let fieldsEnriched = preview.fieldsEnriched, !fieldsEnriched.isEmpty {
+                Text("Fields: \(fieldsEnriched.joined(separator: ", "))")
+                    .font(.caption2)
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(8)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(6)
     }
 }
 
@@ -1094,7 +1542,6 @@ struct SeriesPickerSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Assign TV Series")
                     .font(.title2)
@@ -1106,7 +1553,6 @@ struct SeriesPickerSheet: View {
 
             Divider()
 
-            // Movie name
             Text("Movie: \(movie.title)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -1114,7 +1560,6 @@ struct SeriesPickerSheet: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
 
-            // Remove assignment option (if assigned)
             if movie.tvSeriesId != nil {
                 Button(action: onRemove) {
                     Label("Remove Series Assignment", systemImage: "xmark.circle")
@@ -1127,7 +1572,6 @@ struct SeriesPickerSheet: View {
                 Divider().padding(.horizontal)
             }
 
-            // Existing series list
             if seriesList.isEmpty {
                 Text("No TV series yet. Create one below.")
                     .foregroundColor(.secondary)
@@ -1150,7 +1594,6 @@ struct SeriesPickerSheet: View {
 
             Divider()
 
-            // Create new series
             VStack(alignment: .leading, spacing: 8) {
                 Text("Create New Series")
                     .font(.headline)
@@ -1174,7 +1617,7 @@ struct SeriesPickerSheet: View {
     }
 }
 
-// MARK: - Reject Movie Sheet
+// MARK: - Reject Movie Sheet (single)
 
 struct RejectMovieSheet: View {
     let movie: StagedMovie
@@ -1215,5 +1658,98 @@ struct RejectMovieSheet: View {
         }
         .padding()
         .frame(width: 480)
+    }
+}
+
+// MARK: - Bulk Reject Sheet
+
+struct BulkRejectSheet: View {
+    let count: Int
+    @Binding var reason: String
+    let onReject: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Reject \(count) Movie\(count == 1 ? "" : "s")")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("A single reason will be applied to all selected movies.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Form {
+                Section("Reason for rejection") {
+                    TextEditor(text: $reason)
+                        .frame(height: 100)
+                        .border(Color.gray.opacity(0.2))
+                }
+            }
+            .frame(height: 160)
+
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Reject \(count)", action: onReject)
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+            }
+        }
+        .padding()
+        .frame(width: 480)
+    }
+}
+
+// MARK: - Batch Progress Sheet
+
+struct BatchProgressSheet: View {
+    let progress: BatchEnrichmentProgress?
+    let onClose: () -> Void
+
+    private var isDone: Bool {
+        progress?.status == "completed" || progress?.status == "failed"
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Batch Enrichment")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            if let progress = progress {
+                ProgressView(value: Double(progress.percentage ?? 0), total: 100) {
+                    Text(progress.status.capitalized)
+                } currentValueLabel: {
+                    Text("\(progress.percentage ?? 0)%")
+                }
+
+                HStack(spacing: 20) {
+                    StatBadge(title: "Enriched", value: progress.enriched, color: .green)
+                    StatBadge(title: "Failed", value: progress.failed, color: .red)
+                    StatBadge(title: "Skipped", value: progress.skipped, color: .gray)
+                    StatBadge(title: "Total", value: progress.total, color: .blue)
+                }
+
+                if let current = progress.current {
+                    Text(current)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+            } else {
+                ProgressView("Starting…")
+            }
+
+            Button(isDone ? "Done" : "Close", action: onClose)
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .frame(width: 460)
     }
 }

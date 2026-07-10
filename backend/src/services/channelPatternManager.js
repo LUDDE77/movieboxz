@@ -286,10 +286,28 @@ class ChannelPatternManager {
                 throw new Error('Patterns must be a non-empty array')
             }
 
-            // Ensure all patterns have required fields
+            // Ensure all patterns have required fields and compile cleanly
             for (const pattern of patterns) {
                 if (!pattern.regex || !pattern.parameters) {
                     throw new Error('Each pattern must have regex and parameters')
+                }
+                try {
+                    new RegExp(pattern.regex, 'i')
+                } catch (regexError) {
+                    const err = new Error(`Invalid regex "${pattern.regex}": ${regexError.message}`)
+                    err.code = 'INVALID_REGEX'
+                    throw err
+                }
+            }
+
+            // Validate the fallback pattern's regex/divider if it carries one
+            if (fallbackPattern && fallbackPattern.regex) {
+                try {
+                    new RegExp(fallbackPattern.regex, 'i')
+                } catch (regexError) {
+                    const err = new Error(`Invalid fallback regex "${fallbackPattern.regex}": ${regexError.message}`)
+                    err.code = 'INVALID_REGEX'
+                    throw err
                 }
             }
 

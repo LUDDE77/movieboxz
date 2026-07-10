@@ -5,6 +5,8 @@ import { movieCurator } from '../services/movieCurator.js'
 import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { logger } from '../utils/logger.js'
 import { adminAuth } from '../middleware/adminAuth.js'
+import { buildDurationFilter, VALID_IMPORT_SORTS } from '../utils/importHelpers.js'
+import { proposeEpisodeMatch } from '../utils/episodeMatcher.js'
 
 const router = express.Router()
 
@@ -29,6 +31,9 @@ function stripEmojis(text) {
         .replace(/\s{2,}/g, ' ')
         .trim()
 }
+
+// buildDurationFilter and VALID_IMPORT_SORTS are pure helpers, imported from
+// ../utils/importHelpers.js so they can be unit tested without a DB connection.
 
 // =============================================================================
 // CHANNEL SETTINGS CRUD
@@ -119,6 +124,29 @@ router.put('/:channelId/settings', async (req, res, next) => {
 
         if (error) throw error
 
+        // Keep channels classification flags in sync with the settings that
+        // actually reach imported movies.
+        // channel_settings.is_kids_content     -> channels.has_kids_content
+        // channel_settings.is_tv_series_channel -> channels.has_series
+        const channelsSync = {}
+        if (cleanUpdates.is_kids_content !== undefined) {
+            channelsSync.has_kids_content = cleanUpdates.is_kids_content
+        }
+        if (cleanUpdates.is_tv_series_channel !== undefined) {
+            channelsSync.has_series = cleanUpdates.is_tv_series_channel
+        }
+        if (Object.keys(channelsSync).length > 0) {
+            const { error: channelsError } = await supabase
+                .from('channels')
+                .update(channelsSync)
+                .eq('id', channelId)
+            if (channelsError) {
+                logger.error(`[Channel Settings] Failed to sync channels flags for ${channelId}:`, channelsError)
+            } else {
+                logger.info(`[Channel Settings] Synced channels flags for ${channelId}:`, channelsSync)
+            }
+        }
+
         logger.info(`[Channel Settings] Updated settings for ${channelId}`)
 
         res.json({
@@ -142,12 +170,21 @@ router.put('/:channelId/settings', async (req, res, next) => {
  * background. Returns null if the channel does not exist.
  */
 async function startChannelImport(channelId, { limit = null, sortOrder = 'latest', applySettings = true, autoEnrich = false } = {}) {
+    // Reject unsupported sort orders (e.g. the old fake 'rating') — fall back to 'latest'
+    if (!VALID_IMPORT_SORTS.includes(sortOrder)) {
+        logger.warn(`[Bulk Import] Unsupported sortOrder '${sortOrder}', falling back to 'latest'`)
+        sortOrder = 'latest'
+    }
+
     logger.info(`[Bulk Import] Starting import for ${channelId}, limit: ${limit || 'ALL'}, sort: ${sortOrder}, autoEnrich: ${autoEnrich}`)
+
+    // Sweep any zombie imports left 'running' from a previous crash before starting a new one
+    await sweepZombieImports().catch(err => logger.warn('[Bulk Import] Zombie sweep failed:', err.message))
 
     // Get channel info
     const { data: channel } = await supabase
         .from('channels')
-        .select('title')
+        .select('title, pattern_source')
         .eq('id', channelId)
         .single()
 
@@ -184,7 +221,7 @@ async function startChannelImport(channelId, { limit = null, sortOrder = 'latest
     if (importError) throw importError
 
     // Start import process asynchronously
-    processImport(importRecord.id, channelId, channel.title, limit, sortOrder, channelSettings, autoEnrich)
+    processImport(importRecord.id, channelId, channel.title, limit, sortOrder, channelSettings, autoEnrich, channel.pattern_source)
         .catch(error => {
             logger.error('[Bulk Import] Process error:', error)
         })
@@ -310,11 +347,15 @@ router.get('/imports/:batchId/status', async (req, res, next) => {
             status: importRecord.status,
             found: importRecord.videos_found || 0,
             imported: importRecord.videos_imported || 0,
+            imported_count: importRecord.videos_imported || 0,
             skipped: importRecord.videos_skipped || 0,
             failed: importRecord.videos_failed || 0,
+            pattern_match_count: importRecord.pattern_match_count ?? null,
+            truncated: importRecord.truncated || false,
             current: importRecord.current_video_title,
             currentIndex: importRecord.current_video_index,
-            channelTitle: importRecord.channels?.title
+            channelTitle: importRecord.channels?.title,
+            errorDetails: importRecord.error_details || null
         }
 
         // Calculate percentage
@@ -333,6 +374,86 @@ router.get('/imports/:batchId/status', async (req, res, next) => {
         next(error)
     }
 })
+
+/**
+ * POST /api/admin/channel-management/imports/:batchId/cancel
+ * Request cancellation of a running import. The processImport loop re-reads the
+ * status every ~10 videos and stops cleanly, finalizing counts.
+ */
+router.post('/imports/:batchId/cancel', async (req, res, next) => {
+    try {
+        const { batchId } = req.params
+
+        const { data: importRecord, error: fetchError } = await supabase
+            .from('import_history')
+            .select('id, status')
+            .eq('id', batchId)
+            .single()
+
+        if (fetchError || !importRecord) {
+            return res.status(404).json({
+                success: false,
+                error: 'Import not found'
+            })
+        }
+
+        if (importRecord.status !== 'running' && importRecord.status !== 'pending') {
+            return res.status(409).json({
+                success: false,
+                error: `Cannot cancel an import with status '${importRecord.status}'`
+            })
+        }
+
+        const { error: updateError } = await supabase
+            .from('import_history')
+            .update({ status: 'cancelled' })
+            .eq('id', batchId)
+
+        if (updateError) throw updateError
+
+        logger.info(`[Import Cancel] Marked import ${batchId} as cancelled`)
+
+        res.json({
+            success: true,
+            message: 'Import cancellation requested'
+        })
+    } catch (error) {
+        logger.error('[Import Cancel] Error:', error)
+        next(error)
+    }
+})
+
+/**
+ * Zombie sweeper: mark import_history rows stuck in 'running' for more than
+ * 30 minutes as 'failed'. These are imports orphaned by a server restart mid-run.
+ * Exported so server.js can call it once at boot, and startChannelImport calls it
+ * before every new import.
+ */
+export async function sweepZombieImports() {
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+
+    const { data, error } = await supabase
+        .from('import_history')
+        .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: 'server restarted mid-import'
+        })
+        .eq('status', 'running')
+        .lt('started_at', cutoff)
+        .select('id')
+
+    if (error) {
+        logger.error('[Zombie Sweep] Error:', error)
+        return 0
+    }
+
+    const swept = data?.length || 0
+    if (swept > 0) {
+        logger.warn(`[Zombie Sweep] Marked ${swept} stale 'running' import(s) as failed`)
+    }
+    return swept
+}
 
 // =============================================================================
 // BATCH OPERATIONS
@@ -400,22 +521,26 @@ router.delete('/:channelId/movies', async (req, res, next) => {
 
         // Delete from production
         if (sources.includes('production')) {
-            // First delete relationships
-            await supabase
-                .from('movie_genres')
-                .delete()
-                .in('movie_id', supabase
-                    .from('movies')
-                    .select('id')
-                    .eq('channel_id', channelId)
-                )
-
-            const { data: movies } = await supabase
+            // Fetch the movie ids first — Supabase JS has no real subquery support,
+            // so .in() must receive a concrete array, not a query builder
+            const { data: movies, error: moviesFetchError } = await supabase
                 .from('movies')
                 .select('id')
                 .eq('channel_id', channelId)
 
+            if (moviesFetchError) throw moviesFetchError
+
             if (movies && movies.length > 0) {
+                const movieIds = movies.map(m => m.id)
+
+                // First delete relationships
+                const { error: genresError } = await supabase
+                    .from('movie_genres')
+                    .delete()
+                    .in('movie_id', movieIds)
+
+                if (genresError) throw genresError
+
                 const { error } = await supabase
                     .from('movies')
                     .delete()
@@ -449,24 +574,54 @@ router.post('/:channelId/reimport', async (req, res, next) => {
     try {
         const { channelId } = req.params
         const {
-            deleteExisting = true,
+            deleteExisting = false,
             applySettings = true,
-            limit = null
+            limit = null,
+            force = false
         } = req.body
 
         // Delete existing if requested
         if (deleteExisting) {
+            // Refuse to wipe production movies unless the caller explicitly forces it
+            const { count: prodCount } = await supabase
+                .from('movies')
+                .select('*', { count: 'exact', head: true })
+                .eq('channel_id', channelId)
+
+            if ((prodCount || 0) > 0 && !force) {
+                return res.status(409).json({
+                    success: false,
+                    error: `Reimport would delete ${prodCount} production movie(s) for this channel. Pass force:true to confirm.`,
+                    details: { production: prodCount || 0 }
+                })
+            }
+
             await supabase
                 .from('staged_movies')
                 .delete()
                 .eq('channel_id', channelId)
 
-            await supabase
-                .from('movies')
-                .delete()
-                .eq('channel_id', channelId)
+            if ((prodCount || 0) > 0 && force) {
+                // Clean up genre relationships first (no real subquery support in Supabase JS)
+                const { data: prodMovies } = await supabase
+                    .from('movies')
+                    .select('id')
+                    .eq('channel_id', channelId)
 
-            logger.info(`[Reimport] Deleted existing movies from ${channelId}`)
+                if (prodMovies && prodMovies.length > 0) {
+                    await supabase
+                        .from('movie_genres')
+                        .delete()
+                        .in('movie_id', prodMovies.map(m => m.id))
+                }
+
+                await supabase
+                    .from('movies')
+                    .delete()
+                    .eq('channel_id', channelId)
+            }
+
+            logger.info(`[Reimport] Deleted existing movies from ${channelId} (production removed: ${(prodCount || 0) > 0 && force})`)
         }
 
         // Trigger new import via the shared starter
@@ -596,7 +751,9 @@ router.get('/:channelId/import-history', async (req, res, next) => {
 // IMPORT PROCESSING (Background)
 // =============================================================================
 
-async function processImport(importId, channelId, channelTitle, limit, sortOrder, channelSettings, autoEnrich) {
+async function processImport(importId, channelId, channelTitle, limit, sortOrder, channelSettings, autoEnrich, patternSource = 'title') {
+    // Track per-video failures for import_history.error_details
+    const errorDetails = []
     try {
         logger.info(`[Import Process] Starting ${importId} for ${channelTitle}`)
 
@@ -606,20 +763,32 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
             .update({ status: 'running' })
             .eq('id', importId)
 
-        // Fetch videos from YouTube with sort order
+        // Duration/shorts filter derived from channel settings
+        const durationFilter = buildDurationFilter(channelSettings)
+
+        // For latest/oldest we can page-and-filter (fetch-before-filter). For
+        // sorts that need the full set (alphabetical, views) we fetch everything
+        // within the safety cap, then sort, then slice to the limit.
+        const needsFullSet = sortOrder === 'alphabetical_az' ||
+            sortOrder === 'alphabetical_za' ||
+            sortOrder === 'views'
+
         const fetchOptions = {
             maxResults: limit || 500,
-            fetchDetails: true
+            filter: durationFilter,
+            order: sortOrder === 'oldest' ? 'oldest' : null
         }
 
-        // Apply sort order
-        if (sortOrder === 'latest' || sortOrder === 'oldest') {
-            fetchOptions.order = sortOrder === 'latest' ? 'date' : 'date_asc'
+        // Only early-stop on the limit for latest (chronological) imports; the
+        // other orders need the full candidate set before the limit is applied
+        if (limit && !needsFullSet && sortOrder !== 'oldest') {
+            fetchOptions.postFilterLimit = limit
         }
 
         const videos = await youtubeService.getChannelVideos(channelId, fetchOptions)
+        const truncated = !!videos.truncated
 
-        // Apply additional sorting if needed
+        // Apply sorts that require the full set
         if (sortOrder === 'alphabetical_az') {
             videos.sort((a, b) => a.title.localeCompare(b.title))
         } else if (sortOrder === 'alphabetical_za') {
@@ -628,61 +797,45 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
             videos.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0))
         }
 
-        // Apply duration filters if set
+        // Videos are already duration-filtered inside getChannelVideos
         let filteredVideos = videos
-        if (channelSettings) {
-            const { min_duration_minutes, max_duration_minutes, filter_shorts } = channelSettings
 
-            filteredVideos = videos.filter(video => {
-                // Parse duration to minutes
-                const durationMinutes = movieCurator.parseDuration(video.duration)
-
-                // Filter shorts (< 1 minute)
-                if (filter_shorts && durationMinutes < 1) {
-                    logger.debug(`[Import Filter] Filtering short: ${video.title} (${durationMinutes} min)`)
-                    return false
-                }
-
-                // Filter by minimum duration
-                if (min_duration_minutes && durationMinutes < min_duration_minutes) {
-                    logger.debug(`[Import Filter] Below minimum: ${video.title} (${durationMinutes} < ${min_duration_minutes} min)`)
-                    return false
-                }
-
-                // Filter by maximum duration
-                if (max_duration_minutes && durationMinutes > max_duration_minutes) {
-                    logger.debug(`[Import Filter] Above maximum: ${video.title} (${durationMinutes} > ${max_duration_minutes} min)`)
-                    return false
-                }
-
-                return true
-            })
-
-            const filtered = videos.length - filteredVideos.length
-            if (filtered > 0) {
-                logger.info(`[Import Filter] Filtered ${filtered} videos by duration (${filteredVideos.length} remaining)`)
-            }
-        }
-
-        // Enforce the requested limit after filtering
+        // Enforce the requested limit after ordering
         if (limit && filteredVideos.length > limit) {
             logger.info(`[Import Filter] 🎯 Limiting to ${limit} videos (had ${filteredVideos.length} after filtering)`)
             filteredVideos = filteredVideos.slice(0, limit)
         }
 
-        // Update videos found
+        // Update videos found (+ truncation flag)
         await supabase
             .from('import_history')
-            .update({ videos_found: filteredVideos.length })
+            .update({ videos_found: filteredVideos.length, truncated })
             .eq('id', importId)
 
         let imported = 0
         let skipped = 0
         let failed = 0
+        let patternMatchCount = 0
+        let cancelled = false
 
         // Import each video
         for (let i = 0; i < filteredVideos.length; i++) {
             const video = filteredVideos[i]
+
+            // Re-read status every ~10 videos so a cancel request stops us cleanly
+            if (i > 0 && i % 10 === 0) {
+                const { data: statusRow } = await supabase
+                    .from('import_history')
+                    .select('status')
+                    .eq('id', importId)
+                    .single()
+
+                if (statusRow?.status === 'cancelled') {
+                    logger.info(`[Import Process] Import ${importId} cancelled at video ${i}/${filteredVideos.length}`)
+                    cancelled = true
+                    break
+                }
+            }
 
             try {
                 // Update current progress
@@ -717,11 +870,22 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     continue
                 }
 
-                // Extract metadata using channel pattern
-                const parsed = await movieCurator.extractMetadata(video.title, channelId)
+                // Extract metadata using channel pattern. When the channel's
+                // pattern_source is 'description', run the pattern against the
+                // video description text instead of the title.
+                const patternInput = (patternSource === 'description' && video.description)
+                    ? video.description
+                    : video.title
+                const parsed = await movieCurator.extractMetadata(patternInput, channelId)
+
+                // Count pattern matches for the import's match-rate metric
+                if (parsed.patternMatched) {
+                    patternMatchCount++
+                }
 
                 // Log pattern extraction results
                 logger.info(`[Import] Pattern extraction for "${video.title}":`, {
+                    source: patternSource,
                     matched: parsed.patternMatched || false,
                     extractedTitle: parsed.title,
                     actor: parsed.actors || parsed.actor || null,
@@ -791,6 +955,7 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                 if (insertError) {
                     logger.error(`[Import] Failed to insert ${video.id}:`, insertError)
                     failed++
+                    errorDetails.push({ videoId: video.id, title: video.title, error: insertError.message })
                 } else {
                     imported++
 
@@ -939,29 +1104,33 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     .update({
                         videos_imported: imported,
                         videos_skipped: skipped,
-                        videos_failed: failed
+                        videos_failed: failed,
+                        pattern_match_count: patternMatchCount
                     })
                     .eq('id', importId)
 
             } catch (videoError) {
                 logger.error(`[Import] Error processing video ${video.id}:`, videoError)
                 failed++
+                errorDetails.push({ videoId: video.id, title: video.title, error: videoError.message })
             }
         }
 
-        // Mark as completed
+        // Finalize — respect a cancellation requested mid-run
         await supabase
             .from('import_history')
             .update({
-                status: 'completed',
+                status: cancelled ? 'cancelled' : 'completed',
                 completed_at: new Date().toISOString(),
                 videos_imported: imported,
                 videos_skipped: skipped,
-                videos_failed: failed
+                videos_failed: failed,
+                pattern_match_count: patternMatchCount,
+                error_details: errorDetails.length > 0 ? errorDetails : null
             })
             .eq('id', importId)
 
-        logger.info(`[Import Process] Completed ${importId}: ${imported} imported, ${skipped} skipped, ${failed} failed`)
+        logger.info(`[Import Process] ${cancelled ? 'Cancelled' : 'Completed'} ${importId}: ${imported} imported, ${skipped} skipped, ${failed} failed, ${patternMatchCount} pattern-matched`)
 
     } catch (error) {
         logger.error(`[Import Process] Fatal error for ${importId}:`, error)
@@ -971,10 +1140,203 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
             .update({
                 status: 'failed',
                 completed_at: new Date().toISOString(),
-                error_message: error.message
+                error_message: error.message,
+                error_details: errorDetails.length > 0 ? errorDetails : null
             })
             .eq('id', importId)
     }
 }
+
+// =============================================================================
+// TV SERIES EPISODE MATCHING
+// =============================================================================
+
+/**
+ * POST /api/admin/channel-management/:channelId/match-episodes
+ * Body: { seriesIds: [uuid, ...] }
+ *
+ * Dry-run: for each of the channel's staged movies still awaiting approval,
+ * detect which of the given series it belongs to and fuzzy-match its YouTube
+ * title against that series' stored episode guide. Writes NOTHING.
+ */
+router.post('/:channelId/match-episodes', async (req, res, next) => {
+    try {
+        const { channelId } = req.params
+        const { seriesIds } = req.body || {}
+
+        if (!Array.isArray(seriesIds) || seriesIds.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'seriesIds must be a non-empty array of tv_series uuids'
+            })
+        }
+
+        const { data: seriesRows, error: seriesError } = await supabase
+            .from('tv_series')
+            .select('id, title')
+            .in('id', seriesIds)
+
+        if (seriesError) throw seriesError
+
+        if (!seriesRows || seriesRows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'No tv_series found for the given seriesIds'
+            })
+        }
+
+        const { data: guides, error: guidesError } = await supabase
+            .from('episode_guides')
+            .select('tv_series_id, episodes')
+            .in('tv_series_id', seriesIds)
+
+        if (guidesError) throw guidesError
+
+        const guideBySeries = new Map((guides || []).map(g => [g.tv_series_id, g.episodes || []]))
+        const seriesOptions = seriesRows.map(s => ({
+            tvSeriesId: s.id,
+            title: s.title,
+            episodes: guideBySeries.get(s.id) || []
+        }))
+
+        // Fetch the channel's staged movies still awaiting approval.
+        // Note: 'enriched' is not an approval_status value — enrichment keeps rows
+        // in 'pending' (tracked via enriched_at), so 'pending' covers both.
+        const stagedMovies = []
+        const PAGE_SIZE = 1000
+        for (let from = 0; ; from += PAGE_SIZE) {
+            const { data, error } = await supabase
+                .from('staged_movies')
+                .select('id, title, youtube_video_title')
+                .eq('channel_id', channelId)
+                .eq('approval_status', 'pending')
+                .order('created_at', { ascending: true })
+                .range(from, from + PAGE_SIZE - 1)
+            if (error) throw error
+            stagedMovies.push(...(data || []))
+            if (!data || data.length < PAGE_SIZE) break
+        }
+
+        const proposals = []
+        const unmatched = []
+
+        for (const movie of stagedMovies) {
+            const youtubeTitle = movie.youtube_video_title || movie.title || ''
+            const result = proposeEpisodeMatch(youtubeTitle, seriesOptions)
+
+            if (result.matched) {
+                proposals.push({
+                    stagedMovieId: movie.id,
+                    youtubeTitle,
+                    tvSeriesId: result.tvSeriesId,
+                    season: result.season,
+                    episode: result.episode,
+                    episodeName: result.episodeName,
+                    confidence: result.confidence
+                })
+            } else {
+                unmatched.push({
+                    stagedMovieId: movie.id,
+                    youtubeTitle,
+                    reason: result.reason
+                })
+            }
+        }
+
+        logger.info(`[Episode Match] Channel ${channelId}: ${proposals.length} proposals, ${unmatched.length} unmatched (dry-run, ${seriesOptions.length} series)`)
+
+        res.json({
+            success: true,
+            data: { proposals, unmatched }
+        })
+    } catch (error) {
+        logger.error('[Episode Match] match-episodes error:', error)
+        next(error)
+    }
+})
+
+/**
+ * POST /api/admin/channel-management/:channelId/confirm-episode-matches
+ * Body: { matches: [{ stagedMovieId, tvSeriesId, season, episode, episodeName }] }
+ *
+ * Applies confirmed episode matches to staged_movies — only rows belonging to
+ * this channel that are not already publishing/published.
+ */
+router.post('/:channelId/confirm-episode-matches', async (req, res, next) => {
+    try {
+        const { channelId } = req.params
+        const { matches } = req.body || {}
+
+        if (!Array.isArray(matches) || matches.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'matches must be a non-empty array'
+            })
+        }
+
+        const toInteger = (value) => {
+            const n = parseInt(value)
+            return Number.isInteger(n) ? n : null
+        }
+
+        let updated = 0
+        const errors = []
+
+        for (const match of matches) {
+            const { stagedMovieId, tvSeriesId, season, episode, episodeName } = match || {}
+
+            if (!stagedMovieId || !tvSeriesId) {
+                errors.push({
+                    stagedMovieId: stagedMovieId || null,
+                    error: 'stagedMovieId and tvSeriesId are required'
+                })
+                continue
+            }
+
+            const { data, error } = await supabase
+                .from('staged_movies')
+                .update({
+                    tv_series_id: tvSeriesId,
+                    season_number: toInteger(season),
+                    episode_number: toInteger(episode),
+                    episode_name: episodeName || null,
+                    is_tv_series: true,
+                    series_type: 'tv_series',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', stagedMovieId)
+                .eq('channel_id', channelId)
+                .not('approval_status', 'in', '("publishing","published")')
+                .select('id')
+
+            if (error) {
+                errors.push({ stagedMovieId, error: error.message })
+                continue
+            }
+
+            if (data && data.length > 0) {
+                updated++
+            } else {
+                errors.push({
+                    stagedMovieId,
+                    error: 'Not updated (wrong channel, already published, or not found)'
+                })
+            }
+        }
+
+        logger.info(`[Episode Match] Channel ${channelId}: confirmed ${updated}/${matches.length} episode matches`)
+
+        res.json({
+            success: true,
+            data: {
+                updated,
+                errors: errors.length > 0 ? errors : undefined
+            }
+        })
+    } catch (error) {
+        logger.error('[Episode Match] confirm-episode-matches error:', error)
+        next(error)
+    }
+})
 
 export default router

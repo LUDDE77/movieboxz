@@ -341,16 +341,17 @@ struct ChannelMoviesView: View {
         } message: {
             Text("This will permanently delete all movies from this channel. This action cannot be undone.")
         }
-        .confirmationDialog("Re-import Channel", isPresented: $showReimportConfirm) {
-            Button("Re-import (Keep Existing)") {
-                reimportChannel(deleteExisting: false)
-            }
-            Button("Re-import (Delete & Re-import)", role: .destructive) {
-                reimportChannel(deleteExisting: true)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Choose whether to keep existing movies or delete and re-import everything.")
+        .sheet(isPresented: $showReimportConfirm) {
+            ReimportChannelSheet(
+                channelTitle: channel.title,
+                stagingCount: moviesData?.staging?.total ?? 0,
+                productionCount: moviesData?.production?.total ?? 0,
+                onStart: { deleteExisting in
+                    showReimportConfirm = false
+                    reimportChannel(deleteExisting: deleteExisting)
+                },
+                onCancel: { showReimportConfirm = false }
+            )
         }
         .sheet(isPresented: $showEnrichmentProgress) {
             EnrichmentProgressModal(
@@ -440,12 +441,32 @@ struct ChannelMoviesView: View {
             successMessage = nil
 
             do {
-                let response = try await apiService.reimportChannel(
-                    channelId: channel.id,
-                    deleteExisting: deleteExisting,
-                    limit: nil,
-                    applySettings: true
-                )
+                let response: BulkImportResponse
+                if deleteExisting {
+                    // The destructive path was explicitly confirmed (checkbox +
+                    // typed confirmation in ReimportChannelSheet), so pass
+                    // force:true — the backend refuses to delete production
+                    // movies without it. Uses the direct helper because
+                    // AdminAPIService.reimportChannel has no force parameter,
+                    // and so a backend 409 refusal surfaces its message.
+                    let data = try await ChannelAdminDirectAPI.send(
+                        path: "/channel-management/\(channel.id)/reimport",
+                        method: "POST",
+                        body: [
+                            "deleteExisting": true,
+                            "force": true,
+                            "applySettings": true
+                        ]
+                    )
+                    response = try ChannelAdminDirectAPI.decode(BulkImportResponse.self, from: data)
+                } else {
+                    response = try await apiService.reimportChannel(
+                        channelId: channel.id,
+                        deleteExisting: false,
+                        limit: nil,
+                        applySettings: true
+                    )
+                }
 
                 successMessage = "Re-import started (Batch ID: \(response.batchId)). Check Import History for progress."
 
@@ -680,6 +701,91 @@ struct ChannelMoviesView: View {
     }
 }
 
+// MARK: - Re-import Sheet
+
+/// Confirmation flow for channel re-import. The destructive path (delete
+/// existing movies first) is an explicit opt-in checkbox plus a typed
+/// confirmation, matching the backend contract where deleteExisting defaults
+/// to false and deleting production movies requires force:true.
+struct ReimportChannelSheet: View {
+    let channelTitle: String
+    let stagingCount: Int
+    let productionCount: Int
+    let onStart: (_ deleteExisting: Bool) -> Void
+    let onCancel: () -> Void
+
+    @State private var deleteExisting = false
+    @State private var confirmText = ""
+
+    private var confirmationRequired: Bool { deleteExisting }
+    private var confirmed: Bool {
+        !confirmationRequired || confirmText.trimmingCharacters(in: .whitespaces).uppercased() == "DELETE"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Re-import Channel")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Re-import fetches the channel's videos again into staging. Videos that already exist are skipped unless you delete them first.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Divider()
+
+            Toggle(isOn: $deleteExisting) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Delete existing movies first")
+                        .fontWeight(.medium)
+                    Text("Off (default): existing movies are kept and duplicates are skipped.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if deleteExisting {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label {
+                        Text("This permanently deletes this channel's movies before re-importing: \(stagingCount) staged and \(productionCount) production movie(s) currently loaded. Production movies disappear from the consumer apps immediately. This cannot be undone.")
+                            .font(.caption)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .foregroundColor(.red)
+
+                    Text("Type DELETE to confirm:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    TextField("DELETE", text: $confirmText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 160)
+                }
+                .padding(12)
+                .background(Color.red.opacity(0.08))
+                .cornerRadius(8)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.bordered)
+
+                Button(action: { onStart(deleteExisting) }) {
+                    Label(deleteExisting ? "Delete & Re-import" : "Re-import (Keep Existing)",
+                          systemImage: deleteExisting ? "trash" : "arrow.clockwise.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(deleteExisting ? .red : .accentColor)
+                .disabled(!confirmed)
+            }
+        }
+        .padding(24)
+        .frame(width: 480)
+    }
+}
+
 // MARK: - Movie Section
 
 struct MovieSection: View {
@@ -760,7 +866,7 @@ struct ChannelMovieRow: View {
     var body: some View {
         rowContent
             .padding()
-            .background(isSelected ? Color.blue.opacity(0.1) : Color.white)
+            .background(isSelected ? Color.blue.opacity(0.1) : Color(nsColor: .controlBackgroundColor))
             .cornerRadius(8)
             .overlay(borderOverlay)
             .sheet(isPresented: $showDetail) {

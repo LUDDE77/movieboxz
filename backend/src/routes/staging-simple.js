@@ -15,6 +15,181 @@ router.use(adminAuth)
 // In-memory store for batch enrichment progress
 const enrichmentProgress = new Map()
 
+// =============================================================================
+// POST-ENRICHMENT PIPELINE HELPERS
+// Auto-approve on high confidence + manual verification queue feeding
+// =============================================================================
+
+// Low-confidence bar used when the channel has no auto_approve_threshold
+const DEFAULT_LOW_CONFIDENCE_THRESHOLD = 50
+
+// enrichment confidence appears on both 0-1 and 0-100 scales — normalize to 0-100
+function confidenceAsPercent(confidence) {
+    const value = parseFloat(confidence)
+    if (Number.isNaN(value)) return null
+    return value <= 1 ? value * 100 : value
+}
+
+// Returns the channel's auto_approve_threshold (0-100) or null when unset/<= 0
+async function getAutoApproveThreshold(channelId) {
+    if (!channelId) return null
+    const { data, error } = await supabase
+        .from('channel_settings')
+        .select('auto_approve_threshold')
+        .eq('channel_id', channelId)
+        .single()
+    if (error || !data) return null
+    const threshold = parseFloat(data.auto_approve_threshold)
+    return threshold > 0 ? threshold : null
+}
+
+// Auto-approve a pending staged movie when its enrichment confidence clears the
+// channel's auto_approve_threshold. Returns true when the row was approved.
+async function maybeAutoApprove(movie, confidencePercent, threshold) {
+    if (!movie?.id || threshold == null || confidencePercent == null) return false
+    if (movie.approval_status !== 'pending') return false
+    if (confidencePercent < threshold) return false
+
+    const { data, error } = await supabase
+        .from('staged_movies')
+        .update({
+            approval_status: 'approved',
+            approved_at: new Date().toISOString(),
+            approved_by: 'auto-approve',
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', movie.id)
+        .eq('approval_status', 'pending') // never touch rows an admin already moved
+        .select('id')
+
+    if (error) {
+        logger.error(`[Auto-Approve] Failed for staged movie ${movie.id}:`, error)
+        return false
+    }
+
+    const approved = (data || []).length > 0
+    if (approved) {
+        logger.info(`[Auto-Approve] "${movie.title}" (${movie.id}) auto-approved: confidence ${confidencePercent} >= threshold ${threshold}`)
+    }
+    return approved
+}
+
+// Build candidate data (for the verification queue) from an enrichment result
+function buildCandidateData(enrichmentResult) {
+    const preview = enrichmentResult?.preview || {}
+    const metadata = enrichmentResult?.metadata || {}
+    const candidate = {
+        source: enrichmentResult?.source || null,
+        title: preview.title || metadata.title || null,
+        release_date: preview.release_date || null,
+        tmdb_id: metadata.tmdb_id ?? preview.tmdb_id ?? null,
+        imdb_id: metadata.imdb_id ?? preview.imdb_id ?? null,
+        poster_path: preview.poster_path || null
+    }
+    const hasData = Object.entries(candidate).some(([key, value]) => key !== 'source' && value != null)
+    return hasData ? [candidate] : null
+}
+
+// Insert a staged movie into manual_enrichment_queue, deduping on open rows for
+// the same video. Never throws — queue feeding must not break enrichment.
+async function queueForManualEnrichment(movie, { reason, confidencePercent = null, candidates = null }) {
+    try {
+        if (!movie?.youtube_video_id) return false
+
+        // Dedupe: skip when an open (pending/in_progress) entry already exists
+        const { data: existing } = await supabase
+            .from('manual_enrichment_queue')
+            .select('id')
+            .eq('youtube_video_id', movie.youtube_video_id)
+            .in('enrichment_status', ['pending', 'in_progress'])
+            .limit(1)
+
+        if (existing && existing.length > 0) {
+            logger.debug(`[Manual Queue] ${movie.youtube_video_id} already has an open queue entry`)
+            return false
+        }
+
+        // channel_title is NOT NULL on the queue table
+        let channelTitle = movie.channel_title || movie.channels?.title || null
+        if (!channelTitle && movie.channel_id) {
+            const { data: channel } = await supabase
+                .from('channels')
+                .select('title')
+                .eq('id', movie.channel_id)
+                .single()
+            channelTitle = channel?.title || null
+        }
+
+        const { error } = await supabase
+            .from('manual_enrichment_queue')
+            .insert({
+                youtube_video_id: movie.youtube_video_id,
+                youtube_video_title: movie.youtube_video_title || movie.title,
+                channel_id: movie.channel_id,
+                channel_title: channelTitle || 'Unknown channel',
+                extracted_title: movie.title || null,
+                extracted_actors: movie.extracted_actor ? [movie.extracted_actor] : null,
+                extracted_genre: movie.extracted_genre || null,
+                extracted_year: movie.extracted_year || null,
+                description: movie.description || null,
+                published_at: movie.published_at || null,
+                duration_minutes: movie.runtime_minutes || null,
+                enrichment_status: 'pending',
+                source_table: 'staged_movies',
+                staged_movie_id: movie.id,
+                reason,
+                confidence: confidencePercent,
+                candidates
+            })
+
+        if (error) {
+            // 23505 = a concurrent request queued the same video — that's fine
+            if (error.code !== '23505') {
+                logger.error(`[Manual Queue] Failed to queue ${movie.youtube_video_id}:`, error)
+            }
+            return false
+        }
+
+        logger.info(`[Manual Queue] Queued "${movie.title}" (${movie.youtube_video_id}) for manual review: ${reason}`)
+        return true
+    } catch (err) {
+        logger.error('[Manual Queue] Unexpected error:', err)
+        return false
+    }
+}
+
+// Shared hook run after every auto-enrichment attempt (single + batch paths):
+//   - high confidence + channel threshold set  -> auto-approve
+//   - low confidence (below threshold, or 50 if unset) or no match -> queue for manual review
+async function handlePostEnrichment(movie, enrichmentResult) {
+    const threshold = await getAutoApproveThreshold(movie?.channel_id)
+    const confidencePercent = confidenceAsPercent(enrichmentResult?.confidence)
+
+    if (enrichmentResult?.success) {
+        const autoApproved = await maybeAutoApprove(movie, confidencePercent, threshold)
+        if (autoApproved) return { autoApproved: true, queued: false }
+
+        const lowBar = threshold ?? DEFAULT_LOW_CONFIDENCE_THRESHOLD
+        if (confidencePercent == null || confidencePercent < lowBar) {
+            const queued = await queueForManualEnrichment(movie, {
+                reason: `Low enrichment confidence (${confidencePercent ?? 'unknown'} < ${lowBar})`,
+                confidencePercent,
+                candidates: buildCandidateData(enrichmentResult)
+            })
+            return { autoApproved: false, queued }
+        }
+        return { autoApproved: false, queued: false }
+    }
+
+    // Enrichment found no match at all
+    const queued = await queueForManualEnrichment(movie, {
+        reason: 'No enrichment match found',
+        confidencePercent,
+        candidates: null
+    })
+    return { autoApproved: false, queued }
+}
+
 // POST /api/admin/staging/import - Import movies to staging
 router.post('/import', async (req, res, next) => {
     try {
@@ -310,6 +485,7 @@ router.get('/movies', async (req, res, next) => {
         const status = req.query.status
         const filter = req.query.filter
         const channelId = req.query.channel_id
+        const search = req.query.search
 
         let query = supabase
             .from('staged_movies')
@@ -325,6 +501,12 @@ router.get('/movies', async (req, res, next) => {
 
         if (channelId) {
             query = query.eq('channel_id', channelId)
+        }
+
+        if (search) {
+            // Case-insensitive match on either the cleaned title or the raw YouTube title
+            const escaped = search.replace(/[%,]/g, ' ').trim()
+            query = query.or(`title.ilike.%${escaped}%,youtube_video_title.ilike.%${escaped}%`)
         }
 
         if (filter === 'enriched') {
@@ -449,11 +631,22 @@ router.post('/movies/:id/enrich', async (req, res, next) => {
 
             if (updateError) throw updateError
 
+            // Auto-approve on high confidence / queue for manual review on low
+            const postResult = await handlePostEnrichment(updated, enrichmentResult)
+            if (postResult.autoApproved) {
+                updated.approval_status = 'approved'
+                updated.approved_at = new Date().toISOString()
+                updated.approved_by = 'auto-approve'
+            }
+
             res.json({
                 success: true,
-                data: updated
+                data: postResult.autoApproved ? { ...updated, autoApproved: true } : updated
             })
         } else {
+            // No match found — feed the manual verification queue
+            await handlePostEnrichment(movie, enrichmentResult)
+
             res.status(400).json({
                 success: false,
                 error: 'Enrichment failed',
@@ -963,6 +1156,7 @@ router.post('/publish', async (req, res, next) => {
                         tv_series_id: stagedMovie.tv_series_id,
                         season_number: stagedMovie.season_number,
                         episode_number: stagedMovie.episode_number,
+                        series_type: stagedMovie.series_type || null,
                         category: mapToContentCategory(stagedMovie.category),
                         region_restrictions: stagedMovie.region_restrictions || null,
                         enrichment_source: stagedMovie.enrichment_source,
@@ -1068,6 +1262,7 @@ router.post('/batch-enrich', async (req, res, next) => {
             enriched: 0,
             failed: 0,
             skipped: 0,
+            autoApproved: 0,
             current: null,
             currentIndex: 0,
             startedAt: new Date().toISOString()
@@ -1195,10 +1390,19 @@ async function processEnrichmentBatch(batchId, movieIds, priority) {
                 } else {
                     logger.info(`✅ [Batch Enrich ${batchId}] Enriched: ${movie.title} from ${enrichResult.source}`)
                     progress.enriched++
+
+                    // Auto-approve on high confidence / queue for manual review on low
+                    const postResult = await handlePostEnrichment({ ...movie, ...enrichmentUpdate }, enrichResult)
+                    if (postResult.autoApproved) {
+                        progress.autoApproved++
+                    }
                 }
             } else {
                 logger.warn(`⚠️ [Batch Enrich ${batchId}] No enrichment data for ${movie.title}: ${enrichResult.message}`)
                 progress.skipped++
+
+                // No match — feed the manual verification queue
+                await handlePostEnrichment(movie, enrichResult)
             }
 
         } catch (movieError) {

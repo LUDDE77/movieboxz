@@ -49,20 +49,6 @@ struct ChannelSettingsView: View {
                     // Import Configuration
                     GroupBox(label: Label("Import Configuration", systemImage: "arrow.down.circle")) {
                         VStack(alignment: .leading, spacing: 16) {
-                            Toggle("Auto-import enabled", isOn: $autoImportEnabled)
-                                .help("Automatically import new videos from this channel")
-
-                            HStack {
-                                Text("Auto-import schedule:")
-                                    .frame(width: 180, alignment: .leading)
-                                Picker("", selection: $autoImportSchedule) {
-                                    Text("Manual").tag("manual")
-                                    Text("Daily").tag("daily")
-                                    Text("Weekly").tag("weekly")
-                                }
-                                .frame(width: 150)
-                            }
-
                             HStack {
                                 Text("Default import limit:")
                                     .frame(width: 180, alignment: .leading)
@@ -147,18 +133,6 @@ struct ChannelSettingsView: View {
                     // Approval Settings
                     GroupBox(label: Label("Approval Settings", systemImage: "checkmark.circle")) {
                         VStack(alignment: .leading, spacing: 16) {
-                            HStack {
-                                Text("Auto-approve threshold:")
-                                    .frame(width: 180, alignment: .leading)
-                                TextField("0.85", text: $autoApproveThreshold)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 100)
-                                Text("(0.0 - 1.0)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .help("Movies with enrichment confidence above this threshold will be auto-approved (leave empty to disable)")
-
                             Toggle("Require manual review", isOn: $requireManualReview)
                                 .help("Always require manual review before publishing")
                         }
@@ -176,20 +150,6 @@ struct ChannelSettingsView: View {
                                     .frame(width: 200)
                             }
                             .help("Tag applied to all movies from this channel for filtering")
-
-                            HStack {
-                                Text("Quality tier:")
-                                    .frame(width: 180, alignment: .leading)
-                                Picker("", selection: $qualityTier) {
-                                    ForEach(QualityTier.allCases, id: \.rawValue) { tier in
-                                        Text(tier.displayName).tag(tier.rawValue)
-                                    }
-                                }
-                                .frame(width: 150)
-                            }
-
-                            Toggle("Featured channel", isOn: $isFeatured)
-                                .help("Mark this channel as featured in the app")
                         }
                         .padding()
                     }
@@ -208,8 +168,79 @@ struct ChannelSettingsView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+
+                            Text("These flags sync automatically (server-side) with the channel classification shown on the Pattern tab — saving here also updates the channel's Series/Kids badges, and vice versa.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         .padding()
+                    }
+
+                    // Not-yet-active settings (stored, but no backend feature reads them)
+                    GroupBox {
+                        DisclosureGroup {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("These options are saved to the database but nothing reads them yet — there is no auto-import scheduler, no auto-approval, and quality tier / featured flags are not used by any endpoint. They may be wired up later.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 8)
+
+                                Toggle("Auto-import enabled", isOn: $autoImportEnabled)
+                                    .help("Stored only — no scheduler exists yet")
+
+                                HStack {
+                                    Text("Auto-import schedule:")
+                                        .frame(width: 180, alignment: .leading)
+                                    Picker("", selection: $autoImportSchedule) {
+                                        Text("Manual").tag("manual")
+                                        Text("Daily").tag("daily")
+                                        Text("Weekly").tag("weekly")
+                                    }
+                                    .frame(width: 150)
+                                }
+
+                                HStack {
+                                    Text("Auto-approve threshold:")
+                                        .frame(width: 180, alignment: .leading)
+                                    TextField("0.85", text: $autoApproveThreshold)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 100)
+                                    Text("(0.0 - 1.0)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .help("Stored only — auto-approval is not implemented yet")
+
+                                HStack {
+                                    Text("Quality tier:")
+                                        .frame(width: 180, alignment: .leading)
+                                    Picker("", selection: $qualityTier) {
+                                        ForEach(QualityTier.allCases, id: \.rawValue) { tier in
+                                            Text(tier.displayName).tag(tier.rawValue)
+                                        }
+                                    }
+                                    .frame(width: 150)
+                                }
+
+                                Toggle("Featured channel", isOn: $isFeatured)
+                                    .help("Stored only — not read by the apps yet")
+                            }
+                            .padding(.leading, 4)
+                        } label: {
+                            Label {
+                                HStack(spacing: 8) {
+                                    Text("Not yet active")
+                                        .fontWeight(.semibold)
+                                    Text("stored but has no effect yet")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "hourglass")
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        .padding(8)
                     }
 
                     // Statistics (read-only)
@@ -341,6 +372,8 @@ struct ChannelSettingsView: View {
                 // Build updated settings
                 guard var updatedSettings = settings else {
                     print("❌ [Settings] No existing settings found")
+                    error = "Settings have not loaded yet — try refreshing the tab."
+                    isSaving = false
                     return
                 }
 

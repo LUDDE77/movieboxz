@@ -12,10 +12,13 @@ enum TVSeriesFilter: String, CaseIterable {
 // MARK: - Group model
 
 struct TVShowGroup: Identifiable {
+    /// Stable grouping key: "series:<tv_series_id>" for assigned episodes,
+    /// "title:<title>" for rows not linked to a series yet.
+    let id: String
     let title: String
+    /// Non-nil when the group represents an actual tv_series row.
+    let seriesId: String?
     var movies: [Movie]
-
-    var id: String { title }
 
     var episodeCount: Int { movies.count }
 
@@ -51,9 +54,11 @@ struct TVSeriesView: View {
     @State private var selectedMovie: Movie?
     @State private var expandedGroups: Set<String> = []
 
-    // Detail panel state
-    @State private var editSeason: Int = 1
-    @State private var editEpisode: Int = 1
+    // Detail panel state.
+    // Season/episode are kept as text so "unset" is representable: an empty
+    // field is simply not sent on save (previously everything got stamped S1E1).
+    @State private var editSeasonText: String = ""
+    @State private var editEpisodeText: String = ""
     @State private var editSeriesType: String = ""
     @State private var editTvSeriesId: String = ""
     @State private var editIsTvShow: Bool = false
@@ -71,11 +76,32 @@ struct TVSeriesView: View {
     @State private var createSeriesError: String?
 
     var filteredGroups: [TVShowGroup] {
-        let grouped = Dictionary(grouping: tvMovies, by: { $0.title })
-        var groups = grouped.map { title, movies -> TVShowGroup in
-            TVShowGroup(title: title, movies: movies.sorted { ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0) })
+        // Group by tv_series_id when assigned; fall back to title only for
+        // unassigned rows (title-string grouping merges distinct series that
+        // share a cleaned title).
+        let grouped = Dictionary(grouping: tvMovies) { movie -> String in
+            if let sid = movie.tvSeriesId, !sid.isEmpty {
+                return "series:\(sid)"
+            }
+            return "title:\(movie.title)"
         }
-        .sorted { $0.title < $1.title }
+        var groups = grouped.map { key, movies -> TVShowGroup in
+            let seriesId: String? = key.hasPrefix("series:") ? String(key.dropFirst("series:".count)) : nil
+            let title: String
+            if let seriesId, let series = seriesList.first(where: { $0.id == seriesId }) {
+                title = series.title
+            } else {
+                title = movies.first?.title ?? "Unknown"
+            }
+            let sortedMovies = movies.sorted {
+                if ($0.seasonNumber ?? 0) != ($1.seasonNumber ?? 0) {
+                    return ($0.seasonNumber ?? 0) < ($1.seasonNumber ?? 0)
+                }
+                return ($0.episodeNumber ?? 0) < ($1.episodeNumber ?? 0)
+            }
+            return TVShowGroup(id: key, title: title, seriesId: seriesId, movies: sortedMovies)
+        }
+        .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
         switch selectedFilter {
         case .all:
@@ -365,28 +391,24 @@ struct TVSeriesView: View {
                     Text("Season")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    HStack {
-                        Stepper("", value: $editSeason, in: 1...99)
-                            .labelsHidden()
-                        TextField("Season", value: $editSeason, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 60)
-                    }
+                    TextField("—", text: $editSeasonText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 60)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Episode")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    HStack {
-                        Stepper("", value: $editEpisode, in: 1...999)
-                            .labelsHidden()
-                        TextField("Episode", value: $editEpisode, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 70)
-                    }
+                    TextField("—", text: $editEpisodeText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 70)
                 }
             }
+
+            Text("Leave season/episode blank to keep them unset — blank fields are not saved.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Series Type")
@@ -535,12 +557,24 @@ struct TVSeriesView: View {
         error = nil
 
         do {
-            async let moviesTask = apiService.getTVContent()
-            async let seriesTask = apiService.getAdminTVSeriesList()
+            // Fetch every TV series (paged) so pickers show series beyond 100.
+            async let seriesTask = apiService.fetchAllTvSeries()
 
-            let (movies, series) = try await (moviesTask, seriesTask)
-            tvMovies = movies
-            seriesList = series
+            // Page through ALL TV content instead of stopping at the first page.
+            var allMovies: [Movie] = []
+            var page = 1
+            while true {
+                let data = try await apiService.getTVContentPaged(page: page, limit: 200)
+                allMovies.append(contentsOf: data.movies)
+                let totalPages = max(data.pagination.pages, 1)
+                if page >= totalPages || data.movies.isEmpty { break }
+                page += 1
+                if page > 500 { break } // safety valve
+            }
+
+            tvMovies = allMovies
+            seriesList = try await seriesTask
+                .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         } catch {
             self.error = error.localizedDescription
         }
@@ -551,8 +585,10 @@ struct TVSeriesView: View {
     // MARK: - Edit Helpers
 
     private func populateEditFields(from movie: Movie) {
-        editSeason = movie.seasonNumber ?? 1
-        editEpisode = movie.episodeNumber ?? 1
+        // Empty text = the movie has no season/episode; nothing is sent unless
+        // the user types a value (or the movie already had one).
+        editSeasonText = movie.seasonNumber.map(String.init) ?? ""
+        editEpisodeText = movie.episodeNumber.map(String.init) ?? ""
         editSeriesType = movie.seriesType ?? ""
         editTvSeriesId = movie.tvSeriesId ?? ""
         editIsTvShow = movie.isTvShow ?? false
@@ -564,34 +600,58 @@ struct TVSeriesView: View {
     private func saveChanges() async {
         guard let movie = selectedMovie else { return }
 
-        isSaving = true
         saveError = nil
         saveSuccess = false
 
-        do {
-            let tvSeriesIdToSend: String? = editTvSeriesId.isEmpty ? nil : editTvSeriesId
-            let seriesTypeToSend: String? = editSeriesType.isEmpty ? nil : editSeriesType
+        // Parse season/episode: blank means "leave unset" (not sent).
+        let seasonText = editSeasonText.trimmingCharacters(in: .whitespaces)
+        let episodeText = editEpisodeText.trimmingCharacters(in: .whitespaces)
 
-            let updatedMovie = try await apiService.updateMovieTVInfo(
+        let seasonToSend: Int?
+        if seasonText.isEmpty {
+            seasonToSend = nil
+        } else if let value = Int(seasonText), value > 0 {
+            seasonToSend = value
+        } else {
+            saveError = "Season must be a positive whole number (or blank)"
+            return
+        }
+
+        let episodeToSend: Int?
+        if episodeText.isEmpty {
+            episodeToSend = nil
+        } else if let value = Int(episodeText), value > 0 {
+            episodeToSend = value
+        } else {
+            saveError = "Episode must be a positive whole number (or blank)"
+            return
+        }
+
+        isSaving = true
+
+        do {
+            let seriesTypeToSend: String? = editSeriesType.isEmpty ? nil : editSeriesType
+            let clearSeries = editTvSeriesId.isEmpty
+            let tvSeriesIdToSend: String? = clearSeries ? nil : editTvSeriesId
+
+            let result = try await apiService.updateMovieTVInfo(
                 movieId: movie.id,
-                seasonNumber: editSeason,
-                episodeNumber: editEpisode,
+                seasonNumber: seasonToSend,
+                episodeNumber: episodeToSend,
                 seriesType: seriesTypeToSend,
                 tvSeriesId: tvSeriesIdToSend,
+                clearSeries: clearSeries,
                 isTvShow: editIsTvShow,
                 isTvSeries: editIsTvSeries
             )
 
-            // Update local state
-            if let idx = tvMovies.firstIndex(where: { $0.id == updatedMovie.id }) {
-                tvMovies[idx] = updatedMovie
+            // Merge the slim result back into local state.
+            if let idx = tvMovies.firstIndex(where: { $0.id == result.id }) {
+                let updated = tvMovies[idx].updatingTVInfo(from: result)
+                tvMovies[idx] = updated
+                selectedMovie = updated
             }
-            selectedMovie = updatedMovie
             saveSuccess = true
-
-            // Auto-clear success after 2 seconds
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            saveSuccess = false
         } catch {
             saveError = error.localizedDescription
         }
@@ -630,6 +690,65 @@ struct TVSeriesView: View {
         newSeriesImdbId = ""
         newSeriesDescription = ""
         createSeriesError = nil
+    }
+}
+
+// MARK: - Movie + TVInfoUpdateResult merge
+
+private extension Movie {
+    /// Returns a copy of this movie with the TV fields replaced by the slim
+    /// PATCH /tv-info result (identity/enrichment fields are preserved locally).
+    /// `tvSeriesId`/`seasonNumber`/`episodeNumber`/`seriesType` are taken directly
+    /// from the result since the endpoint returns their current DB state —
+    /// including nil after an explicit clear.
+    func updatingTVInfo(from r: TVInfoUpdateResult) -> Movie {
+        Movie(
+            id: id,
+            youtubeVideoId: youtubeVideoId,
+            youtubeVideoTitle: youtubeVideoTitle,
+            title: r.title ?? title,
+            originalTitle: originalTitle,
+            channelTitle: r.channelTitle ?? channelTitle,
+            releaseDate: releaseDate,
+            runtimeMinutes: runtimeMinutes,
+            imdbRating: imdbRating,
+            imdbVotes: imdbVotes,
+            genres: genres,
+            tmdbId: tmdbId,
+            imdbId: r.imdbId ?? imdbId,
+            isAvailable: r.isAvailable ?? isAvailable,
+            viewCount: viewCount,
+            likeCount: likeCount,
+            commentCount: commentCount,
+            createdAt: createdAt,
+            updatedAt: r.updatedAt ?? updatedAt,
+            publishedAt: publishedAt,
+            description: description,
+            category: category,
+            quality: quality,
+            language: language,
+            rated: rated,
+            director: director,
+            actors: actors,
+            country: country,
+            isTvShow: r.isTvShow ?? isTvShow,
+            isTvSeries: r.isTvSeries ?? isTvSeries,
+            tvSeriesId: r.tvSeriesId,
+            seasonNumber: r.seasonNumber,
+            episodeNumber: r.episodeNumber,
+            seriesType: r.seriesType,
+            isKidsContent: isKidsContent,
+            posterPath: posterPath,
+            backdropPath: backdropPath,
+            enrichmentSource: enrichmentSource,
+            featured: featured,
+            featuredOrder: featuredOrder,
+            trending: trending,
+            staffPick: staffPick,
+            addedAt: addedAt,
+            lastValidated: lastValidated,
+            needsVerification: needsVerification
+        )
     }
 }
 

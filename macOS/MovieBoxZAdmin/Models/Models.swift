@@ -7,6 +7,72 @@ struct APIResponse<T: Codable>: Codable {
     let message: String?
 }
 
+/// Tolerant response for endpoints that return only `{ success, message }`
+/// (e.g. DELETE /featured/:id, PATCH /featured/reorder). `data` is optional so
+/// these no-data responses decode without throwing.
+struct BasicResponse: Codable {
+    let success: Bool
+    let message: String?
+    let error: String?
+}
+
+/// Tolerant generic response where `data` may be absent.
+struct BasicAPIResponse<T: Codable>: Codable {
+    let success: Bool
+    let message: String?
+    let data: T?
+}
+
+// MARK: - Pagination (tolerant)
+/// Decodes pagination that uses either `pages` or `totalPages` for the page count.
+struct PaginationInfo: Codable, Hashable {
+    let page: Int
+    let limit: Int
+    let total: Int
+    let pages: Int
+
+    enum CodingKeys: String, CodingKey {
+        case page, limit, total, pages, totalPages
+    }
+
+    init(page: Int, limit: Int, total: Int, pages: Int) {
+        self.page = page
+        self.limit = limit
+        self.total = total
+        self.pages = pages
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        page = (try? c.decode(Int.self, forKey: .page)) ?? 1
+        limit = (try? c.decode(Int.self, forKey: .limit)) ?? 0
+        total = (try? c.decode(Int.self, forKey: .total)) ?? 0
+        if let p = try? c.decode(Int.self, forKey: .pages) {
+            pages = p
+        } else if let tp = try? c.decode(Int.self, forKey: .totalPages) {
+            pages = tp
+        } else {
+            pages = 0
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(page, forKey: .page)
+        try c.encode(limit, forKey: .limit)
+        try c.encode(total, forKey: .total)
+        try c.encode(pages, forKey: .pages)
+    }
+}
+
+// MARK: - YouTube Quota
+struct QuotaInfo: Codable {
+    let date: String
+    let used: Int
+    let budget: Int
+    let remaining: Int
+}
+
 // MARK: - Admin Stats
 struct AdminStats: Codable {
     let totalMovies: Int
@@ -140,6 +206,58 @@ struct Movie: Codable, Identifiable {
     }
 }
 
+extension Movie {
+    /// Build a `Movie` from the slim `TVInfoUpdateResult` (fills unavailable fields
+    /// with sensible defaults). Used by the deprecated Movie-returning TV-info overload.
+    init(from r: TVInfoUpdateResult) {
+        self.id = r.id
+        self.youtubeVideoId = r.youtubeVideoId ?? ""
+        self.youtubeVideoTitle = r.youtubeVideoTitle ?? ""
+        self.title = r.title ?? ""
+        self.originalTitle = nil
+        self.channelTitle = r.channelTitle
+        self.releaseDate = nil
+        self.runtimeMinutes = nil
+        self.imdbRating = nil
+        self.imdbVotes = nil
+        self.genres = []
+        self.tmdbId = nil
+        self.imdbId = r.imdbId
+        self.isAvailable = r.isAvailable ?? true
+        self.viewCount = 0
+        self.likeCount = 0
+        self.commentCount = nil
+        self.createdAt = r.createdAt ?? ""
+        self.updatedAt = r.updatedAt
+        self.publishedAt = nil
+        self.description = nil
+        self.category = nil
+        self.quality = nil
+        self.language = nil
+        self.rated = nil
+        self.director = nil
+        self.actors = nil
+        self.country = nil
+        self.isTvShow = r.isTvShow
+        self.isTvSeries = r.isTvSeries
+        self.tvSeriesId = r.tvSeriesId
+        self.seasonNumber = r.seasonNumber
+        self.episodeNumber = r.episodeNumber
+        self.seriesType = r.seriesType
+        self.isKidsContent = nil
+        self.posterPath = nil
+        self.backdropPath = nil
+        self.enrichmentSource = nil
+        self.featured = nil
+        self.featuredOrder = nil
+        self.trending = nil
+        self.staffPick = nil
+        self.addedAt = nil
+        self.lastValidated = nil
+        self.needsVerification = nil
+    }
+}
+
 // MARK: - Featured Movie (lightweight, for featured carousel management)
 struct FeaturedMovieItem: Codable, Identifiable {
     let id: String
@@ -157,8 +275,55 @@ struct FeaturedMovieItem: Codable, Identifiable {
     }
 
     var posterURL: URL? {
-        guard let path = posterPath else { return nil }
+        guard let path = posterPath, !path.isEmpty else { return nil }
+        // OMDB posters are already full URLs; TMDB posters are relative paths.
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            return URL(string: path)
+        }
         return URL(string: "https://image.tmdb.org/t/p/w342\(path)")
+    }
+}
+
+// MARK: - TV Info Update Result
+/// Slim result returned by PATCH /api/admin/movies/:id/tv-info.
+/// The endpoint returns only the movie's identity + TV fields (no genres,
+/// view_count or like_count), so decoding it as a full `Movie` false-fails.
+struct TVInfoUpdateResult: Codable, Identifiable {
+    let id: String
+    let title: String?
+    let youtubeVideoId: String?
+    let youtubeVideoTitle: String?
+    let isTvShow: Bool?
+    let isTvSeries: Bool?
+    let tvSeriesId: String?
+    let seasonNumber: Int?
+    let episodeNumber: Int?
+    let seriesType: String?
+    let imdbId: String?
+    let channelId: String?
+    let isAvailable: Bool?
+    let createdAt: String?
+    let updatedAt: String?
+    let channelTitle: String?
+    let channelThumbnail: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title
+        case youtubeVideoId = "youtube_video_id"
+        case youtubeVideoTitle = "youtube_video_title"
+        case isTvShow = "is_tv_show"
+        case isTvSeries = "is_tv_series"
+        case tvSeriesId = "tv_series_id"
+        case seasonNumber = "season_number"
+        case episodeNumber = "episode_number"
+        case seriesType = "series_type"
+        case imdbId = "imdb_id"
+        case channelId = "channel_id"
+        case isAvailable = "is_available"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case channelTitle = "channel_title"
+        case channelThumbnail = "channel_thumbnail"
     }
 }
 
@@ -309,10 +474,19 @@ struct ExtractedMetadata: Codable {
     let actorsArray: [String]?
     let genre: String?
     let year: Int?
+    let episodeName: String?
+    let season: Int?
+    let episode: Int?
     let patternMatched: Bool?
     let confidence: Double?
     let rawTitle: String?
     let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case title, actors, actorsArray, genre, year, season, episode
+        case episodeName = "episode_name"
+        case patternMatched, confidence, rawTitle, error
+    }
 }
 
 struct PatternTestData: Codable {
@@ -393,6 +567,8 @@ enum APIError: Error, LocalizedError {
     case invalidURL
     case invalidResponse
     case httpError(Int)
+    /// Carries the backend-provided { error / message } text alongside the status code.
+    case server(status: Int, message: String)
     case decodingError(String)
     case networkError(Error)
     case unauthorized
@@ -405,6 +581,8 @@ enum APIError: Error, LocalizedError {
             return "Invalid response from server"
         case .httpError(let code):
             return "HTTP error: \(code)"
+        case .server(_, let message):
+            return message
         case .decodingError(let message):
             return "Decoding error: \(message)"
         case .networkError(let error):
@@ -413,6 +591,17 @@ enum APIError: Error, LocalizedError {
             return "Unauthorized: Invalid API key"
         }
     }
+}
+
+// MARK: - Paged TV Content / Series
+struct TVContentPagedData: Codable {
+    let movies: [Movie]
+    let pagination: PaginationInfo
+}
+
+struct AdminSeriesPagedData: Codable {
+    let series: [TvSeries]
+    let pagination: PaginationInfo
 }
 
 // MARK: - Staging Workflow Models
@@ -931,6 +1120,13 @@ struct ChannelSettingsData: Codable {
     let settings: ChannelSettings
 }
 
+/// Per-video failure stored in import_history.error_details (JSONB with camelCase keys).
+struct ImportVideoError: Codable, Hashable {
+    let videoId: String?
+    let title: String?
+    let error: String?
+}
+
 // Import History
 struct ImportHistory: Codable, Identifiable, Hashable {
     let id: String
@@ -949,7 +1145,11 @@ struct ImportHistory: Codable, Identifiable, Hashable {
     let durationSeconds: Int?
     let currentVideoTitle: String?
     let currentVideoIndex: Int?
-    
+    let patternMatchCount: Int?
+    let truncated: Bool?
+    let autoEnriched: Bool?
+    let errorDetails: [ImportVideoError]?
+
     enum CodingKeys: String, CodingKey {
         case id
         case channelId = "channel_id"
@@ -967,6 +1167,10 @@ struct ImportHistory: Codable, Identifiable, Hashable {
         case durationSeconds = "duration_seconds"
         case currentVideoTitle = "current_video_title"
         case currentVideoIndex = "current_video_index"
+        case patternMatchCount = "pattern_match_count"
+        case truncated
+        case autoEnriched = "auto_enriched"
+        case errorDetails = "error_details"
     }
     
     var statusEmoji: String {
@@ -1003,7 +1207,9 @@ struct ImportProgress: Codable {
     let currentIndex: Int?
     let channelTitle: String?
     let percentage: Int?
-    
+    let patternMatchCount: Int?
+    let truncated: Bool?
+
     enum CodingKeys: String, CodingKey {
         case status
         case found
@@ -1014,6 +1220,8 @@ struct ImportProgress: Codable {
         case currentIndex
         case channelTitle
         case percentage
+        case patternMatchCount = "pattern_match_count"
+        case truncated
     }
 }
 
@@ -1086,12 +1294,37 @@ enum ImportSortOrder: String, CaseIterable {
     }
 }
 
+// MARK: - Bulk Maintenance Results
+
+/// Result of POST /api/admin/movies/fix-titles
+struct FixTitlesResult: Codable {
+    let total: Int
+    let updated: Int
+    let unchanged: Int
+    let failed: Int
+    let changes: [FixTitleChange]?
+}
+
+struct FixTitleChange: Codable, Identifiable {
+    let id: String
+    let oldTitle: String
+    let newTitle: String
+}
+
+/// Result of POST /api/admin/enrich-enhanced (results array intentionally omitted;
+/// shape varies per movie — later agents can extend if a detail table is needed).
+struct EnrichEnhancedResult: Codable {
+    let total: Int
+    let enriched: Int
+    let failed: Int
+}
+
 // Quality Tier Options
 enum QualityTier: String, CaseIterable {
     case premium = "premium"
     case standard = "standard"
     case basic = "basic"
-    
+
     var displayName: String {
         switch self {
         case .premium: return "Premium"
@@ -1099,4 +1332,255 @@ enum QualityTier: String, CaseIterable {
         case .basic: return "Basic"
         }
     }
+}
+
+// MARK: - Manual Enrichment (Verification) Queue
+
+/// A candidate match proposed by the enrichment pipeline
+/// (manual_enrichment_queue.candidates JSONB).
+struct EnrichmentCandidate: Codable, Hashable, Identifiable {
+    let source: String?
+    let title: String?
+    let releaseDate: String?
+    let tmdbId: Int?
+    let imdbId: String?
+    let posterPath: String?
+
+    enum CodingKeys: String, CodingKey {
+        case source, title
+        case releaseDate = "release_date"
+        case tmdbId = "tmdb_id"
+        case imdbId = "imdb_id"
+        case posterPath = "poster_path"
+    }
+
+    var id: String {
+        "\(source ?? "?")|\(imdbId ?? "-")|\(tmdbId.map(String.init) ?? "-")|\(title ?? "-")"
+    }
+
+    var releaseYear: String? {
+        guard let releaseDate, releaseDate.count >= 4 else { return nil }
+        return String(releaseDate.prefix(4))
+    }
+}
+
+/// Row in the manual enrichment (verification) queue.
+struct EnrichmentQueueItem: Codable, Identifiable, Hashable {
+    let id: String
+    let youtubeVideoId: String
+    let youtubeVideoTitle: String
+    let channelId: String?
+    let channelTitle: String?
+    let extractedTitle: String?
+    let extractedActors: [String]?
+    let extractedGenre: String?
+    let extractedYear: Int?
+    let description: String?
+    let publishedAt: String?
+    let durationMinutes: Int?
+    let thumbnailUrl: String?
+    let manualImdbId: String?
+    let manualTmdbId: Int?
+    let manualNotes: String?
+    let enrichmentStatus: String
+    let sourceTable: String?
+    let stagedMovieId: String?
+    let reason: String?
+    let confidence: Double?
+    let candidates: [EnrichmentCandidate]?
+    let createdAt: String?
+    let updatedAt: String?
+    let processedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case youtubeVideoId = "youtube_video_id"
+        case youtubeVideoTitle = "youtube_video_title"
+        case channelId = "channel_id"
+        case channelTitle = "channel_title"
+        case extractedTitle = "extracted_title"
+        case extractedActors = "extracted_actors"
+        case extractedGenre = "extracted_genre"
+        case extractedYear = "extracted_year"
+        case description
+        case publishedAt = "published_at"
+        case durationMinutes = "duration_minutes"
+        case thumbnailUrl = "thumbnail_url"
+        case manualImdbId = "manual_imdb_id"
+        case manualTmdbId = "manual_tmdb_id"
+        case manualNotes = "manual_notes"
+        case enrichmentStatus = "enrichment_status"
+        case sourceTable = "source_table"
+        case stagedMovieId = "staged_movie_id"
+        case reason
+        case confidence
+        case candidates
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case processedAt = "processed_at"
+    }
+
+    var youtubeURL: URL? {
+        URL(string: "https://www.youtube.com/watch?v=\(youtubeVideoId)")
+    }
+
+    var youtubeThumbnailURL: URL? {
+        if let thumbnailUrl, !thumbnailUrl.isEmpty { return URL(string: thumbnailUrl) }
+        return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
+    }
+}
+
+struct EnrichmentQueueData: Codable {
+    let items: [EnrichmentQueueItem]
+    let total: Int?
+    let limit: Int?
+    let offset: Int?
+}
+
+struct EnrichmentQueueItemData: Codable {
+    let item: EnrichmentQueueItem
+}
+
+struct EnrichmentQueueStats: Codable {
+    let total: Int
+    let pending: Int
+    let inProgress: Int
+    let matched: Int
+    let skipped: Int
+
+    enum CodingKeys: String, CodingKey {
+        case total, pending, matched, skipped
+        case inProgress = "in_progress"
+    }
+}
+
+struct EnrichmentQueueStatsData: Codable {
+    let stats: EnrichmentQueueStats
+}
+
+// MARK: - Duplicate Manager
+
+/// Slim movie projection returned by GET /api/admin/duplicates.
+struct DuplicateMovie: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let youtubeVideoId: String?
+    let isAvailable: Bool?
+    let viewCount: Int?
+    let channelTitle: String?
+    let posterPath: String?
+    let imdbId: String?
+    let tvSeriesId: String?
+    let seasonNumber: Int?
+    let episodeNumber: Int?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title
+        case youtubeVideoId = "youtube_video_id"
+        case isAvailable = "is_available"
+        case viewCount = "view_count"
+        case channelTitle = "channel_title"
+        case posterPath = "poster_path"
+        case imdbId = "imdb_id"
+        case tvSeriesId = "tv_series_id"
+        case seasonNumber = "season_number"
+        case episodeNumber = "episode_number"
+        case createdAt = "created_at"
+    }
+
+    var youtubeURL: URL? {
+        guard let youtubeVideoId, !youtubeVideoId.isEmpty else { return nil }
+        return URL(string: "https://www.youtube.com/watch?v=\(youtubeVideoId)")
+    }
+}
+
+struct DuplicateGroup: Codable, Identifiable, Hashable {
+    let key: String
+    let type: String   // 'imdb' | 'episode'
+    let movies: [DuplicateMovie]
+
+    var id: String { "\(type):\(key)" }
+}
+
+struct DuplicateGroupsData: Codable {
+    let groups: [DuplicateGroup]
+    let total: Int
+}
+
+struct DuplicateResolveData: Codable {
+    let deleted: Int
+}
+
+// MARK: - Episode Matching
+
+struct EpisodeGuideEntry: Codable, Hashable {
+    let season: Int
+    let episode: Int
+    let name: String?
+    let airDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case season, episode, name
+        case airDate = "air_date"
+    }
+}
+
+/// Stored episode guide for a series (GET /api/admin/tv-series/:id/episode-guide).
+struct EpisodeGuideInfo: Codable {
+    let source: String?
+    let sourceId: String?
+    let updatedAt: String?
+    let episodes: [EpisodeGuideEntry]
+}
+
+/// Result of POST /api/admin/tv-series/:id/episode-guide.
+struct EpisodeGuideFetchResult: Codable {
+    let episodesCount: Int
+    let seasons: Int
+}
+
+struct EpisodeMatchProposal: Codable, Identifiable, Hashable {
+    let stagedMovieId: String
+    let youtubeTitle: String
+    let tvSeriesId: String
+    let season: Int?
+    let episode: Int?
+    let episodeName: String?
+    let confidence: Double?
+
+    var id: String { stagedMovieId }
+}
+
+struct EpisodeMatchUnmatched: Codable, Identifiable, Hashable {
+    let stagedMovieId: String?
+    let youtubeTitle: String?
+    let reason: String?
+
+    var id: String { stagedMovieId ?? (youtubeTitle ?? "?") }
+}
+
+/// Dry-run result of POST /api/admin/channel-management/:id/match-episodes.
+struct EpisodeMatchDryRunData: Codable {
+    let proposals: [EpisodeMatchProposal]
+    let unmatched: [EpisodeMatchUnmatched]
+}
+
+/// Body row for POST /api/admin/channel-management/:id/confirm-episode-matches.
+struct EpisodeMatchConfirmation: Codable {
+    let stagedMovieId: String
+    let tvSeriesId: String
+    let season: Int?
+    let episode: Int?
+    let episodeName: String?
+}
+
+struct EpisodeMatchConfirmError: Codable, Hashable {
+    let stagedMovieId: String?
+    let error: String?
+}
+
+struct EpisodeMatchConfirmData: Codable {
+    let updated: Int
+    let errors: [EpisodeMatchConfirmError]?
 }

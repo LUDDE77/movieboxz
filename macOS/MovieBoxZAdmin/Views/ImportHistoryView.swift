@@ -1,10 +1,39 @@
 import SwiftUI
 
+// MARK: - Import History Extras
+// The backend returns `auto_enriched` and `error_details` on import_history
+// rows, but the shared `ImportHistory` model (Models.swift, not owned here)
+// does not decode them yet. Until it does, they are fetched with a
+// supplementary decode of the same endpoint.
+
+struct ImportErrorDetail: Codable, Hashable {
+    let videoId: String?
+    let title: String?
+    let error: String?
+}
+
+struct ImportHistoryExtras: Codable {
+    let id: String
+    let autoEnriched: Bool?
+    let errorDetails: [ImportErrorDetail]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case autoEnriched = "auto_enriched"
+        case errorDetails = "error_details"
+    }
+}
+
+private struct ImportHistoryExtrasData: Codable {
+    let imports: [ImportHistoryExtras]
+}
+
 struct ImportHistoryView: View {
     let channel: ChannelWithPattern
     @StateObject private var apiService = AdminAPIService()
 
     @State private var imports: [ImportHistory] = []
+    @State private var extrasById: [String: ImportHistoryExtras] = [:]
     @State private var isLoading = false
     @State private var error: String?
     @State private var selectedImport: ImportHistory?
@@ -80,7 +109,10 @@ struct ImportHistoryView: View {
         }
         .sheet(isPresented: $showDetailsSheet) {
             if let importRecord = selectedImport {
-                ImportDetailsSheet(importRecord: importRecord)
+                ImportDetailsSheet(
+                    importRecord: importRecord,
+                    extras: extrasById[importRecord.id]
+                )
             }
         }
         .task {
@@ -101,17 +133,34 @@ struct ImportHistoryView: View {
             self.error = "Failed to load import history: \(error.localizedDescription)"
         }
 
+        // Supplementary decode of the same endpoint for auto_enriched /
+        // error_details (missing from the shared ImportHistory model).
+        // Failure here degrades gracefully — the extras just stay hidden.
+        do {
+            let data = try await ChannelAdminDirectAPI.send(
+                path: "/channel-management/\(channel.id)/import-history?limit=50",
+                method: "GET"
+            )
+            let extras = try ChannelAdminDirectAPI.decode(ImportHistoryExtrasData.self, from: data)
+            extrasById = Dictionary(uniqueKeysWithValues: extras.imports.map { ($0.id, $0) })
+        } catch {
+            print("Failed to load import history extras: \(error)")
+        }
+
         isLoading = false
     }
 
     func rerunImport(_ importRecord: ImportHistory) {
         Task {
             do {
+                // Preserve the original run's auto-enrich choice (from the
+                // supplementary extras fetch; nil if unavailable).
+                let originalAutoEnrich = extrasById[importRecord.id]?.autoEnriched
                 let request = BulkImportRequest(
                     limit: importRecord.importLimit,
                     sortOrder: importRecord.sortOrder ?? "latest",
                     applySettings: true,
-                    autoEnrich: nil
+                    autoEnrich: originalAutoEnrich == true ? true : nil
                 )
 
                 _ = try await apiService.importAllVideos(
@@ -170,6 +219,27 @@ struct ImportHistoryRow: View {
                         StatLabel(label: "Failed", value: "\(importRecord.videosFailed)", color: .red)
                     }
 
+                    // Pattern match rate (when reported by the backend)
+                    if let match = patternMatch {
+                        StatLabel(
+                            label: "Pattern",
+                            value: "\(match.matched)/\(match.imported) (\(match.percent)%)",
+                            color: match.percent >= 50 ? .green : (match.percent >= 25 ? .orange : .red)
+                        )
+                    }
+
+                    if importRecord.truncated == true {
+                        Text("Stopped at cap")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange.opacity(0.2))
+                            .foregroundColor(.orange)
+                            .cornerRadius(4)
+                            .help("Import stopped at the safety cap — the channel has more videos")
+                    }
+
                     Spacer()
 
                     if importRecord.durationSeconds != nil {
@@ -223,13 +293,21 @@ struct ImportHistoryRow: View {
             }
         }
         .padding()
-        .background(Color.white)
+        .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(statusColor.opacity(0.3), lineWidth: 2)
         )
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+
+    /// Pattern match rate of the imported videos, when reported.
+    var patternMatch: (matched: Int, imported: Int, percent: Int)? {
+        guard let matched = importRecord.patternMatchCount,
+              importRecord.videosImported > 0 else { return nil }
+        let percent = Int((Double(matched) / Double(importRecord.videosImported)) * 100)
+        return (matched, importRecord.videosImported, percent)
     }
 
     var statusIcon: String {
@@ -292,6 +370,7 @@ struct StatLabel: View {
 
 struct ImportDetailsSheet: View {
     let importRecord: ImportHistory
+    var extras: ImportHistoryExtras? = nil
 
     var body: some View {
         VStack(spacing: 24) {
@@ -339,6 +418,19 @@ struct ImportDetailsSheet: View {
                 DetailRow(label: "Videos Skipped", value: "\(importRecord.videosSkipped)", labelWidth: 150, showColon: true)
                 DetailRow(label: "Videos Failed", value: "\(importRecord.videosFailed)", labelWidth: 150, showColon: true)
 
+                if let matched = importRecord.patternMatchCount, importRecord.videosImported > 0 {
+                    let percent = Int((Double(matched) / Double(importRecord.videosImported)) * 100)
+                    DetailRow(label: "Pattern Matched", value: "\(matched) of \(importRecord.videosImported) (\(percent)%)", labelWidth: 150, showColon: true)
+                }
+
+                if importRecord.truncated == true {
+                    DetailRow(label: "Truncated", value: "Stopped at safety cap — channel has more videos", labelWidth: 150, showColon: true)
+                }
+
+                if let autoEnriched = extras?.autoEnriched {
+                    DetailRow(label: "Auto-enrich", value: autoEnriched ? "Enabled" : "Disabled", labelWidth: 150, showColon: true)
+                }
+
                 Divider()
 
                 DetailRow(label: "Started At", value: formatDate(importRecord.startedAt), labelWidth: 150, showColon: true)
@@ -364,12 +456,45 @@ struct ImportDetailsSheet: View {
                             .textSelection(.enabled)
                     }
                 }
+
+                // Per-video failures (import_history.error_details)
+                if let failures = extras?.errorDetails, !failures.isEmpty {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Per-Video Failures (\(failures.count))")
+                            .font(.headline)
+                            .foregroundColor(.red)
+
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(Array(failures.enumerated()), id: \.offset) { _, failure in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(failure.title ?? failure.videoId ?? "Unknown video")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .lineLimit(1)
+                                        Text(failure.error ?? "Unknown error")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(6)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.red.opacity(0.06))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 150)
+                    }
+                }
             }
 
             Spacer()
         }
         .padding(30)
-        .frame(width: 600, height: 600)
+        .frame(width: 600, height: 640)
     }
 
     func formatDate(_ dateString: String) -> String {

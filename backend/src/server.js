@@ -15,12 +15,13 @@ import slowDown from 'express-slow-down'
 import moviesRouter from './routes/movies.js'
 import channelsRouter from './routes/channels.js'
 import channelsAdminRouter from './routes/channelsAdmin.js'
-import channelManagementRouter from './routes/channelManagement.js'
+import channelManagementRouter, { sweepZombieImports } from './routes/channelManagement.js'
 import browseRouter from './routes/browse.js'
 import userRouter from './routes/user.js'
 import adminRouter from './routes/admin.js'
 import healthRouter from './routes/health.js'
 import stagingRouter from './routes/staging-simple.js'
+import duplicatesAdminRouter from './routes/duplicatesAdmin.js'
 import { tvSeriesAdminRouter } from './routes/tvSeriesAdmin.js'
 import seriesRouter from './routes/series.js'
 
@@ -99,6 +100,7 @@ app.use('/api/user', userRouter)
 app.use('/api/admin/channels', channelsAdminRouter)
 app.use('/api/admin/channel-management', channelManagementRouter)
 app.use('/api/admin/staging', stagingRouter)
+app.use('/api/admin/duplicates', duplicatesAdminRouter)
 app.use('/api/admin', tvSeriesAdminRouter)
 app.use('/api/admin', adminRouter)
 
@@ -175,6 +177,13 @@ const server = app.listen(port, () => {
     logger.info(`🎬 MovieBoxZ Backend API running on port ${port}`)
     logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`)
     logger.info(`📊 API Documentation: http://localhost:${port}/`)
+
+    // Sweep imports orphaned in 'running' by a previous crash/restart
+    try {
+        sweepZombieImports().catch(error => logger.error('Zombie import sweep failed at boot:', error))
+    } catch (error) {
+        logger.error('Zombie import sweep failed at boot:', error)
+    }
 
     // Initialize cron jobs in production
     if (process.env.NODE_ENV === 'production') {

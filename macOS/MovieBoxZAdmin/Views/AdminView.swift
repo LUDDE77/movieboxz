@@ -3,6 +3,8 @@ import SwiftUI
 struct AdminView: View {
     @StateObject private var apiService = AdminAPIService()
     @State private var stats: AdminStats?
+    @State private var stagingStats: StagingStats?
+    @State private var quota: QuotaInfo?
     @State private var isLoadingStats = false
     @State private var statsError: String?
     @State private var selectedTab = 0
@@ -14,12 +16,20 @@ struct AdminView: View {
                     .tag(0)
                 Label("Movies", systemImage: "film.fill")
                     .tag(1)
+                Label("Staging", systemImage: "tray.full.fill")
+                    .tag(7)
+                Label("Verification", systemImage: "checkmark.seal.fill")
+                    .tag(8)
+                Label("Duplicates", systemImage: "square.on.square")
+                    .tag(9)
                 Label("Channel Setup", systemImage: "tv.fill")
                     .tag(2)
                 Label("Genres", systemImage: "theatermasks.fill")
                     .tag(3)
                 Label("TV Series", systemImage: "tv.and.mediabox")
                     .tag(4)
+                Label("Series Matching", systemImage: "link")
+                    .tag(10)
                 Label("Featured", systemImage: "star.fill")
                     .tag(5)
                 Label("Settings", systemImage: "gearshape.fill")
@@ -31,9 +41,24 @@ struct AdminView: View {
             Group {
                 switch selectedTab {
                 case 0:
-                    DashboardView(stats: stats, isLoading: isLoadingStats, error: statsError)
+                    DashboardView(
+                        stats: stats,
+                        stagingStats: stagingStats,
+                        quota: quota,
+                        isLoading: isLoadingStats,
+                        error: statsError,
+                        onRefresh: { await loadDashboard() }
+                    )
                 case 1:
                     MoviesView()
+                case 7:
+                    StagingView()
+                case 8:
+                    VerificationQueueView()
+                case 9:
+                    DuplicateManagerView()
+                case 10:
+                    SeriesMatchingView()
                 case 2:
                     ChannelManagementView()
                 case 3:
@@ -50,19 +75,34 @@ struct AdminView: View {
             }
         }
         .task {
-            await loadStats()
+            await loadDashboard()
+        }
+        .onChange(of: selectedTab) { _, newValue in
+            // Reload the dashboard whenever the user navigates back to it.
+            if newValue == 0 {
+                Task { await loadDashboard() }
+            }
         }
     }
 
-    private func loadStats() async {
+    private func loadDashboard() async {
         isLoadingStats = true
         statsError = nil
 
-        do {
-            stats = try await apiService.getStats()
-        } catch {
-            statsError = error.localizedDescription
-            print("Error loading stats: \(error)")
+        // Load the core stats (funnel + quota are best-effort so a missing
+        // endpoint never blanks the whole dashboard).
+        async let statsTask = try? await apiService.getStats()
+        async let stagingTask = try? await apiService.getStagingStats()
+        async let quotaTask = try? await apiService.getQuota()
+
+        let loadedStats = await statsTask
+        stagingStats = await stagingTask
+        quota = await quotaTask
+
+        if let loadedStats {
+            stats = loadedStats
+        } else if stats == nil {
+            statsError = "Failed to load statistics"
         }
 
         isLoadingStats = false
@@ -71,15 +111,19 @@ struct AdminView: View {
 
 struct DashboardView: View {
     let stats: AdminStats?
+    let stagingStats: StagingStats?
+    let quota: QuotaInfo?
     let isLoading: Bool
     let error: String?
+    let onRefresh: () async -> Void
 
     var body: some View {
         ScrollView {
-            if isLoading {
+            if isLoading && stats == nil {
                 ProgressView("Loading statistics...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = error {
+                    .padding(.top, 80)
+            } else if let error = error, stats == nil {
                 VStack {
                     Text("Failed to load statistics")
                         .font(.headline)
@@ -87,28 +131,49 @@ struct DashboardView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-            } else if let stats = stats {
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 20) {
-                    StatCard(title: "Total Movies", value: "\(stats.totalMovies)", icon: "film.fill", color: .blue)
-                    StatCard(title: "Available Movies", value: "\(stats.availableMovies)", icon: "checkmark.circle.fill", color: .green)
-                    StatCard(title: "Total Channels", value: "\(stats.totalChannels)", icon: "tv.fill", color: .purple)
-                    StatCard(title: "Total Genres", value: "\(stats.totalGenres)", icon: "theatermasks.fill", color: .orange)
-                    StatCard(title: "Enriched Movies", value: "\(stats.enrichedMovies)", icon: "sparkles", color: .yellow)
-                    StatCard(title: "Pending Enrichment", value: "\(stats.pendingEnrichment)", icon: "clock.fill", color: .red)
-                    StatCard(title: "Recently Added", value: "\(stats.recentlyAdded)", icon: "plus.circle.fill", color: .cyan)
-                    StatCard(title: "Last Curation", value: formatDate(stats.lastCuration), icon: "calendar", color: .gray)
+                .padding(.top, 80)
+            } else {
+                VStack(alignment: .leading, spacing: 24) {
+                    if let quota = quota {
+                        QuotaGaugeCard(quota: quota)
+                    }
+
+                    if let staging = stagingStats {
+                        PipelineFunnelView(staging: staging, publishedTotal: stats?.totalMovies)
+                    }
+
+                    if let stats = stats {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 20) {
+                            StatCard(title: "Total Movies", value: "\(stats.totalMovies)", icon: "film.fill", color: .blue)
+                            StatCard(title: "Available Movies", value: "\(stats.availableMovies)", icon: "checkmark.circle.fill", color: .green)
+                            StatCard(title: "Total Channels", value: "\(stats.totalChannels)", icon: "tv.fill", color: .purple)
+                            StatCard(title: "Total Genres", value: "\(stats.totalGenres)", icon: "theatermasks.fill", color: .orange)
+                            StatCard(title: "Enriched Movies", value: "\(stats.enrichedMovies)", icon: "sparkles", color: .yellow)
+                            StatCard(title: "Pending Enrichment", value: "\(stats.pendingEnrichment)", icon: "clock.fill", color: .red)
+                            StatCard(title: "Recently Added", value: "\(stats.recentlyAdded)", icon: "plus.circle.fill", color: .cyan)
+                            StatCard(title: "Last Curation", value: formatDate(stats.lastCuration), icon: "calendar", color: .gray)
+                        }
+                    }
                 }
                 .padding()
-            } else {
-                Text("No statistics available")
-                    .foregroundColor(.secondary)
             }
         }
+        .refreshable { await onRefresh() }
         .navigationTitle("Dashboard")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await onRefresh() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .disabled(isLoading)
+            }
+        }
     }
 
     private func formatDate(_ dateString: String?) -> String {
@@ -122,6 +187,120 @@ struct DashboardView: View {
             return displayFormatter.string(from: date)
         }
         return dateString
+    }
+}
+
+// MARK: - Quota Gauge Card
+
+struct QuotaGaugeCard: View {
+    let quota: QuotaInfo
+
+    private var fraction: Double {
+        guard quota.budget > 0 else { return 0 }
+        return min(1.0, Double(quota.used) / Double(quota.budget))
+    }
+
+    private var color: Color {
+        switch fraction {
+        case ..<0.7: return .green
+        case ..<0.9: return .orange
+        default: return .red
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("YouTube API Quota", systemImage: "bolt.fill")
+                    .font(.headline)
+                Spacer()
+                Text(quota.date)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            HStack(spacing: 16) {
+                Gauge(value: fraction) {
+                    EmptyView()
+                } currentValueLabel: {
+                    Text("\(Int(fraction * 100))%")
+                        .font(.caption2)
+                }
+                .gaugeStyle(.accessoryCircular)
+                .tint(color)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(quota.used) / \(quota.budget) units")
+                        .font(.system(size: 22, weight: .bold))
+                    Text("\(quota.remaining) remaining")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Pipeline Funnel
+
+struct PipelineFunnelView: View {
+    let staging: StagingStats
+    let publishedTotal: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Staging Pipeline")
+                .font(.headline)
+
+            HStack(spacing: 12) {
+                FunnelStage(title: "Pending", value: staging.pending, color: .orange, icon: "clock.fill")
+                FunnelArrow()
+                FunnelStage(title: "Enriched", value: staging.enriched, color: .yellow, icon: "sparkles")
+                FunnelArrow()
+                FunnelStage(title: "Approved", value: staging.approved, color: .green, icon: "checkmark.seal.fill")
+                FunnelArrow()
+                FunnelStage(title: "Published", value: publishedTotal ?? 0, color: .blue, icon: "arrow.up.circle.fill")
+            }
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+    }
+}
+
+struct FunnelStage: View {
+    let title: String
+    let value: Int
+    let color: Color
+    let icon: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .font(.title3)
+            Text("\(value)")
+                .font(.system(size: 24, weight: .bold))
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
+
+struct FunnelArrow: View {
+    var body: some View {
+        Image(systemName: "arrow.right")
+            .foregroundColor(.secondary)
+            .font(.caption)
     }
 }
 
