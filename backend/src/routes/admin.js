@@ -1340,6 +1340,14 @@ router.post('/manual-enrichment-queue/:queueId/match', async (req, res, next) =>
         })
 
     } catch (error) {
+        // Lookup failures are a data problem, not a server fault — tell the
+        // admin what happened instead of a blank 500
+        if (String(error.message).startsWith('Failed to enrich movie with IMDB ID')) {
+            return res.status(422).json({
+                success: false,
+                error: `No data found for that IMDB id on OMDB or TMDB. Check the id (tt...) is correct — episode-level ids often work better than series-level ones.`
+            })
+        }
         next(error)
     }
 })

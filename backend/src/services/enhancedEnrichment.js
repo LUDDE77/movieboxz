@@ -444,20 +444,67 @@ class EnhancedEnrichment {
             let imdbData = null
             if (!omdbData) {
                 imdbData = await this.scrapeIMDBData(imdbId)
-                if (!imdbData) {
-                    logger.warn(`Failed to get data for ${imdbId} from OMDB or IMDB scrape`)
-                    return null
-                }
             }
 
-            // Try to get TMDB data for posters/backdrops
+            // TMDB via /find — supplements posters, and stands alone as the
+            // full source when OMDB is over its daily limit and the scrape fails
             let tmdbDetails = null
+            let tmdbIsTv = false
             try {
                 // /find returns { movie_results, tv_results } — unwrap the first hit
                 const found = await tmdbService.findByImdbId(imdbId)
-                tmdbDetails = found?.movie_results?.[0] || found?.tv_results?.[0] || null
+                if (found?.movie_results?.[0]) {
+                    tmdbDetails = found.movie_results[0]
+                } else if (found?.tv_results?.[0]) {
+                    tmdbDetails = found.tv_results[0]
+                    tmdbIsTv = true
+                }
             } catch (error) {
                 logger.debug(`TMDB lookup failed for ${imdbId}, using OMDB/IMDB-only data`)
+            }
+
+            if (!omdbData && !imdbData && !tmdbDetails) {
+                logger.warn(`Failed to get data for ${imdbId} from OMDB, IMDB scrape, or TMDB`)
+                return null
+            }
+
+            // TMDB-only path: build the enrichment from TMDB fields
+            if (!omdbData && !imdbData && tmdbDetails) {
+                logger.info(`✓ Enriched ${imdbId} from TMDB alone (OMDB unavailable)`)
+                let tmdbGenres = []
+                try {
+                    tmdbGenres = tmdbIsTv
+                        ? await tmdbService.getTVShowGenres(tmdbDetails.id)
+                        : await tmdbService.getMovieGenres(tmdbDetails.id)
+                } catch (error) {
+                    logger.debug(`TMDB genre fetch failed for ${imdbId}`)
+                }
+                return {
+                    imdb_id: imdbId,
+                    tmdb_id: tmdbDetails.id,
+                    title: tmdbDetails.title || tmdbDetails.name,
+                    original_title: tmdbDetails.original_title || tmdbDetails.original_name || null,
+                    description: tmdbDetails.overview || null,
+                    release_date: tmdbDetails.release_date || tmdbDetails.first_air_date || null,
+                    runtime_minutes: null,
+                    poster_path: tmdbDetails.poster_path || null,
+                    backdrop_path: tmdbDetails.backdrop_path || null,
+                    vote_average: tmdbDetails.vote_average || null,
+                    vote_count: tmdbDetails.vote_count || null,
+                    popularity: tmdbDetails.popularity || null,
+                    genres: (tmdbGenres || []).map(g => g.name || g).filter(Boolean),
+                    imdb_rating: null,
+                    imdb_votes: null,
+                    rated: null,
+                    director: null,
+                    actors: null,
+                    country: null,
+                    language: null,
+                    media_type: tmdbIsTv ? 'tv' : 'movie',
+                    confidence: 100, // Manual IMDB ID = 100% confidence
+                    actorMatch: false,
+                    source: 'tmdb_by_imdb'
+                }
             }
 
             // Parse genres: OMDB returns comma-separated string, IMDB scrape returns array
