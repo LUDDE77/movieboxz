@@ -108,6 +108,49 @@ class SelectiveEnrichment {
      * @private
      */
     async _fetchEnrichmentData(movie, preferTmdb = true) {
+        const enrichmentData = await this._fetchEnrichmentDataUnchecked(movie, preferTmdb)
+        return this._applySanityChecks(enrichmentData, movie)
+    }
+
+    /**
+     * Reality checks on a candidate match, using signals the matcher can't fake:
+     * 1. TIMELINE VETO: a full movie cannot be uploaded to YouTube before the
+     *    film exists — candidate release_date after the video upload (+30d
+     *    slack) means the match is impossible (e.g. "Five (1951)" matched to
+     *    Toy Story 5 because TMDB ranks upcoming franchise titles highly).
+     * 2. YEAR GUARD: when the YouTube title itself states a year that is not
+     *    part of the matched film's own title and disagrees with the match by
+     *    more than a year, cap confidence below every auto-approve/low bar so
+     *    the row goes to manual verification instead.
+     */
+    _applySanityChecks(enrichmentData, movie) {
+        if (!enrichmentData || !enrichmentData.release_date) return enrichmentData
+
+        const releaseTime = Date.parse(enrichmentData.release_date)
+        if (Number.isNaN(releaseTime)) return enrichmentData
+
+        const uploadTime = Date.parse(movie.published_at)
+        if (!Number.isNaN(uploadTime) && releaseTime > uploadTime + 30 * 24 * 3600 * 1000) {
+            logger.warn(`⛔ [SelectiveEnrichment] Timeline veto: "${enrichmentData.title}" (${enrichmentData.release_date}) released after the video upload (${movie.published_at}) — discarding match`)
+            return null
+        }
+
+        const ytTitle = movie.youtube_video_title || ''
+        const matchedTitle = (enrichmentData.title || '').toLowerCase()
+        const releaseYear = new Date(releaseTime).getFullYear()
+        const statedYears = [...ytTitle.matchAll(/\b(19[2-9][0-9]|20[0-2][0-9])\b/g)]
+            .map(m => parseInt(m[1]))
+            .filter(y => !matchedTitle.includes(String(y))) // years that are part of the film's own title don't count
+        if (statedYears.length > 0 && !statedYears.some(y => Math.abs(y - releaseYear) <= 1)) {
+            const capped = Math.min(enrichmentData.confidence ?? 0, 40)
+            logger.warn(`⚠️ [SelectiveEnrichment] Year guard: video states ${statedYears.join('/')} but match "${enrichmentData.title}" is ${releaseYear} — capping confidence ${enrichmentData.confidence} -> ${capped}`)
+            enrichmentData.confidence = capped
+        }
+
+        return enrichmentData
+    }
+
+    async _fetchEnrichmentDataUnchecked(movie, preferTmdb = true) {
         const { title, actors = [], year, youtube_video_title, channel_id, channel_title, published_at } = movie
 
         logger.info(`🔍 [SelectiveEnrichment] _fetchEnrichmentData called with:`, {
