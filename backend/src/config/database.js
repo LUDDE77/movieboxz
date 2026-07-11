@@ -98,6 +98,12 @@ export const dbOperations = {
             query = query.eq('is_tv_series', true)
         }
 
+        // Consumer browse surfaces exclude TV episodes (they live in the
+        // TV Series / Kids sections); NULL must count as "not an episode"
+        if (filters.excludeTvSeries) {
+            query = query.not('is_tv_series', 'is', true)
+        }
+
         if (filters.isKidsContent) {
             query = query.eq('is_kids_content', true)
         }
@@ -392,6 +398,8 @@ export const dbOperations = {
             `, { count: 'exact' })
             .eq('genre_id', genreId)
             .eq('movies.is_available', true)
+            // Genre browse rows are movie surfaces — episodes stay in TV Series/Kids series sections
+            .not('movies.is_tv_series', 'is', true)
 
         // Apply sorting on the movies relation
         query = query.order(sortBy, {
@@ -440,6 +448,8 @@ export const dbOperations = {
             `, { count: 'exact' })
             .is('movie_genres.genre_id', null)
             .eq('is_available', true)
+            // Uncategorized is a movie surface — TV episodes stay in series sections
+            .not('is_tv_series', 'is', true)
 
         // Apply sorting
         query = query.order(sortBy, { ascending: sortOrder === 'asc' })

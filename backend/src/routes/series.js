@@ -17,6 +17,7 @@ router.get('/', async (req, res, next) => {
         const limit = Math.min(parseInt(req.query.limit) || 50, 100)
         const page = parseInt(req.query.page) || 1
         const offset = (page - 1) * limit
+        const kidsOnly = req.query.kids === 'true'
 
         logger.info(`Fetching series list - page ${page}, limit ${limit}`)
 
@@ -24,7 +25,7 @@ router.get('/', async (req, res, next) => {
         // movies!inner restricts to series with at least one non-unavailable
         // episode, pagination happens in the database via .range(), and
         // count: 'exact' returns the total matching series without loading them.
-        const { data: seriesRows, error: seriesError, count } = await supabase
+        let seriesQuery = supabase
             .from('tv_series')
             .select(`
                 id,
@@ -37,10 +38,18 @@ router.get('/', async (req, res, next) => {
                     id,
                     season_number,
                     is_tv_series,
-                    is_available
+                    is_available,
+                    is_kids_content
                 )
             `, { count: 'exact' })
             .not('movies.is_available', 'is', false)
+
+        if (kidsOnly) {
+            // Kids surface: only series whose episodes are kids content
+            seriesQuery = seriesQuery.eq('movies.is_kids_content', true)
+        }
+
+        const { data: seriesRows, error: seriesError, count } = await seriesQuery
             .order('title', { ascending: true })
             .range(offset, offset + limit - 1)
 

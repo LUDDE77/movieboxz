@@ -351,11 +351,12 @@ class MovieService: ObservableObject {
         return response.data.movies
     }
 
-    func fetchSeriesList(page: Int = 1, limit: Int = 50) async throws -> [TVSeries] {
+    func fetchSeriesList(page: Int = 1, limit: Int = 50, kidsOnly: Bool = false) async throws -> [TVSeries] {
         struct Inner: Codable { let series: [TVSeries] }
         struct Response: Codable { let success: Bool; let data: Inner }
+        let kidsParam = kidsOnly ? "&kids=true" : ""
         let response = try await performRequest(
-            endpoint: "/series?page=\(page)&limit=\(limit)",
+            endpoint: "/series?page=\(page)&limit=\(limit)\(kidsParam)",
             type: Response.self
         )
         return response.data.series

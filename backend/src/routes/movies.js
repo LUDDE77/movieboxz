@@ -115,6 +115,10 @@ router.get('/', async (req, res, next) => {
 
         if (is_tv_series === 'true') {
             filters.isTvSeries = true
+        } else {
+            // Movie surfaces exclude TV episodes by default; pass is_tv_series=true
+            // to fetch episodes explicitly (Browse's TV Series row does this)
+            filters.excludeTvSeries = true
         }
 
         if (is_kids_content === 'true') {
@@ -182,7 +186,7 @@ router.get('/featured', async (req, res, next) => {
         // Use getMovies to get fully-shaped movie objects (with channel_title, genres, etc.)
         // sorted by featured_order so the admin-curated order is preserved
         const result = await dbOperations.getMovies(
-            { featured: true, sortBy: 'featured_order', sortOrder: 'asc' },
+            { featured: true, excludeTvSeries: true, sortBy: 'featured_order', sortOrder: 'asc' },
             5,
             0
         )
@@ -214,7 +218,8 @@ router.get('/trending', async (req, res, next) => {
         logger.info(`Fetching trending movies - page ${page}`)
 
         let result = await dbOperations.getMovies({
-            trending: true
+            trending: true,
+            excludeTvSeries: true
         }, limit, offset)
 
         // No movies are flagged trending — fall back to most viewed so the
@@ -224,7 +229,8 @@ router.get('/trending', async (req, res, next) => {
             usedFallback = true
             result = await dbOperations.getMovies({
                 sortBy: 'view_count',
-                sortOrder: 'desc'
+                sortOrder: 'desc',
+                excludeTvSeries: true
             }, limit, offset)
         }
 
@@ -267,7 +273,8 @@ router.get('/popular', async (req, res, next) => {
 
         const result = await dbOperations.getMovies({
             sortBy,
-            sortOrder: 'desc'
+            sortOrder: 'desc',
+            excludeTvSeries: true
         }, limit, offset)
 
         res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
@@ -370,7 +377,8 @@ router.get('/recent', async (req, res, next) => {
 
         const result = await dbOperations.getMovies({
             sortBy: 'added_at',
-            sortOrder: 'desc'
+            sortOrder: 'desc',
+            excludeTvSeries: true
         }, limit, offset)
 
         res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
