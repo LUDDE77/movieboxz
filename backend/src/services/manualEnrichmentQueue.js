@@ -166,7 +166,7 @@ class ManualEnrichmentQueue {
             // 2. Mark as in_progress
             await this.updateStatus(queueId, 'in_progress')
 
-            // 3. Enrich using IMDB ID
+            // 3. Enrich using the IMDB ID (returns staged_movies-shaped fields)
             logger.info(`Processing manual match: ${queueEntry.extracted_title}`, {
                 imdb_id: imdbId,
                 queue_id: queueId
@@ -178,50 +178,73 @@ class ManualEnrichmentQueue {
                 throw new Error(`Failed to enrich movie with IMDB ID: ${imdbId}`)
             }
 
-            // 4. Update or create movie record
-            const movieData = {
-                youtube_video_id: queueEntry.youtube_video_id,
-                title: enrichmentData.title || queueEntry.extracted_title,
-                youtube_video_title: queueEntry.youtube_video_title,
-                channel_id: queueEntry.channel_id,
-                channel_title: queueEntry.channel_title,
-                description: queueEntry.description,
-                published_at: queueEntry.published_at,
-                duration_minutes: queueEntry.duration_minutes,
-                thumbnail_url: queueEntry.thumbnail_url,
-
-                // Enrichment data
-                imdb_id: enrichmentData.imdb_id,
-                tmdb_id: enrichmentData.tmdb_id,
-                poster_url: enrichmentData.poster_url,
-                backdrop_url: enrichmentData.backdrop_url,
-                overview: enrichmentData.overview,
-                release_year: enrichmentData.release_year,
-                runtime: enrichmentData.runtime,
-                rating: enrichmentData.rating,
-                genres: enrichmentData.genres,
-                cast: enrichmentData.cast,
-                director: enrichmentData.director,
-                enrichment_confidence: 100, // Manual match = 100% confidence
-                enrichment_source: 'manual',
-                is_enriched: true
+            // 4. Locate the STAGED movie this queue entry belongs to. Manual
+            //    matches flow through staging like everything else — never
+            //    straight into production (the publish step owns that).
+            let stagedQuery = supabase
+                .from('staged_movies')
+                .select('id, approval_status')
+            if (queueEntry.staged_movie_id) {
+                stagedQuery = stagedQuery.eq('id', queueEntry.staged_movie_id)
+            } else {
+                stagedQuery = stagedQuery.eq('youtube_video_id', queueEntry.youtube_video_id)
+            }
+            const { data: stagedRows, error: stagedError } = await stagedQuery.limit(1)
+            if (stagedError) throw stagedError
+            const staged = stagedRows?.[0]
+            if (!staged) {
+                throw new Error(`No staged movie found for queue entry ${queueId} (video ${queueEntry.youtube_video_id})`)
+            }
+            if (['publishing', 'published'].includes(staged.approval_status)) {
+                throw new Error(`Staged movie is already ${staged.approval_status} — edit it in production instead`)
             }
 
-            // 4. Save movie to database using upsert
-            const { data: savedMovie, error: movieError } = await supabase
-                .from('movies')
-                .upsert(movieData, {
-                    onConflict: 'youtube_video_id',
-                    ignoreDuplicates: false
-                })
+            // 5. Apply the enrichment to the staged row; a human picked this
+            //    match, so it is verified and approved in one step
+            const stagedUpdate = {
+                title: enrichmentData.title || queueEntry.extracted_title,
+                original_title: enrichmentData.original_title || null,
+                description: enrichmentData.description || null,
+                release_date: enrichmentData.release_date || null,
+                runtime_minutes: enrichmentData.runtime_minutes || null,
+                imdb_id: enrichmentData.imdb_id,
+                tmdb_id: enrichmentData.tmdb_id,
+                poster_path: enrichmentData.poster_path,
+                backdrop_path: enrichmentData.backdrop_path,
+                vote_average: enrichmentData.vote_average,
+                vote_count: enrichmentData.vote_count,
+                popularity: enrichmentData.popularity,
+                imdb_rating: enrichmentData.imdb_rating,
+                imdb_votes: enrichmentData.imdb_votes,
+                rated: enrichmentData.rated,
+                director: enrichmentData.director,
+                actors: enrichmentData.actors,
+                language: enrichmentData.language,
+                country: enrichmentData.country,
+                genre_data: (enrichmentData.genres || []).map(name => ({ name })),
+                enrichment_confidence: 100,
+                enrichment_source: 'manual_imdb',
+                manually_verified: true,
+                enriched_at: new Date().toISOString(),
+                approval_status: staged.approval_status === 'pending' ? 'approved' : staged.approval_status,
+                approved_at: staged.approval_status === 'pending' ? new Date().toISOString() : undefined,
+                approved_by: staged.approval_status === 'pending' ? 'manual-match' : undefined,
+                updated_at: new Date().toISOString()
+            }
+            Object.keys(stagedUpdate).forEach(k => stagedUpdate[k] === undefined && delete stagedUpdate[k])
+
+            const { data: savedStaged, error: stagedUpdateError } = await supabase
+                .from('staged_movies')
+                .update(stagedUpdate)
+                .eq('id', staged.id)
                 .select()
                 .single()
 
-            if (movieError) {
-                throw new Error(`Failed to save movie: ${movieError.message}`)
+            if (stagedUpdateError) {
+                throw new Error(`Failed to update staged movie: ${stagedUpdateError.message}`)
             }
 
-            // 5. Update queue entry
+            // 6. Close the queue entry
             const { error: updateError } = await supabase
                 .from('manual_enrichment_queue')
                 .update({
@@ -237,20 +260,19 @@ class ManualEnrichmentQueue {
                 throw updateError
             }
 
-            logger.info(`Manual match completed successfully: ${enrichmentData.title}`, {
+            logger.info(`Manual match completed: "${enrichmentData.title}" -> staged ${staged.id} (approved, awaiting publish)`, {
                 imdb_id: imdbId,
-                tmdb_id: enrichmentData.tmdb_id,
-                movie_id: savedMovie.id
+                tmdb_id: enrichmentData.tmdb_id
             })
 
             return {
-                movie: savedMovie,
+                movie: savedStaged,
                 enrichment: enrichmentData,
                 queueEntry: queueEntry
             }
 
         } catch (error) {
-            // Mark as failed on error
+            // Put the entry back to pending on error so it can be retried
             await this.updateStatus(queueId, 'pending', error.message)
             logger.error('Error processing manual match:', error)
             throw error

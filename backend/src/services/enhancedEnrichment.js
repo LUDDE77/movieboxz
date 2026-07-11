@@ -453,10 +453,9 @@ class EnhancedEnrichment {
             // Try to get TMDB data for posters/backdrops
             let tmdbDetails = null
             try {
-                const tmdbResults = await tmdbService.findByIMDBId(imdbId)
-                if (tmdbResults) {
-                    tmdbDetails = tmdbResults
-                }
+                // /find returns { movie_results, tv_results } — unwrap the first hit
+                const found = await tmdbService.findByImdbId(imdbId)
+                tmdbDetails = found?.movie_results?.[0] || found?.tv_results?.[0] || null
             } catch (error) {
                 logger.debug(`TMDB lookup failed for ${imdbId}, using OMDB/IMDB-only data`)
             }
@@ -654,7 +653,9 @@ class EnhancedEnrichment {
                 let tmdbDetails = null
                 if (omdbResult.imdb_id) {
                     try {
-                        tmdbDetails = await tmdbService.findByIMDBId(omdbResult.imdb_id)
+                        // /find returns { movie_results, tv_results } — unwrap the first hit
+                        const found = await tmdbService.findByImdbId(omdbResult.imdb_id)
+                        tmdbDetails = found?.movie_results?.[0] || found?.tv_results?.[0] || null
                     } catch (error) {
                         logger.debug(`TMDB lookup failed for ${omdbResult.imdb_id}, using OMDB-only data`)
                     }
