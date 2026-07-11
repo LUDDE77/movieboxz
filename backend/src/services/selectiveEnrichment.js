@@ -178,7 +178,10 @@ class SelectiveEnrichment {
                 youtube_video_title,
                 channel_id,
                 channel_title: channel_title || 'Unknown',
-                published_at: published_at || new Date().toISOString()
+                published_at: published_at || new Date().toISOString(),
+                // Pass the staged title so a manually cleaned title (from title
+                // repair) beats pattern extraction of the raw YouTube title
+                title
             })
 
             logger.info(`🎯 [SelectiveEnrichment] Enhanced enrichment returned:`, {
