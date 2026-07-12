@@ -158,10 +158,12 @@ router.get('/:seriesId/episodes', async (req, res, next) => {
             }
         })
 
-        // Group episodes by season_number
+        // Group episodes by season_number. Episodes we couldn't map to a
+        // specific season (null) list under Season 1 rather than a bare
+        // "Season 0" — real TMDB specials carry an explicit 0 and are unaffected.
         const seasonMap = new Map()
         for (const episode of episodes) {
-            const seasonNum = episode.season_number ?? 0
+            const seasonNum = episode.season_number ?? 1
             if (!seasonMap.has(seasonNum)) {
                 seasonMap.set(seasonNum, [])
             }
