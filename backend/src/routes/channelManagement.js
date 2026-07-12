@@ -1400,15 +1400,25 @@ router.post('/:channelId/confirm-episode-matches', async (req, res, next) => {
 
             if (data && data.length > 0) {
                 updated++
-                // Backfill the series poster only when the episode has none,
-                // so a matched episode never publishes blank.
+                // Align the episode poster with the matched series. Confirming a
+                // match is the authoritative series assignment, so a poster left
+                // over from an earlier wrong-series enrichment must be corrected.
+                // A YouTube-thumbnail poster is a real per-episode image — keep it.
                 const seriesPoster = await getSeriesPoster(tvSeriesId)
                 if (seriesPoster) {
-                    await supabase
+                    const { data: cur } = await supabase
                         .from('staged_movies')
-                        .update({ poster_path: seriesPoster })
+                        .select('poster_path')
                         .eq('id', stagedMovieId)
-                        .is('poster_path', null)
+                        .maybeSingle()
+                    const p = cur?.poster_path
+                    const isYouTubeThumb = typeof p === 'string' && p.includes('ytimg.com')
+                    if ((!p || !isYouTubeThumb) && p !== seriesPoster) {
+                        await supabase
+                            .from('staged_movies')
+                            .update({ poster_path: seriesPoster })
+                            .eq('id', stagedMovieId)
+                    }
                 }
             } else {
                 errors.push({
