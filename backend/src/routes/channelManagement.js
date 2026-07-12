@@ -960,6 +960,10 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     youtube_description: video.description ? stripEmojis(video.description) : video.description,
                     channel_id: channelId,
                     runtime_minutes: Math.round(durationMinutes),
+                    // Actual YouTube length in seconds — runtime_minutes gets
+                    // overwritten by enrichment with the matched title's runtime,
+                    // so keep the true clip length to catch clips masquerading as movies.
+                    youtube_duration_seconds: Math.round(durationMinutes * 60),
                     view_count: parseInt(video.viewCount) || 0,
                     like_count: parseInt(video.likeCount) || 0,
                     comment_count: parseInt(video.commentCount) || 0,
