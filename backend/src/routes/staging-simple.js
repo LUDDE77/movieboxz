@@ -4,6 +4,7 @@ import { selectiveEnrichment } from '../services/selectiveEnrichment.js'
 import { movieCurator } from '../services/movieCurator.js'
 import { youtubeService } from '../services/youtubeService.js'
 import omdbService from '../services/omdbService.js'
+import { tmdbService } from '../services/tmdbService.js'
 import { logger } from '../utils/logger.js'
 import { adminAuth } from '../middleware/adminAuth.js'
 import { normalizeGenreEntries, mapGenreEntriesToIds } from '../utils/genreMapping.js'
@@ -544,6 +545,100 @@ router.get('/movies', async (req, res, next) => {
         })
     } catch (error) {
         logger.error('[Staging] List movies error:', error)
+        next(error)
+    }
+})
+
+// GET /api/admin/staging/movies/:id/tmdb-candidates?q=<title>
+// Alternate TMDB matches for the review workflow's inline re-pick. Uses the
+// provided query, or falls back to the movie's cleaned title / YouTube title.
+router.get('/movies/:id/tmdb-candidates', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        let query = (req.query.q || '').trim()
+
+        if (!query) {
+            const { data: movie } = await supabase
+                .from('staged_movies')
+                .select('title, youtube_video_title')
+                .eq('id', id)
+                .maybeSingle()
+            query = (movie?.title || movie?.youtube_video_title || '').trim()
+        }
+
+        if (!query) {
+            return res.status(400).json({ success: false, error: 'No search query available' })
+        }
+
+        const results = await tmdbService.searchMovies(query)
+        const candidates = (results || []).slice(0, 8).map(r => ({
+            tmdb_id: r.id,
+            title: r.title,
+            year: r.release_date ? parseInt(String(r.release_date).slice(0, 4)) : null,
+            poster_path: r.poster_path || null,
+            overview: r.overview || null,
+            vote_average: r.vote_average ?? null
+        }))
+
+        res.json({ success: true, data: { query, candidates } })
+    } catch (error) {
+        logger.error('[Staging] tmdb-candidates error:', error)
+        next(error)
+    }
+})
+
+// POST /api/admin/staging/movies/:id/set-match  { tmdbId }
+// Re-point a staged movie's pick to a chosen TMDB match (used when the review
+// UI operator corrects a wrong auto-pick). Writes the new pick but leaves the
+// row pending so the operator confirms with Approve.
+router.post('/movies/:id/set-match', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { tmdbId } = req.body || {}
+        if (!tmdbId) {
+            return res.status(400).json({ success: false, error: 'tmdbId is required' })
+        }
+
+        const details = await tmdbService.getMovieDetails(tmdbId)
+        if (!details || !details.title) {
+            return res.status(404).json({ success: false, error: `No TMDB movie found for id ${tmdbId}` })
+        }
+
+        const update = {
+            title: details.title,
+            description: details.overview || null,
+            poster_path: details.poster_path || null,
+            backdrop_path: details.backdrop_path || null,
+            release_date: details.release_date || null,
+            tmdb_id: details.id,
+            imdb_id: details.imdb_id || null,
+            vote_average: details.vote_average ?? null,
+            enrichment_source: 'manual_review',
+            enrichment_confidence: 100,
+            manually_verified: true,
+            enriched_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        }
+        if (Array.isArray(details.genres) && details.genres.length > 0) {
+            update.genre_data = details.genres
+        }
+
+        const { data, error } = await supabase
+            .from('staged_movies')
+            .update(update)
+            .eq('id', id)
+            .not('approval_status', 'in', '("publishing","published")')
+            .select('*')
+            .maybeSingle()
+
+        if (error) throw error
+        if (!data) {
+            return res.status(404).json({ success: false, error: 'Movie not found or already published' })
+        }
+
+        res.json({ success: true, data })
+    } catch (error) {
+        logger.error('[Staging] set-match error:', error)
         next(error)
     }
 })

@@ -954,6 +954,10 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     youtube_video_title: stripEmojis(video.title),
                     title: parsed.title || video.title,
                     description: video.description ? stripEmojis(video.description) : video.description,
+                    // Preserve the original YouTube description separately — enrichment
+                    // overwrites `description` with the matched plot, but the review
+                    // workflow needs the untouched original.
+                    youtube_description: video.description ? stripEmojis(video.description) : video.description,
                     channel_id: channelId,
                     runtime_minutes: Math.round(durationMinutes),
                     view_count: parseInt(video.viewCount) || 0,
