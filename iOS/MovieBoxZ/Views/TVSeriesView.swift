@@ -249,7 +249,7 @@ struct TVSeriesView: View {
     private func loadData() {
         Task {
             isLoading = true
-            seriesList = (try? await movieService.fetchSeriesList()) ?? []
+            seriesList = (try? await movieService.fetchAllSeries()) ?? []
             isLoading = false
         }
     }

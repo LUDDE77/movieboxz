@@ -351,7 +351,7 @@ class MovieService: ObservableObject {
         return response.data.movies
     }
 
-    func fetchSeriesList(page: Int = 1, limit: Int = 50, kidsOnly: Bool = false) async throws -> [TVSeries] {
+    func fetchSeriesList(page: Int = 1, limit: Int = 100, kidsOnly: Bool = false) async throws -> [TVSeries] {
         struct Inner: Codable { let series: [TVSeries] }
         struct Response: Codable { let success: Bool; let data: Inner }
         let kidsParam = kidsOnly ? "&kids=true" : ""
@@ -360,6 +360,19 @@ class MovieService: ObservableObject {
             type: Response.self
         )
         return response.data.series
+    }
+
+    /// Load every TV series across all pages (the catalog has more series than one page).
+    func fetchAllSeries(kidsOnly: Bool = false) async throws -> [TVSeries] {
+        var all: [TVSeries] = []
+        var page = 1
+        while page <= 20 {
+            let batch = try await fetchSeriesList(page: page, limit: 100, kidsOnly: kidsOnly)
+            all.append(contentsOf: batch)
+            if batch.count < 100 { break }
+            page += 1
+        }
+        return all
     }
 
     func fetchSeriesEpisodes(seriesId: String) async throws -> SeriesDetailResponse {
