@@ -1344,6 +1344,20 @@ router.post('/:channelId/confirm-episode-matches', async (req, res, next) => {
 
         let updated = 0
         const errors = []
+        // Cache each series' poster so a matched episode with no artwork of its
+        // own falls back to the series poster instead of publishing blank.
+        const seriesPosterCache = new Map()
+        const getSeriesPoster = async (seriesId) => {
+            if (seriesPosterCache.has(seriesId)) return seriesPosterCache.get(seriesId)
+            const { data } = await supabase
+                .from('tv_series')
+                .select('poster_path')
+                .eq('id', seriesId)
+                .maybeSingle()
+            const poster = data?.poster_path || null
+            seriesPosterCache.set(seriesId, poster)
+            return poster
+        }
 
         for (const match of matches) {
             const { stagedMovieId, tvSeriesId, season, episode, episodeName } = match || {}
@@ -1356,17 +1370,24 @@ router.post('/:channelId/confirm-episode-matches', async (req, res, next) => {
                 continue
             }
 
+            const updateFields = {
+                tv_series_id: tvSeriesId,
+                season_number: toInteger(season),
+                episode_number: toInteger(episode),
+                episode_name: episodeName || null,
+                is_tv_series: true,
+                series_type: 'tv_series',
+                updated_at: new Date().toISOString()
+            }
+            // Use the real episode name as the display title (import patterns
+            // often extract junk like "HD" or the series name).
+            if (episodeName) {
+                updateFields.title = episodeName
+            }
+
             const { data, error } = await supabase
                 .from('staged_movies')
-                .update({
-                    tv_series_id: tvSeriesId,
-                    season_number: toInteger(season),
-                    episode_number: toInteger(episode),
-                    episode_name: episodeName || null,
-                    is_tv_series: true,
-                    series_type: 'tv_series',
-                    updated_at: new Date().toISOString()
-                })
+                .update(updateFields)
                 .eq('id', stagedMovieId)
                 .eq('channel_id', channelId)
                 .not('approval_status', 'in', '("publishing","published")')
@@ -1379,6 +1400,16 @@ router.post('/:channelId/confirm-episode-matches', async (req, res, next) => {
 
             if (data && data.length > 0) {
                 updated++
+                // Backfill the series poster only when the episode has none,
+                // so a matched episode never publishes blank.
+                const seriesPoster = await getSeriesPoster(tvSeriesId)
+                if (seriesPoster) {
+                    await supabase
+                        .from('staged_movies')
+                        .update({ poster_path: seriesPoster })
+                        .eq('id', stagedMovieId)
+                        .is('poster_path', null)
+                }
             } else {
                 errors.push({
                     stagedMovieId,
