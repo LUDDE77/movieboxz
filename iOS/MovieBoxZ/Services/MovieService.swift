@@ -208,6 +208,14 @@ class MovieService: ObservableObject {
         return response.data.movies
     }
 
+    func fetchTopImdbMovies(page: Int = 1, limit: Int = 20) async throws -> [Movie] {
+        let response = try await performRequest(
+            endpoint: "/movies/top-rated?source=imdb&page=\(page)&limit=\(limit)",
+            type: MoviesResponse.self
+        )
+        return response.data.movies
+    }
+
     func searchMovies(
         query: String,
         category: String? = nil,

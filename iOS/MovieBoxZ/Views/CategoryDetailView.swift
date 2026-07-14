@@ -10,6 +10,7 @@ enum CategoryType: Identifiable, Hashable {
     case tvSeries
     case kids
     case uncategorized
+    case topImdb
 
     var id: String {
         switch self {
@@ -21,6 +22,7 @@ enum CategoryType: Identifiable, Hashable {
         case .tvSeries: return "tv-series"
         case .kids: return "kids"
         case .uncategorized: return "uncategorized"
+        case .topImdb: return "top-imdb"
         }
     }
 
@@ -34,6 +36,7 @@ enum CategoryType: Identifiable, Hashable {
         case .tvSeries: return "TV Series"
         case .kids: return "Kids"
         case .uncategorized: return "Other"
+        case .topImdb: return "High Score IMDB"
         }
     }
 }
@@ -257,6 +260,12 @@ struct CategoryDetailView: View {
 
                 case .popular:
                     fetchedMovies = try await movieService.fetchPopularMovies(
+                        page: 1,
+                        limit: 200
+                    )
+
+                case .topImdb:
+                    fetchedMovies = try await movieService.fetchTopImdbMovies(
                         page: 1,
                         limit: 200
                     )

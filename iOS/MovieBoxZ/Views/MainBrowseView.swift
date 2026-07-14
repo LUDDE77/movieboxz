@@ -17,6 +17,7 @@ struct MainBrowseView: View {
     private var allMovies: [Movie] { movieService.allBrowseMovies }
 
     @State private var tvSeries: [Movie] = [] // Placeholder for TV series
+    @State private var topImdbMovies: [Movie] = [] // High Score IMDB row
 
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -136,6 +137,20 @@ struct MainBrowseView: View {
                                     onPlayVideo: playVideo,
                                     onSeeAll: {
                                         selectedCategory = .popular
+                                    }
+                                )
+                            }
+
+                            if !topImdbMovies.isEmpty {
+                                MovieRowView(
+                                    title: "High Score IMDB",
+                                    movies: topImdbMovies,
+                                    sectionHeaderSize: sectionHeaderSize,
+                                    cardTitleSize: cardTitleSize,
+                                    cardMetadataSize: cardMetadataSize,
+                                    onPlayVideo: playVideo,
+                                    onSeeAll: {
+                                        selectedCategory = .topImdb
                                     }
                                 )
                             }
@@ -276,6 +291,18 @@ struct MainBrowseView: View {
                                     )
                                 }
 
+                                if !topImdbMovies.isEmpty {
+                                    MovieRowView(
+                                        title: "High Score IMDB",
+                                        movies: topImdbMovies,
+                                        sectionHeaderSize: sectionHeaderSize,
+                                        cardTitleSize: cardTitleSize,
+                                        cardMetadataSize: cardMetadataSize,
+                                        onPlayVideo: playVideo,
+                                        onSeeAll: { selectedCategory = .topImdb }
+                                    )
+                                }
+
                                 ForEach(genreCategories, id: \.genre.id) { category in
                                     if !category.movies.isEmpty {
                                         MovieRowView(
@@ -359,6 +386,9 @@ struct MainBrowseView: View {
                 // no refetch, no skeleton.
                 currentHeroIndex = min(currentHeroIndex, max(featuredMovies.count - 1, 0))
                 startHeroTimer()
+                if topImdbMovies.isEmpty {
+                    loadTopImdb()
+                }
             } else {
                 loadMovies()
             }
@@ -401,7 +431,13 @@ struct MainBrowseView: View {
                 isLoading = true
                 errorMessage = nil
 
+                async let topImdb = movieService.fetchTopImdbMovies(limit: 20)
+
                 try await movieService.loadBrowseData()
+
+                // Resilient: a failure here leaves the row empty rather than
+                // erroring the whole page.
+                topImdbMovies = (try? await topImdb) ?? []
 
                 currentHeroIndex = 0
                 startHeroTimer()
@@ -420,10 +456,21 @@ struct MainBrowseView: View {
         }
     }
 
+    /// Loads just the High Score IMDB row (used when the shared browse cache is
+    /// already populated but this @State row hasn't been fetched yet). Resilient:
+    /// a failure leaves the row empty.
+    private func loadTopImdb() {
+        Task {
+            topImdbMovies = (try? await movieService.fetchTopImdbMovies(limit: 20)) ?? []
+        }
+    }
+
     /// Manual reload path for pull-to-refresh — bypasses the cache.
     private func refreshMovies() async {
         do {
+            async let topImdb = movieService.fetchTopImdbMovies(limit: 20)
             try await movieService.loadBrowseData(force: true)
+            topImdbMovies = (try? await topImdb) ?? []
             currentHeroIndex = 0
             startHeroTimer()
         } catch {
@@ -442,7 +489,8 @@ struct MainBrowseView: View {
             recentMovies,
             allMovies,
             uncategorizedMovies,
-            tvSeries
+            tvSeries,
+            topImdbMovies
         ]
 
         for movies in coreArrays {
