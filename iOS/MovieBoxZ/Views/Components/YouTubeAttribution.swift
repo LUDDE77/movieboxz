@@ -28,12 +28,12 @@ struct YouTubeAttribution: View {
             // YouTube logo
             Image(systemName: "play.rectangle.fill")
                 .font(.system(size: 14))
-                .foregroundColor(.red)
+                .foregroundColor(.mbzRed)
 
             // Channel name
             Text("on \(movie.channelTitle)")
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.mbzMuted)
                 .lineLimit(1)
         }
     }
@@ -45,7 +45,7 @@ struct YouTubeAttribution: View {
             // Section header
             Text("YouTube Video")
                 .font(.headline)
-                .foregroundColor(.primary)
+                .foregroundColor(.mbzGold)
 
             // YouTube video card
             HStack(spacing: 12) {
@@ -62,7 +62,7 @@ struct YouTubeAttribution: View {
                             .aspectRatio(16/9, contentMode: .fill)
                             .overlay {
                                 Image(systemName: "play.rectangle.fill")
-                                    .foregroundColor(.red)
+                                    .foregroundColor(.mbzRed)
                             }
                     @unknown default:
                         EmptyView()
@@ -84,7 +84,7 @@ struct YouTubeAttribution: View {
                         #else
                         .font(.caption)
                         #endif
-                        .foregroundColor(.primary)
+                        .foregroundColor(.mbzScreen)
                         .lineLimit(2)
 
                     // YouTube stats
@@ -100,13 +100,13 @@ struct YouTubeAttribution: View {
                     #else
                     .font(.caption2)
                     #endif
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.mbzMuted)
                 }
 
                 Spacer()
             }
             .padding()
-            .background(Color.gray.opacity(0.1))
+            .background(Color.mbzSlate)
             .cornerRadius(12)
 
             // Channel info — below the card, sized to content
@@ -135,7 +135,7 @@ struct YouTubeAttribution: View {
                             #else
                             .font(.system(size: 16))
                             #endif
-                            .foregroundColor(.red)
+                            .foregroundColor(.mbzRed)
                     }
 
                     Text(movie.channelTitle)
@@ -144,11 +144,11 @@ struct YouTubeAttribution: View {
                         #else
                         .font(.subheadline)
                         #endif
-                        .foregroundColor(.primary)
+                        .foregroundColor(.mbzScreen)
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.mbzMuted)
                 }
             }
             #if os(tvOS)

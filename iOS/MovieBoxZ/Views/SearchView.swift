@@ -20,7 +20,7 @@ struct SearchView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.mbzInk.ignoresSafeArea()
 
             #if os(tvOS)
             tvOSLayout
@@ -53,8 +53,9 @@ struct SearchView: View {
             // Header + search bar
             VStack(spacing: 12) {
                 Text("Search")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(0.5)
+                    .foregroundColor(.mbzGold)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -62,11 +63,11 @@ struct SearchView: View {
                 HStack(spacing: 10) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(.mbzMuted)
                         TextField("Search movies...", text: $searchText)
                             .textFieldStyle(.plain)
-                            .foregroundColor(.white)
-                            .tint(.red)
+                            .foregroundColor(.mbzScreen)
+                            .tint(.mbzGold)
                             .submitLabel(.search)
                             .onSubmit { performSearch() }
                         if !searchText.isEmpty {
@@ -75,32 +76,32 @@ struct SearchView: View {
                                 searchResults = []
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(.mbzMuted)
                             }
                         }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.15))
+                    .background(Color.mbzSlate)
                     .cornerRadius(10)
 
                     if isSearching {
                         ProgressView()
-                            .tint(.white)
+                            .tint(.mbzGold)
                     } else {
                         Button("Search") { performSearch() }
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzInk)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
-                            .background(Color.red)
+                            .background(Color.mbzGold)
                             .cornerRadius(10)
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 12)
             }
-            .background(Color.white.opacity(0.05))
+            .background(Color.mbzSlate.opacity(0.4))
 
             Divider().background(Color.white.opacity(0.1))
 
@@ -120,7 +121,7 @@ struct SearchView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         Text("\(searchResults.count) \(searchResults.count == 1 ? "result" : "results")")
                             .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(.mbzMuted)
                             .padding(.horizontal, 16)
 
                         LazyVGrid(columns: columns, spacing: 20) {
@@ -147,13 +148,13 @@ struct SearchView: View {
             Spacer()
             Image(systemName: icon)
                 .font(.system(size: 50))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(.mbzMuted.opacity(0.5))
             Text(title)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(.mbzScreen)
             Text(subtitle)
                 .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(.mbzMuted)
                 .multilineTextAlignment(.center)
             Spacer()
         }

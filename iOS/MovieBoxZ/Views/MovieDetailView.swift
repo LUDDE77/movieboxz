@@ -58,7 +58,7 @@ struct MovieDetailView: View {
                 #endif
             }
         }
-        .background(Color.black)
+        .background(Color.mbzInk)
         .ignoresSafeArea(edges: .top)
         #if !os(tvOS)
         .overlay(alignment: .top) {
@@ -79,7 +79,7 @@ struct MovieDetailView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 36))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(.mbzScreen.opacity(0.9))
                         .background(
                             Circle()
                                 .fill(Color.black.opacity(0.4))
@@ -131,8 +131,8 @@ struct MovieDetailView: View {
             LinearGradient(
                 gradient: Gradient(stops: [
                     .init(color: .clear, location: 0.0),
-                    .init(color: Color.black.opacity(0.4), location: 0.55),
-                    .init(color: Color.black, location: 1.0)
+                    .init(color: Color.mbzInk.opacity(0.4), location: 0.55),
+                    .init(color: Color.mbzInk, location: 1.0)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -148,7 +148,7 @@ struct MovieDetailView: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 42, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .padding(20)
                             .background(
                                 Circle()
@@ -202,7 +202,7 @@ struct MovieDetailView: View {
                     Spacer().frame(height: 40)
                     Text(movie.displayTitle)
                         .font(.system(size: titleSize, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.mbzScreen)
                         .lineLimit(3)
                         .shadow(radius: 10)
                 }
@@ -244,8 +244,8 @@ struct MovieDetailView: View {
                 LinearGradient(
                     gradient: Gradient(stops: [
                         .init(color: .clear, location: 0.0),
-                        .init(color: Color.black.opacity(0.4), location: 0.5),
-                        .init(color: Color.black, location: 1.0)
+                        .init(color: Color.mbzInk.opacity(0.4), location: 0.5),
+                        .init(color: Color.mbzInk, location: 1.0)
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
@@ -316,7 +316,7 @@ struct MovieDetailView: View {
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "play.rectangle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(.mbzScreen)
                         .font(.system(size: headlineSize))
                     Text("Watch on YouTube")
                         .font(.system(size: headlineSize, weight: .semibold))
@@ -327,8 +327,14 @@ struct MovieDetailView: View {
                 #else
                 .padding(.vertical, 16)
                 #endif
-                .background(Color.white)
-                .foregroundColor(.black)
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.mbzRed, Color.mbzRed.opacity(0.82)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .foregroundColor(.mbzScreen)
                 .cornerRadius(12)
             }
             #if os(tvOS)
@@ -354,9 +360,9 @@ struct MovieDetailView: View {
                             .font(.caption)
                     }
                     .frame(maxWidth: .infinity)
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
                     .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.2))
+                    .background(Color.mbzSlate)
                     .cornerRadius(10)
                 }
 
@@ -381,9 +387,9 @@ struct MovieDetailView: View {
                             .font(.caption)
                     }
                     .frame(maxWidth: .infinity)
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
                     .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.2))
+                    .background(Color.mbzSlate)
                     .cornerRadius(10)
                 }
             }
@@ -400,52 +406,54 @@ struct MovieDetailView: View {
             if movie.runtimeMinutes != nil {
                 Text(movie.formattedRuntime)
                     .font(.system(size: bodySize))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.mbzMuted)
             }
 
             // Quality
             if movie.quality != nil {
                 Text("•")
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.mbzMuted.opacity(0.6))
 
                 Text(movie.quality!)
                     .font(.system(size: captionSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.green.opacity(0.3))
+                    .background(Color.mbzGold)
                     .cornerRadius(6)
             }
 
             // Rating badge
             if let rating = movie.voteAverage ?? movie.imdbRating {
                 Text("•")
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.mbzMuted.opacity(0.6))
 
                 HStack(spacing: 6) {
                     Image(systemName: "star.fill")
-                        .foregroundColor(.yellow)
+                        .foregroundColor(.mbzGold)
                     Text(String(format: "%.1f", rating))
                         .fontWeight(.bold)
                 }
                 .font(.system(size: bodySize))
+                .foregroundColor(.mbzScreen)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.black.opacity(0.6))
+                .background(Color.mbzSlate)
                 .cornerRadius(8)
             }
 
             // Year badge
             if let year = movie.formattedReleaseYear {
                 Text("•")
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.mbzMuted.opacity(0.6))
 
                 Text(year)
                     .font(.system(size: bodySize))
                     .fontWeight(.semibold)
+                    .foregroundColor(.mbzScreen)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.6))
+                    .background(Color.mbzSlate)
                     .cornerRadius(8)
             }
 
@@ -460,12 +468,12 @@ struct MovieDetailView: View {
             if let description = movie.description {
                 Text(description)
                     .font(.system(size: bodySize))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(.mbzScreen.opacity(0.92))
                     .lineSpacing(6)
             } else {
                 Text("No description available")
                     .font(.system(size: bodySize))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.mbzMuted)
                     .italic()
             }
         }
@@ -476,28 +484,22 @@ struct MovieDetailView: View {
     private func genresSection(_ genres: [Genre]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Genres")
-                .font(.system(size: headlineSize, weight: .bold))
-                .foregroundColor(.white)
+                .font(.system(size: headlineSize, weight: .heavy))
+                .tracking(0.5)
+                .foregroundColor(.mbzGold)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(genres) { genre in
                         Text(genre.name)
                             .font(.system(size: bodySize))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzMuted)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.red.opacity(0.3),
-                                        Color.purple.opacity(0.3)
-                                    ]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
                             )
-                            .cornerRadius(20)
                             .accessibilityLabel("Genre: \(genre.name)")
                     }
                 }
@@ -510,8 +512,9 @@ struct MovieDetailView: View {
     private var additionalInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Additional Information")
-                .font(.system(size: headlineSize, weight: .bold))
-                .foregroundColor(.white)
+                .font(.system(size: headlineSize, weight: .heavy))
+                .tracking(0.5)
+                .foregroundColor(.mbzGold)
 
             VStack(alignment: .leading, spacing: 10) {
                 infoRow(label: "Views", value: movie.formattedViewCount)
@@ -532,7 +535,7 @@ struct MovieDetailView: View {
     private var channelSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Divider()
-                .background(Color.white.opacity(0.2))
+                .background(Color.white.opacity(0.12))
                 .padding(.vertical, 8)
 
             // TOS-compliant YouTube attribution (full style)
@@ -541,7 +544,7 @@ struct MovieDetailView: View {
             // Attribution notice
             Text("This content is hosted on YouTube and subject to YouTube's Terms of Service. MovieBoxZ does not host or stream any video content.")
                 .font(.system(size: captionSize - 2))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.mbzMuted)
                 .lineSpacing(4)
                 .padding(.top, 8)
         }
@@ -553,11 +556,11 @@ struct MovieDetailView: View {
         HStack {
             Text(label)
                 .font(.system(size: bodySize))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.mbzMuted)
             Spacer()
             Text(value)
                 .font(.system(size: bodySize))
-                .foregroundColor(.white)
+                .foregroundColor(.mbzScreen)
         }
     }
 

@@ -9,7 +9,7 @@ struct LoadingSkeletonView: View {
             VStack(spacing: 0) {
                 // Hero banner skeleton
                 Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(Color.mbzSlate)
                     #if os(tvOS)
                     .frame(height: 600)
                     #else
@@ -36,7 +36,7 @@ struct LoadingSkeletonView: View {
                 #endif
             }
         }
-        .background(Color.black)
+        .background(Color.mbzInk)
     }
 }
 
@@ -45,7 +45,7 @@ struct CarouselSkeletonView: View {
         VStack(alignment: .leading, spacing: 15) {
             // Section header skeleton
             Rectangle()
-                .fill(Color.gray.opacity(0.2))
+                .fill(Color.mbzSlate)
                 #if os(tvOS)
                 .frame(width: 300, height: 42)
                 #else
@@ -61,20 +61,20 @@ struct CarouselSkeletonView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             // Poster skeleton
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.mbzSlate)
                                 .frame(width: 350, height: 525)
                                 .cornerRadius(12)
                                 .shimmer()
 
                             // Title skeleton
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.mbzSlate)
                                 .frame(width: 300, height: 31)
                                 .shimmer()
 
                             // Metadata skeleton
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.mbzSlate)
                                 .frame(width: 200, height: 25)
                                 .shimmer()
                         }
@@ -87,20 +87,20 @@ struct CarouselSkeletonView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             // Poster skeleton
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.mbzSlate)
                                 .frame(width: 150, height: 225)
                                 .cornerRadius(8)
                                 .shimmer()
 
                             // Title skeleton
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.mbzSlate)
                                 .frame(width: 130, height: 18)
                                 .shimmer()
 
                             // Metadata skeleton
                             Rectangle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.mbzSlate)
                                 .frame(width: 100, height: 14)
                                 .shimmer()
                         }

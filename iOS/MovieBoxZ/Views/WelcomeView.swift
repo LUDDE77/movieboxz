@@ -23,9 +23,9 @@ struct WelcomeView: View {
             // Background gradient
             LinearGradient(
                 gradient: Gradient(colors: [
-                    Color.black,
-                    Color(red: 0.1, green: 0.0, blue: 0.1),
-                    Color.black
+                    Color.mbzInk,
+                    Color.mbzSlate,
+                    Color.mbzInk
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -42,7 +42,7 @@ struct WelcomeView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [.red, .purple]),
+                                    gradient: Gradient(colors: [.mbzGold, .mbzGoldHi]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -51,7 +51,7 @@ struct WelcomeView: View {
 
                         Image(systemName: "play.rectangle.fill")
                             .font(.system(size: appIconSize * 0.5))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzInk)
                     }
                     .shadow(radius: 20)
 
@@ -59,11 +59,11 @@ struct WelcomeView: View {
                     VStack(spacing: 8) {
                         Text("MovieBoxZ")
                             .font(.system(size: appNameFontSize, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
 
                         Text("Discover Movies from YouTube")
                             .font(.system(size: taglineFontSize, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.mbzMuted)
                             .multilineTextAlignment(.center)
                     }
 
@@ -71,28 +71,28 @@ struct WelcomeView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         FeatureRow(
                             icon: "magnifyingglass.circle.fill",
-                            iconColor: .blue,
+                            iconColor: .mbzGold,
                             title: "Discover Movies",
                             description: "Browse thousands of movies from curated YouTube channels"
                         )
 
                         FeatureRow(
                             icon: "play.rectangle.fill",
-                            iconColor: .red,
+                            iconColor: .mbzRed,
                             title: "Watch on YouTube",
                             description: "All videos play in the official YouTube app for the best experience"
                         )
 
                         FeatureRow(
                             icon: "bookmark.circle.fill",
-                            iconColor: .green,
+                            iconColor: .mbzGold,
                             title: "Build Your Library",
                             description: "Save your favorites and track what you've watched"
                         )
 
                         FeatureRow(
                             icon: "tv.circle.fill",
-                            iconColor: .purple,
+                            iconColor: .mbzGold,
                             title: "Multi-Platform",
                             description: "Available on iPhone, iPad, and Apple TV"
                         )
@@ -104,26 +104,26 @@ struct WelcomeView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "info.circle.fill")
                                 .font(.title2)
-                                .foregroundColor(.yellow)
+                                .foregroundColor(.mbzGold)
 
                             Text("YouTube App Required")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(.mbzScreen)
                         }
 
                         Text("MovieBoxZ is a discovery and catalog app. All videos are hosted on YouTube and play in the official YouTube app. This ensures the best quality and supports content creators.")
                             .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.mbzMuted)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
                     }
                     .padding(.vertical, 20)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.yellow.opacity(0.1))
+                            .fill(Color.mbzGold.opacity(0.1))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+                                    .stroke(Color.mbzGold.opacity(0.3), lineWidth: 1)
                             )
                     )
                     .padding(.horizontal, 24)
@@ -157,12 +157,12 @@ struct WelcomeView: View {
                             .padding(.vertical, 16)
                             .background(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [.red, .purple]),
+                                    gradient: Gradient(colors: [.mbzGold, .mbzGoldHi]),
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzInk)
                             .cornerRadius(12)
                         }
                         #if os(tvOS)
@@ -173,7 +173,7 @@ struct WelcomeView: View {
 
                         Text("By continuing, you agree to YouTube's Terms of Service")
                             .font(.caption)
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(.mbzMuted)
                             .multilineTextAlignment(.center)
                     }
                     .padding(.horizontal, 32)
@@ -242,7 +242,7 @@ struct FeatureRow: View {
                     #else
                     .font(.headline)
                     #endif
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
 
                 Text(description)
                     #if os(tvOS)
@@ -250,7 +250,7 @@ struct FeatureRow: View {
                     #else
                     .font(.subheadline)
                     #endif
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(.mbzMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
 

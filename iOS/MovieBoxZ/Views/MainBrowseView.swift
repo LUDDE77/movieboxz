@@ -46,8 +46,8 @@ struct MainBrowseView: View {
 
     var body: some View {
         ZStack {
-            // Full-screen black base — fills safe areas edge to edge
-            Color.black.ignoresSafeArea()
+            // Full-screen ink base — fills safe areas edge to edge
+            Color.mbzInk.ignoresSafeArea()
 
             // iOS: Backdrop placed at ZStack level so it fills the full screen frame
             // offered by ContentView's GeometryReader layout.
@@ -73,9 +73,9 @@ struct MainBrowseView: View {
                     gradient: Gradient(stops: [
                         .init(color: .clear, location: 0.0),
                         .init(color: .clear, location: 0.4),
-                        .init(color: Color.black.opacity(0.3), location: 0.6),
-                        .init(color: Color.black.opacity(0.7), location: 0.8),
-                        .init(color: Color.black, location: 1.0)
+                        .init(color: Color.mbzInk.opacity(0.3), location: 0.6),
+                        .init(color: Color.mbzInk.opacity(0.7), location: 0.8),
+                        .init(color: Color.mbzInk, location: 1.0)
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
@@ -234,7 +234,7 @@ struct MainBrowseView: View {
                         .padding(.bottom, 100)
                     }
                 }
-                .background(Color.black)
+                .background(Color.mbzInk)
                 .ignoresSafeArea()
                 #else
                 // iOS: Landscape-optimized layout.
@@ -368,7 +368,7 @@ struct MainBrowseView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 30)
                             .padding(.bottom, 50)
-                            .background(Color.black)
+                            .background(Color.mbzInk)
                         }
                     }
                     .background(.clear)
@@ -570,10 +570,10 @@ struct FeaturedMovieBanner: View {
                 gradient: Gradient(stops: [
                     .init(color: .clear, location: 0.0),
                     .init(color: .clear, location: 0.25),
-                    .init(color: Color.black.opacity(0.2), location: 0.5),
-                    .init(color: Color.black.opacity(0.6), location: 0.72),
-                    .init(color: Color.black.opacity(0.85), location: 0.88),
-                    .init(color: Color.black, location: 1.0)
+                    .init(color: Color.mbzInk.opacity(0.2), location: 0.5),
+                    .init(color: Color.mbzInk.opacity(0.6), location: 0.72),
+                    .init(color: Color.mbzInk.opacity(0.85), location: 0.88),
+                    .init(color: Color.mbzInk, location: 1.0)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -611,7 +611,7 @@ struct FeaturedMovieBanner: View {
                     VStack(alignment: .leading, spacing: 14) {
                         Text(movie.displayTitle)
                             .font(.system(size: heroTitleSize, weight: .black))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .lineLimit(1)
                             .shadow(radius: 10)
 
@@ -621,11 +621,13 @@ struct FeaturedMovieBanner: View {
                                 ForEach(genres.prefix(3), id: \.id) { genre in
                                     Text(genre.name)
                                         .font(.system(size: bodyTextSize - 10, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.9))
+                                        .foregroundColor(.mbzMuted)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
-                                        .background(Color.white.opacity(0.15))
-                                        .cornerRadius(5)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 5)
+                                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                        )
                                 }
                             }
                         }
@@ -635,28 +637,31 @@ struct FeaturedMovieBanner: View {
                             if let year = movie.formattedReleaseYear {
                                 Text(year)
                                     .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                    .foregroundColor(.mbzScreen)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(Color.white.opacity(0.2))
+                                    .background(Color.mbzSlate.opacity(0.8))
                                     .cornerRadius(6)
                             }
                             if let rating = movie.voteAverage ?? movie.imdbRating {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "star.fill").foregroundColor(.yellow)
+                                    Image(systemName: "star.fill").foregroundColor(.mbzGold)
                                     Text(String(format: "%.1f", rating))
                                 }
                                 .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                .foregroundColor(.mbzScreen)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.2))
+                                .background(Color.mbzSlate.opacity(0.8))
                                 .cornerRadius(6)
                             }
                             if let runtime = movie.runtimeMinutes, runtime > 0 {
                                 Text(movie.formattedRuntime)
                                     .font(.system(size: bodyTextSize - 8, weight: .semibold))
+                                    .foregroundColor(.mbzScreen)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
-                                    .background(Color.white.opacity(0.2))
+                                    .background(Color.mbzSlate.opacity(0.8))
                                     .cornerRadius(6)
                             }
                         }
@@ -664,7 +669,7 @@ struct FeaturedMovieBanner: View {
                         if let overview = movie.description {
                             Text(overview)
                                 .font(.system(size: bodyTextSize))
-                                .foregroundColor(.white.opacity(0.85))
+                                .foregroundColor(.mbzMuted)
                                 .lineLimit(2)
                                 .shadow(radius: 5)
                         }
@@ -675,14 +680,14 @@ struct FeaturedMovieBanner: View {
                                 onPlayVideo(movie.youtubeVideoId)
                             } label: {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "info.circle.fill").foregroundColor(.white)
+                                    Image(systemName: "info.circle.fill").foregroundColor(.mbzScreen)
                                     Text("More Info")
                                 }
                                 .font(.system(size: bodyTextSize, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.mbzScreen)
                                 .padding(.horizontal, 28)
                                 .padding(.vertical, 14)
-                                .background(Color.black.opacity(0.6))
+                                .background(Color.mbzSlate.opacity(0.9))
                                 .cornerRadius(10)
                             }
                             #if os(tvOS)
@@ -698,14 +703,14 @@ struct FeaturedMovieBanner: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: movie.isFavorite ? "heart.fill" : "heart")
-                                        .foregroundColor(movie.isFavorite ? .red : .white)
+                                        .foregroundColor(movie.isFavorite ? .mbzGold : .mbzScreen)
                                     Text(movie.isFavorite ? "In My List" : "My List")
                                 }
                                 .font(.system(size: bodyTextSize, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(.mbzScreen)
                                 .padding(.horizontal, 28)
                                 .padding(.vertical, 14)
-                                .background(Color.white.opacity(0.15))
+                                .background(Color.mbzSlate.opacity(0.6))
                                 .cornerRadius(10)
                             }
                             #if os(tvOS)
@@ -719,11 +724,11 @@ struct FeaturedMovieBanner: View {
                         // Channel attribution
                         HStack(spacing: 6) {
                             Image(systemName: "play.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(.mbzRed)
                                 .font(.system(size: bodyTextSize - 8))
                             Text(movie.channelTitle)
                                 .font(.system(size: bodyTextSize - 8))
-                                .foregroundColor(.white.opacity(0.65))
+                                .foregroundColor(.mbzMuted)
                                 .lineLimit(1)
                         }
                     }
@@ -739,7 +744,7 @@ struct FeaturedMovieBanner: View {
                                 onSelectIndex?(idx)
                             } label: {
                                 Circle()
-                                    .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
+                                    .fill(idx == currentIndex ? Color.mbzGold : Color.mbzMuted.opacity(0.4))
                                     .frame(width: idx == currentIndex ? 14 : 10,
                                            height: idx == currentIndex ? 14 : 10)
                                     .animation(.easeInOut(duration: 0.2), value: currentIndex)
@@ -762,7 +767,7 @@ struct FeaturedMovieBanner: View {
                     // Title
                     Text(movie.displayTitle)
                         .font(.system(size: heroTitleSize, weight: .black))
-                        .foregroundColor(.white)
+                        .foregroundColor(.mbzScreen)
                         .lineLimit(2)
                         .shadow(radius: 10)
 
@@ -771,28 +776,31 @@ struct FeaturedMovieBanner: View {
                         if let year = movie.formattedReleaseYear {
                             Text(year)
                                 .font(.system(size: bodyTextSize - 4, weight: .semibold))
+                                .foregroundColor(.mbzScreen)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(Color.white.opacity(0.2))
+                                .background(Color.mbzSlate.opacity(0.8))
                                 .cornerRadius(6)
                         }
                         if let rating = movie.voteAverage ?? movie.imdbRating {
                             HStack(spacing: 4) {
-                                Image(systemName: "star.fill").foregroundColor(.yellow)
+                                Image(systemName: "star.fill").foregroundColor(.mbzGold)
                                 Text(String(format: "%.1f", rating))
                             }
                             .font(.system(size: bodyTextSize - 4, weight: .semibold))
+                            .foregroundColor(.mbzScreen)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color.white.opacity(0.2))
+                            .background(Color.mbzSlate.opacity(0.8))
                             .cornerRadius(6)
                         }
                         if let runtime = movie.runtimeMinutes, runtime > 0 {
                             Text(movie.formattedRuntime)
                                 .font(.system(size: bodyTextSize - 4, weight: .semibold))
+                                .foregroundColor(.mbzScreen)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(Color.white.opacity(0.2))
+                                .background(Color.mbzSlate.opacity(0.8))
                                 .cornerRadius(6)
                         }
                     }
@@ -801,7 +809,7 @@ struct FeaturedMovieBanner: View {
                     if let overview = movie.description {
                         Text(overview)
                             .font(.system(size: bodyTextSize))
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(.mbzMuted)
                             .lineLimit(2)
                             .shadow(radius: 5)
                     }
@@ -812,14 +820,14 @@ struct FeaturedMovieBanner: View {
                             onPlayVideo(movie.youtubeVideoId)
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "info.circle.fill").foregroundColor(.white)
+                                Image(systemName: "info.circle.fill").foregroundColor(.mbzScreen)
                                 Text("More Info")
                             }
                             .font(.system(size: bodyTextSize, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 11)
-                            .background(Color.black.opacity(0.65))
+                            .background(Color.mbzSlate.opacity(0.9))
                             .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
@@ -831,14 +839,14 @@ struct FeaturedMovieBanner: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: movie.isFavorite ? "heart.fill" : "heart")
-                                    .foregroundColor(movie.isFavorite ? .red : .white)
+                                    .foregroundColor(movie.isFavorite ? .mbzGold : .mbzScreen)
                                 Text(movie.isFavorite ? "In My List" : "My List")
                             }
                             .font(.system(size: bodyTextSize, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 11)
-                            .background(Color.white.opacity(0.15))
+                            .background(Color.mbzSlate.opacity(0.6))
                             .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
@@ -848,11 +856,11 @@ struct FeaturedMovieBanner: View {
                     // Channel attribution
                     HStack(spacing: 5) {
                         Image(systemName: "play.circle.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(.mbzRed)
                             .font(.system(size: bodyTextSize - 2))
                         Text(movie.channelTitle)
                             .font(.system(size: bodyTextSize - 2))
-                            .foregroundColor(.white.opacity(0.65))
+                            .foregroundColor(.mbzMuted)
                             .lineLimit(1)
                     }
                 }
@@ -870,7 +878,7 @@ struct FeaturedMovieBanner: View {
                                 onSelectIndex?(idx)
                             } label: {
                                 Circle()
-                                    .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.4))
+                                    .fill(idx == currentIndex ? Color.mbzGold : Color.mbzMuted.opacity(0.4))
                                     .frame(width: idx == currentIndex ? 8 : 6,
                                            height: idx == currentIndex ? 8 : 6)
                                     .animation(.easeInOut(duration: 0.2), value: currentIndex)
@@ -909,8 +917,9 @@ struct MovieRowView: View {
             // Section header with "See All" button
             HStack {
                 Text(title)
-                    .font(.system(size: sectionHeaderSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: sectionHeaderSize, weight: .heavy))
+                    .tracking(0.5)
+                    .foregroundColor(.mbzGold)
                     .accessibilityAddTraits(.isHeader)
 
                 Spacer()
@@ -923,8 +932,8 @@ struct MovieRowView: View {
                         Text("See All")
                         Image(systemName: "chevron.right")
                     }
-                    .font(.system(size: sectionHeaderSize - 18))
-                    .foregroundColor(.white.opacity(0.6))
+                    .font(.system(size: sectionHeaderSize - 18, weight: .semibold))
+                    .foregroundColor(.mbzGold.opacity(0.85))
                 }
                 .buttonStyle(.plain)
             }
@@ -982,6 +991,13 @@ struct MovieCard: View {
 
     #if os(tvOS)
     @Environment(\.isFocused) private var isFocused
+    private let cornerR: CGFloat = 12
+    private let posterW: CGFloat = 245
+    private let posterH: CGFloat = 368
+    #else
+    private let cornerR: CGFloat = 8
+    private let posterW: CGFloat = 126
+    private let posterH: CGFloat = 189
     #endif
 
     var body: some View {
@@ -1016,100 +1032,96 @@ struct MovieCard: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Poster with shimmer placeholder
-            AsyncImage(url: movie.posterURL) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .aspectRatio(2/3, contentMode: .fill)
-                        .shimmer()
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(2/3, contentMode: .fill)
-                case .failure:
-                    // Fallback to YouTube thumbnail if poster fails to load
-                    AsyncImage(url: movie.youtubeThumbURL) { fallbackPhase in
-                        switch fallbackPhase {
-                        case .success(let image):
-                            image
-                                .resizable()
+            // Poster — rating chip + YouTube cue sit ON the artwork so the
+            // caption stays to a clean title + year.
+            poster
+                .overlay(alignment: .topLeading) {
+                    if let rating = movie.voteAverage ?? movie.imdbRating {
+                        Text(String(format: "%.1f", rating))
+                            .font(.system(size: cardMetadataSize, weight: .bold, design: .monospaced))
+                            .foregroundColor(.mbzInk)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.mbzGold)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .padding(6)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    // "Plays on YouTube" cue (red = play), keeps the ToS nod quiet
+                    Image(systemName: "play.fill")
+                        .font(.system(size: max(cardMetadataSize - 2, 8), weight: .black))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color.mbzRed)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .padding(6)
+                }
+
+            // Title — single line for an even baseline across the rail
+            Text(movie.displayTitle)
+                .font(.system(size: cardTitleSize, weight: .semibold))
+                .foregroundColor(.mbzScreen)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            // Year only — runtime/rating live on the artwork or the detail screen
+            if let year = movie.formattedReleaseYear {
+                Text(year)
+                    .font(.system(size: cardMetadataSize, weight: .regular, design: .monospaced))
+                    .foregroundColor(.mbzMuted)
+            }
+        }
+        .frame(width: posterW)
+    }
+
+    // Poster image with shimmer + YouTube-thumb fallback and a hairline edge.
+    private var poster: some View {
+        AsyncImage(url: movie.posterURL) { phase in
+            switch phase {
+            case .empty:
+                Rectangle()
+                    .fill(Color.mbzSlate)
+                    .aspectRatio(2/3, contentMode: .fill)
+                    .shimmer()
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(2/3, contentMode: .fill)
+            case .failure:
+                AsyncImage(url: movie.youtubeThumbURL) { fallbackPhase in
+                    switch fallbackPhase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(2/3, contentMode: .fill)
+                    default:
+                        ZStack {
+                            Rectangle()
+                                .fill(Color.mbzSlate)
                                 .aspectRatio(2/3, contentMode: .fill)
-                        default:
-                            // If YouTube thumbnail also fails, show placeholder
-                            ZStack {
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.3))
-                                    .aspectRatio(2/3, contentMode: .fill)
-                                VStack(spacing: 8) {
-                                    Image(systemName: "photo")
-                                        .font(.title)
-                                        .foregroundColor(.gray)
-                                    Text("No poster")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
+                            VStack(spacing: 8) {
+                                Image(systemName: "photo")
+                                    .font(.title)
+                                    .foregroundColor(.mbzMuted)
+                                Text("No poster")
+                                    .font(.caption)
+                                    .foregroundColor(.mbzMuted)
                             }
                         }
                     }
-                @unknown default:
-                    EmptyView()
                 }
+            @unknown default:
+                EmptyView()
             }
-            #if os(tvOS)
-            .frame(width: 245, height: 368)
-            .cornerRadius(12)
-            #else
-            .frame(width: 126, height: 189)
-            .cornerRadius(8)
-            #endif
-            .clipped()
-
-            // Title
-            Text(movie.displayTitle)
-                .font(.system(size: cardTitleSize, weight: .semibold))
-                .foregroundColor(.white)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-
-            // Metadata row: Rating • Year • Runtime
-            HStack(spacing: 4) {
-                // Display rating: prefer TMDB, fallback to IMDB
-                if let rating = movie.voteAverage ?? movie.imdbRating {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: cardMetadataSize - 2))
-                        .foregroundColor(.yellow)
-                    Text(String(format: "%.1f", rating))
-                        .font(.system(size: cardMetadataSize))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-
-                if let year = movie.formattedReleaseYear {
-                    Text("•")
-                        .foregroundColor(.white.opacity(0.5))
-                    Text(year)
-                        .font(.system(size: cardMetadataSize))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-
-                if let runtime = movie.runtimeMinutes, runtime > 0 {
-                    Text("•")
-                        .foregroundColor(.white.opacity(0.5))
-                    Text(movie.formattedRuntime)
-                        .font(.system(size: cardMetadataSize))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-
-            // YouTube attribution (TOS-compliant)
-            YouTubeAttribution(movie: movie, style: .compact)
         }
-        #if os(tvOS)
-        .frame(width: 245)
-        #else
-        .frame(width: 126)
-        #endif
+        .frame(width: posterW, height: posterH)
+        .clipShape(RoundedRectangle(cornerRadius: cornerR))
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerR)
+                .stroke(Color.mbzScreen.opacity(0.08), lineWidth: 1)
+        )
     }
 
     // MARK: - Context Menu

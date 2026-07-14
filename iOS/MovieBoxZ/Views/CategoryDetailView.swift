@@ -73,7 +73,7 @@ struct CategoryDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.mbzInk.ignoresSafeArea()
 
             if isLoading {
                 loadingView
@@ -97,10 +97,10 @@ struct CategoryDetailView: View {
         VStack(spacing: 20) {
             ProgressView()
                 .scaleEffect(1.5)
-                .tint(.white)
+                .tint(.mbzGold)
             Text("Loading \(categoryType.title)...")
                 .font(.system(size: cardTitleSize))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.mbzMuted)
         }
     }
 
@@ -113,10 +113,10 @@ struct CategoryDetailView: View {
                 .foregroundColor(.red)
             Text("Error Loading Movies")
                 .font(.system(size: headerSize - 10, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(.mbzScreen)
             Text(message)
                 .font(.system(size: cardTitleSize))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.mbzMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
 
@@ -125,10 +125,10 @@ struct CategoryDetailView: View {
             } label: {
                 Text("Try Again")
                     .font(.system(size: cardTitleSize, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.mbzInk)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 12)
-                    .background(Color.white)
+                    .background(Color.mbzGold)
                     .cornerRadius(10)
             }
             #if os(tvOS)
@@ -142,7 +142,7 @@ struct CategoryDetailView: View {
             } label: {
                 Text("Go Back")
                     .font(.system(size: cardTitleSize))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.mbzMuted)
             }
             #if os(tvOS)
             .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 8)))
@@ -167,7 +167,7 @@ struct CategoryDetailView: View {
                             Text("Back")
                         }
                         .font(.system(size: headerSize - 20))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.mbzGold)
                     }
                     #if os(tvOS)
                     .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 8)))
@@ -178,8 +178,9 @@ struct CategoryDetailView: View {
                     Spacer()
 
                     Text(categoryType.title)
-                        .font(.system(size: headerSize, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(.system(size: headerSize, weight: .heavy))
+                        .tracking(0.5)
+                        .foregroundColor(.mbzGold)
 
                     Spacer()
 
@@ -202,7 +203,7 @@ struct CategoryDetailView: View {
                 // Movie count
                 Text("\(movies.count) \(movies.count == 1 ? "movie" : "movies")")
                     .font(.system(size: headerSize - 28))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.mbzMuted)
                     #if os(tvOS)
                     .padding(.horizontal, 80)
                     #else

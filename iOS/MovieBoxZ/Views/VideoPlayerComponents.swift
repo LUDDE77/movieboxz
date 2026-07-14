@@ -43,7 +43,7 @@ struct VideoPlayerView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } placeholder: {
-                Color.black
+                Color.mbzInk
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
@@ -52,8 +52,8 @@ struct VideoPlayerView: View {
             // Dark gradient overlay
             LinearGradient(
                 gradient: Gradient(colors: [
-                    Color.black.opacity(0.7),
-                    Color.black.opacity(0.4)
+                    Color.mbzInk.opacity(0.7),
+                    Color.mbzInk.opacity(0.4)
                 ]),
                 startPoint: .bottom,
                 endPoint: .top
@@ -69,13 +69,13 @@ struct VideoPlayerView: View {
                     Text(movie.displayTitle)
                         .font(.title)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(.mbzScreen)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
 
                     Text("Hosted on \(movie.channelTitle)")
                         .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.mbzMuted)
                 }
 
                 // Play Button
@@ -89,10 +89,10 @@ struct VideoPlayerView: View {
                             .font(.title3)
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
                     .padding(.horizontal, 40)
                     .padding(.vertical, 16)
-                    .background(Color.red)
+                    .background(Color.mbzRed)
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -102,7 +102,7 @@ struct VideoPlayerView: View {
             .padding()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .background(Color.mbzInk)
         .fullScreenCover(isPresented: $showingSafariPlayer) {
             SafariPlayerView(
                 url: URL(string: "https://www.youtube.com/watch?v=\(movie.youtubeVideoId)")!,
@@ -123,22 +123,22 @@ struct VideoPlayerView: View {
     private var deepLinkPlayerView: some View {
         NavigationView {
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color.mbzInk.ignoresSafeArea()
 
                 VStack(spacing: 40) {
                     // YouTube Logo + Attribution (REQUIRED by TOS)
                     VStack(spacing: 12) {
                         Image(systemName: "play.rectangle.fill")
                             .font(.system(size: 80))
-                            .foregroundColor(.red)
+                            .foregroundColor(.mbzRed)
 
                         Text("Watch on YouTube")
                             .font(.title2)
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
 
                         Text("Hosted on \(movie.channelTitle)")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.mbzMuted)
                     }
 
                     // Movie Info
@@ -146,20 +146,20 @@ struct VideoPlayerView: View {
                         Text(movie.displayTitle)
                             .font(.title)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
 
                         if let year = movie.formattedReleaseYear {
                             Text(year)
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.mbzMuted)
                         }
 
                         if let description = movie.description {
                             Text(description)
                                 .font(.body)
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(.mbzMuted)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(3)
                                 .padding(.horizontal)
@@ -177,8 +177,8 @@ struct VideoPlayerView: View {
                         .font(.headline)
                         .padding(.horizontal, 40)
                         .padding(.vertical, 20)
-                        .background(Color.red)
-                        .foregroundColor(.white)
+                        .background(Color.mbzRed)
+                        .foregroundColor(.mbzScreen)
                         .cornerRadius(12)
                     }
                     #if os(tvOS)
@@ -190,21 +190,21 @@ struct VideoPlayerView: View {
                         VStack(spacing: 8) {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundColor(.yellow)
+                                    .foregroundColor(.mbzGold)
                                 Text("YouTube App Required")
                                     .font(.caption)
                                     .fontWeight(.semibold)
                             }
-                            .foregroundColor(.yellow)
+                            .foregroundColor(.mbzGold)
 
                             Text("Please install the YouTube app from the App Store to watch movies")
                                 .font(.caption2)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(.mbzMuted)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
                         .padding()
-                        .background(Color.yellow.opacity(0.1))
+                        .background(Color.mbzGold.opacity(0.1))
                         .cornerRadius(8)
                         .padding(.horizontal)
                     }
@@ -217,7 +217,7 @@ struct VideoPlayerView: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzGold)
                 }
             }
             #endif

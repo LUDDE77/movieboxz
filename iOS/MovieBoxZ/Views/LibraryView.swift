@@ -40,7 +40,7 @@ struct LibraryView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.mbzInk.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
                 // Header
@@ -70,8 +70,9 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 24) {
             // Title
             Text("My Library")
-                .font(.system(size: headerSize, weight: .bold))
-                .foregroundColor(.white)
+                .font(.system(size: headerSize, weight: .heavy))
+                .tracking(0.5)
+                .foregroundColor(.mbzGold)
 
             // Tab Pills
             TopBarPills(selection: $viewMode)
@@ -121,7 +122,7 @@ struct LibraryView: View {
                 #else
                 .font(.headline)
                 #endif
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.mbzMuted)
             Spacer()
         }
     }
@@ -141,7 +142,7 @@ struct LibraryView: View {
                     #else
                     .font(.system(size: 60))
                     #endif
-                    .foregroundColor(.gray.opacity(0.5))
+                    .foregroundColor(.mbzMuted.opacity(0.6))
 
                 Text("No Favorites Yet")
                     #if os(tvOS)
@@ -149,7 +150,7 @@ struct LibraryView: View {
                     #else
                     .font(.title2.bold())
                     #endif
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
                     .padding(.top, 8)
 
                 Text("Browse movies and add them to your favorites")
@@ -158,7 +159,7 @@ struct LibraryView: View {
                     #else
                     .font(.body)
                     #endif
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.mbzMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             } else {
@@ -169,7 +170,7 @@ struct LibraryView: View {
                     #else
                     .font(.system(size: 60))
                     #endif
-                    .foregroundColor(.gray.opacity(0.5))
+                    .foregroundColor(.mbzMuted.opacity(0.6))
 
                 Text("No Watch History")
                     #if os(tvOS)
@@ -177,7 +178,7 @@ struct LibraryView: View {
                     #else
                     .font(.title2.bold())
                     #endif
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
                     .padding(.top, 8)
 
                 Text("Movies you watch will appear here")
@@ -186,7 +187,7 @@ struct LibraryView: View {
                     #else
                     .font(.body)
                     #endif
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(.mbzMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }

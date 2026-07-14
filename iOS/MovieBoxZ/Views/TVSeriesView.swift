@@ -24,7 +24,7 @@ struct TVSeriesView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.mbzInk.ignoresSafeArea()
 
             if isLoading {
                 loadingView
@@ -71,14 +71,15 @@ struct TVSeriesView: View {
         HStack(spacing: 14) {
             Image(systemName: "tv")
                 .font(.system(size: titleSize * 0.7))
-                .foregroundColor(.red)
+                .foregroundColor(.mbzGold)
             VStack(alignment: .leading, spacing: 4) {
                 Text("TV Series")
-                    .font(.system(size: titleSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: titleSize, weight: .heavy))
+                    .tracking(0.5)
+                    .foregroundColor(.mbzGold)
                 Text("\(seriesList.count) shows")
                     .font(.system(size: cardMetadataSize + 2))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.mbzMuted)
             }
         }
         #if os(tvOS)
@@ -155,10 +156,10 @@ struct TVSeriesView: View {
                 if let eps = series.episodeCount, eps > 0 {
                     Text("\(eps) Episodes")
                         .font(.system(size: cardBadgeSize, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.mbzInk)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(Color.red)
+                        .background(Color.mbzGold)
                         .cornerRadius(6)
                         .padding(6)
                 }
@@ -167,7 +168,7 @@ struct TVSeriesView: View {
             // Title
             Text(series.title)
                 .font(.system(size: cardTitleSize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(.mbzScreen)
                 .lineLimit(2)
 
             // Metadata line: year range + season count
@@ -176,18 +177,18 @@ struct TVSeriesView: View {
                     let endText = series.yearEnd.map { "–\($0)" } ?? "–"
                     Text("\(start)\(endText)")
                         .font(.system(size: cardMetadataSize))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.mbzMuted)
                 }
 
                 if let sc = series.seasonCount, sc > 0 {
                     if series.yearStart != nil {
                         Text("·")
                             .font(.system(size: cardMetadataSize))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(.mbzMuted.opacity(0.6))
                     }
                     Text(sc == 1 ? "1 Season" : "\(sc) Seasons")
                         .font(.system(size: cardMetadataSize))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(.mbzMuted)
                 }
             }
         }
@@ -205,7 +206,7 @@ struct TVSeriesView: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .tint(.white)
+                .tint(.mbzGold)
                 #if os(tvOS)
                 .scaleEffect(2)
                 #else
@@ -213,7 +214,7 @@ struct TVSeriesView: View {
                 #endif
             Text("Loading TV Series...")
                 .font(.system(size: cardTitleSize))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.mbzMuted)
         }
     }
 
@@ -228,13 +229,13 @@ struct TVSeriesView: View {
                 #else
                 .font(.system(size: 60))
                 #endif
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(.mbzMuted.opacity(0.5))
             Text("No TV Series Yet")
                 .font(.system(size: cardTitleSize + 4, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.mbzMuted)
             Text("TV series will appear here as they are added")
                 .font(.system(size: cardMetadataSize + 2))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(.mbzMuted.opacity(0.7))
                 .multilineTextAlignment(.center)
                 #if os(tvOS)
                 .padding(.horizontal, 200)

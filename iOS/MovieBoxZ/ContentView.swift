@@ -48,7 +48,7 @@ struct ContentView: View {
                 }
                 .tag(5)
         }
-        .accentColor(.red)
+        .accentColor(.mbzGold)
         .tabViewStyle(.automatic)
         #else
         iOSLayout
@@ -59,8 +59,8 @@ struct ContentView: View {
     private var iOSLayout: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                // Full-screen black base
-                Color.black
+                // Full-screen ink base
+                Color.mbzInk
 
                 // Tab content fills the full screen so its own
                 // internal .ignoresSafeArea() calls work correctly
@@ -122,14 +122,14 @@ private struct CustomTabBar: View {
                         Text(tabs[index].label)
                             .font(.system(size: 10))
                     }
-                    .foregroundColor(selectedTab == index ? .red : .gray)
+                    .foregroundColor(selectedTab == index ? .mbzGold : .mbzMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .background(Color.black.opacity(0.85))
+        .background(Color.mbzInk.opacity(0.92))
     }
 }
 #endif

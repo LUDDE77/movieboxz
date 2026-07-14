@@ -24,7 +24,7 @@ struct SettingsView: View {
                 Section {
                     HStack {
                         Image(systemName: "tv.circle.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(.mbzGold)
                             .font(.title2)
                         VStack(alignment: .leading) {
                             Text("MovieBoxZ")
@@ -204,6 +204,10 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 }
             }
+            #if os(iOS)
+            .scrollContentBackground(.hidden)
+            .background(Color.mbzInk)
+            #endif
             .navigationTitle("Settings")
         }
         .onReceive(movieService.$isConnected) { connected in

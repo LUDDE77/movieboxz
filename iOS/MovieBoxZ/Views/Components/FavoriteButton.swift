@@ -32,11 +32,11 @@ struct FavoriteButton: View {
         } label: {
             Image(systemName: isFavorite ? "heart.fill" : "heart")
                 .font(.system(size: iconSize))
-                .foregroundColor(isFavorite ? .red : .white)
+                .foregroundColor(isFavorite ? .mbzGold : .mbzScreen)
                 .padding(padding)
                 .background(
                     Circle()
-                        .fill(Color.black.opacity(0.6))
+                        .fill(Color.mbzInk.opacity(0.6))
                         .shadow(color: .black.opacity(0.3), radius: 8)
                 )
         }

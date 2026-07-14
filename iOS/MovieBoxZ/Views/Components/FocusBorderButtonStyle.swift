@@ -44,7 +44,7 @@ enum FocusVariant {
     var shadowColor: Color {
         switch self {
         case .card: return .black.opacity(0.45)
-        case .action: return .white.opacity(0.20)
+        case .action: return .mbzGold.opacity(0.35)
         case .utility: return .clear
         }
     }
@@ -78,7 +78,7 @@ enum FocusVariant {
 // MARK: - FocusBorderButtonStyle
 
 /// Unified focus style for tvOS. Replaces Apple's grey `.card` box with a
-/// crisp white border that reflects the semantic purpose of the button.
+/// crisp marquee-gold border that reflects the semantic purpose of the button.
 struct FocusBorderButtonStyle: ButtonStyle {
     var variant: FocusVariant = .card()
 
@@ -88,7 +88,7 @@ struct FocusBorderButtonStyle: ButtonStyle {
         configuration.label
             .overlay(
                 RoundedRectangle(cornerRadius: variant.resolvedCornerRadius)
-                    .strokeBorder(Color.white, lineWidth: variant.borderWidth)
+                    .strokeBorder(Color.mbzGold, lineWidth: variant.borderWidth)
                     .opacity(isFocused ? 1 : 0)
             )
             .scaleEffect(isFocused ? variant.scale : 1.0)

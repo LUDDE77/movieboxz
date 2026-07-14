@@ -61,13 +61,13 @@ struct TopBarPills<SelectionValue: Hashable & CaseIterable & RawRepresentable>: 
         } label: {
             Text(option.rawValue)
                 .font(.system(size: fontSize, weight: isSelected ? .bold : .regular))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                .foregroundColor(isSelected ? .mbzGold : .mbzMuted)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
                 .background {
                     if isSelected {
                         Capsule()
-                            .fill(Color.white.opacity(0.2))
+                            .fill(Color.mbzGold.opacity(0.18))
                             .matchedGeometryEffect(id: "pill", in: animation)
                     }
                 }
@@ -85,13 +85,13 @@ struct TopBarPills<SelectionValue: Hashable & CaseIterable & RawRepresentable>: 
         } label: {
             Text(option.rawValue)
                 .font(.system(size: fontSize, weight: isSelected ? .bold : .regular))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                .foregroundColor(isSelected ? .mbzGold : .mbzMuted)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, verticalPadding)
                 .background {
                     if isSelected {
                         Capsule()
-                            .fill(Color.white.opacity(0.2))
+                            .fill(Color.mbzGold.opacity(0.18))
                             .matchedGeometryEffect(id: "pill", in: animation)
                     }
                 }

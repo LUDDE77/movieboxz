@@ -53,7 +53,7 @@ struct SeriesDetailView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.mbzInk.ignoresSafeArea()
 
             if isLoading {
                 loadingView
@@ -86,9 +86,9 @@ struct SeriesDetailView: View {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 38, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .padding(18)
-                            .background(Circle().fill(Color.black.opacity(0.6)))
+                            .background(Circle().fill(Color.mbzInk.opacity(0.6)))
                     }
                     .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 100)))
                     .accessibilityLabel("Close")
@@ -110,14 +110,14 @@ struct SeriesDetailView: View {
                 }
             }
         }
-        .background(Color.black)
+        .background(Color.mbzInk)
         #if !os(tvOS)
         .overlay(alignment: .topTrailing) {
             Button { dismiss() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(.white.opacity(0.9))
-                    .background(Circle().fill(Color.black.opacity(0.4)).frame(width: 40, height: 40))
+                    .foregroundColor(.mbzScreen.opacity(0.9))
+                    .background(Circle().fill(Color.mbzInk.opacity(0.4)).frame(width: 40, height: 40))
             }
             .padding(.top, 50)
             .padding(.trailing, 16)
@@ -143,7 +143,7 @@ struct SeriesDetailView: View {
 
                 Text(seriesDetail?.title ?? series.title)
                     .font(.system(size: titleSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(.mbzScreen)
                     .lineLimit(3)
 
                 seriesMetaBadges
@@ -151,7 +151,7 @@ struct SeriesDetailView: View {
                 if let description = seriesDetail?.description ?? series.description {
                     Text(description)
                         .font(.system(size: bodySize))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(.mbzMuted)
                         .lineLimit(5)
                         .lineSpacing(5)
                 }
@@ -185,8 +185,8 @@ struct SeriesDetailView: View {
                 LinearGradient(
                     gradient: Gradient(stops: [
                         .init(color: .clear, location: 0.0),
-                        .init(color: Color.black.opacity(0.5), location: 0.5),
-                        .init(color: Color.black, location: 1.0)
+                        .init(color: Color.mbzInk.opacity(0.5), location: 0.5),
+                        .init(color: Color.mbzInk, location: 1.0)
                     ]),
                     startPoint: .top,
                     endPoint: .bottom
@@ -203,7 +203,7 @@ struct SeriesDetailView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(seriesDetail?.title ?? series.title)
                             .font(.system(size: titleSize, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(.mbzScreen)
                             .lineLimit(2)
                             .shadow(radius: 6)
 
@@ -222,7 +222,7 @@ struct SeriesDetailView: View {
             if let description = seriesDetail?.description ?? series.description {
                 Text(description)
                     .font(.system(size: bodySize))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.mbzMuted)
                     .lineSpacing(4)
                     .padding(.horizontal, contentPadding)
                     .padding(.top, 12)
@@ -245,17 +245,17 @@ struct SeriesDetailView: View {
                 return ""
             }()
             if !yearText.isEmpty {
-                metaBadge(yearText, color: .white.opacity(0.15))
+                metaBadge(yearText, color: Color.mbzSlate)
             }
 
             // Season count
             if let seasons = series.seasonCount, seasons > 0 {
-                metaBadge(seasons == 1 ? "1 Season" : "\(seasons) Seasons", color: Color.red.opacity(0.25))
+                metaBadge(seasons == 1 ? "1 Season" : "\(seasons) Seasons", color: Color.mbzGold.opacity(0.22))
             }
 
             // Episode count
             if let eps = series.episodeCount, eps > 0 {
-                metaBadge("\(eps) Episodes", color: .white.opacity(0.12))
+                metaBadge("\(eps) Episodes", color: Color.mbzSlate)
             }
         }
     }
@@ -263,7 +263,7 @@ struct SeriesDetailView: View {
     private func metaBadge(_ text: String, color: Color) -> some View {
         Text(text)
             .font(.system(size: captionSize, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundColor(.mbzScreen)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(color)
@@ -308,8 +308,9 @@ struct SeriesDetailView: View {
             } else {
                 // Single season — just show a header
                 Text("Episodes")
-                    .font(.system(size: sectionHeaderSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.system(size: sectionHeaderSize, weight: .heavy))
+                    .tracking(0.5)
+                    .foregroundColor(.mbzGold)
                     .padding(.horizontal, contentPadding)
                     .padding(.top, 24)
                     .padding(.bottom, 8)
@@ -337,10 +338,10 @@ struct SeriesDetailView: View {
                     } label: {
                         Text("Season \(seasons[idx].seasonNumber)")
                             .font(.system(size: sectionHeaderSize * 0.85, weight: isSelected ? .bold : .regular))
-                            .foregroundColor(isSelected ? .black : .white)
+                            .foregroundColor(isSelected ? .mbzInk : .mbzScreen)
                             .padding(.horizontal, 18)
                             .frame(height: seasonPickerHeight)
-                            .background(isSelected ? Color.white : Color.white.opacity(0.15))
+                            .background(isSelected ? Color.mbzGold : Color.mbzSlate)
                             .cornerRadius(10)
                     }
                     #if os(tvOS)
@@ -438,10 +439,10 @@ struct SeriesDetailView: View {
                 if let season = episode.seasonNumber, let ep = episode.episodeNumber {
                     Text("S\(season)E\(ep)")
                         .font(.system(size: episodeBadgeSize, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.mbzInk)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(Color.red)
+                        .background(Color.mbzGold)
                         .cornerRadius(5)
                         .padding(8)
                 }
@@ -451,7 +452,7 @@ struct SeriesDetailView: View {
                     Spacer()
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: episodeTitleSize + 8))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(.mbzRed)
                         .shadow(radius: 6)
                         .padding(8)
                 }
@@ -460,7 +461,7 @@ struct SeriesDetailView: View {
             // Episode title
             Text(episode.displayTitle)
                 .font(.system(size: episodeTitleSize, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(.mbzScreen)
                 .lineLimit(2)
                 .frame(width: episodeCardWidth, alignment: .leading)
 
@@ -468,12 +469,12 @@ struct SeriesDetailView: View {
             if episode.runtimeMinutes != nil {
                 Text(episode.formattedRuntime)
                     .font(.system(size: episodeBadgeSize + 2))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.mbzMuted)
             } else if episode.episodeNumber != nil {
                 // Show view count as a fallback for episodes without runtime
                 Text(episode.formattedViewCount)
                     .font(.system(size: episodeBadgeSize + 2))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.mbzMuted)
             }
         }
     }
@@ -492,7 +493,7 @@ struct SeriesDetailView: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .tint(.white)
+                .tint(.mbzGold)
                 #if os(tvOS)
                 .scaleEffect(2)
                 #else
@@ -500,7 +501,7 @@ struct SeriesDetailView: View {
                 #endif
             Text("Loading series...")
                 .font(.system(size: bodySize))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.mbzMuted)
         }
     }
 
@@ -511,18 +512,18 @@ struct SeriesDetailView: View {
                 .foregroundColor(.red)
             Text("Could not load series")
                 .font(.system(size: titleSize * 0.6, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(.mbzScreen)
             Text(message)
                 .font(.system(size: bodySize))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.mbzMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             Button("Retry") { loadSeriesDetail() }
                 .font(.system(size: bodySize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(.mbzInk)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
-                .background(Color.red)
+                .background(Color.mbzGold)
                 .cornerRadius(10)
                 #if os(tvOS)
                 .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 10)))
