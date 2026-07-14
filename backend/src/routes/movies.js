@@ -308,13 +308,17 @@ router.get('/top-rated', async (req, res, next) => {
     try {
         const page = parseInt(req.query.page) || 1
         const limit = Math.min(parseInt(req.query.limit) || 50, MAX_LIMIT)
-        const minVotes = parseInt(req.query.minVotes) || 10
         const offset = (page - 1) * limit
+        // source=imdb ranks by the IMDB rating (numeric); default ranks by TMDB vote_average.
+        const source = req.query.source === 'imdb' ? 'imdb' : 'tmdb'
+        const ratingColumn = source === 'imdb' ? 'imdb_rating' : 'vote_average'
+        const voteColumn = source === 'imdb' ? 'imdb_votes' : 'vote_count'
+        const minVotes = parseInt(req.query.minVotes) || (source === 'imdb' ? 1000 : 10)
 
-        logger.info(`Fetching top rated movies - page ${page}, min ${minVotes} votes`)
+        logger.info(`Fetching top rated movies (${source}) - page ${page}, min ${minVotes} ${voteColumn}`)
 
         // Use raw Supabase query to filter NULL ratings and minimum votes
-        const { data, error, count } = await supabase
+        let query = supabase
             .from('movies')
             .select(`
                 *,
@@ -322,9 +326,17 @@ router.get('/top-rated', async (req, res, next) => {
                 movie_genres(genres(id, name))
             `, { count: 'exact' })
             .eq('is_available', true)
-            .not('vote_average', 'is', null)  // Filter out NULL ratings
-            .gte('vote_count', minVotes)      // Minimum vote threshold
-            .order('vote_average', { ascending: false })
+            .not(ratingColumn, 'is', null)    // Filter out NULL ratings
+            .gte(voteColumn, minVotes)        // Minimum vote threshold
+
+        // The IMDB high-score row is a films-only list — keep TV episodes out
+        // (is_tv_series is not true keeps both false and NULL).
+        if (source === 'imdb') {
+            query = query.not('is_tv_series', 'is', true)
+        }
+
+        const { data, error, count } = await query
+            .order(ratingColumn, { ascending: false })
             .range(offset, offset + limit - 1)
 
         if (error) {
