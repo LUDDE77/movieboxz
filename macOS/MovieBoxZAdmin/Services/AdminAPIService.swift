@@ -1569,4 +1569,87 @@ class AdminAPIService: ObservableObject {
         )
         return response.data
     }
+
+    // MARK: - Review (below-threshold pick triage)
+
+    /// GET /staging/movies?status=pending&filter=enriched&channel_id=…&page=N&limit=50
+    /// Returns pending movies whose pick scored below the auto-approve threshold,
+    /// including the original YouTube description backfill.
+    func getReviewQueue(channelId: String? = nil, page: Int = 1, limit: Int = 50) async throws -> ReviewQueueData {
+        var items = [
+            URLQueryItem(name: "status", value: "pending"),
+            URLQueryItem(name: "filter", value: "enriched"),
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "limit", value: String(limit))
+        ]
+        if let channelId, !channelId.isEmpty {
+            items.append(URLQueryItem(name: "channel_id", value: channelId))
+        }
+        dlog("🗂️ [API] Fetching review queue: page=\(page), channel=\(channelId ?? "all")")
+        let response: APIResponse<ReviewQueueData> = try await request(
+            endpoint: endpointWithQuery("/staging/movies", items)
+        )
+        return response.data
+    }
+
+    /// POST /staging/movies/:id/approve — approves the current pick for publishing.
+    @discardableResult
+    func approveReviewMovie(movieId: String) async throws -> String? {
+        dlog("✅ [API] Approving review movie \(movieId)")
+        let response = try await requestBasic(endpoint: "/staging/movies/\(movieId)/approve", method: "POST")
+        return response.message
+    }
+
+    /// POST /staging/movies/:id/reject { reason }
+    @discardableResult
+    func rejectReviewMovie(movieId: String, reason: String) async throws -> String? {
+        struct Body: Codable { let reason: String }
+        dlog("❌ [API] Rejecting review movie \(movieId)")
+        let response = try await requestBasic(
+            endpoint: "/staging/movies/\(movieId)/reject",
+            method: "POST",
+            body: Body(reason: reason)
+        )
+        return response.message
+    }
+
+    /// GET /staging/movies/:id/tmdb-candidates?q=<optional override>
+    func getTmdbCandidates(movieId: String, query: String? = nil) async throws -> TmdbCandidatesData {
+        var items: [URLQueryItem] = []
+        if let query, !query.isEmpty {
+            items.append(URLQueryItem(name: "q", value: query))
+        }
+        dlog("🔎 [API] Fetching TMDB candidates for \(movieId), q=\(query ?? "auto")")
+        let response: APIResponse<TmdbCandidatesData> = try await request(
+            endpoint: endpointWithQuery("/staging/movies/\(movieId)/tmdb-candidates", items)
+        )
+        return response.data
+    }
+
+    /// POST /staging/movies/:id/set-match { tmdbId } — re-picks the match and
+    /// returns the updated movie row so the UI can refresh in place.
+    func setReviewMatch(movieId: String, tmdbId: Int) async throws -> ReviewMovie {
+        struct Body: Codable { let tmdbId: Int }
+        dlog("🎯 [API] Setting match for \(movieId) → TMDB \(tmdbId)")
+        let response: APIResponse<ReviewMovie> = try await request(
+            endpoint: "/staging/movies/\(movieId)/set-match",
+            method: "POST",
+            body: Body(tmdbId: tmdbId)
+        )
+        return response.data
+    }
+
+    /// POST /staging/movies/:id/enrich-manual-imdb { imdbId } — applies a known
+    /// IMDB id directly (OMDB fetch, marks the row manually_verified) and returns
+    /// the updated movie row so the UI can refresh the pick in place.
+    func enrichReviewMovieByImdb(movieId: String, imdbId: String) async throws -> ReviewMovie {
+        struct Body: Codable { let imdbId: String }
+        dlog("🎯 [API] Manual IMDB enrich for review movie \(movieId) → \(imdbId)")
+        let response: APIResponse<ReviewMovie> = try await request(
+            endpoint: "/staging/movies/\(movieId)/enrich-manual-imdb",
+            method: "POST",
+            body: Body(imdbId: imdbId)
+        )
+        return response.data
+    }
 }

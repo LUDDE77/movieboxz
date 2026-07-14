@@ -1584,3 +1584,250 @@ struct EpisodeMatchConfirmData: Codable {
     let updated: Int
     let errors: [EpisodeMatchConfirmError]?
 }
+
+// MARK: - Review Queue (below-threshold pick triage)
+
+/// A pending staged movie whose enrichment PICK scored below the channel's
+/// auto-approve threshold. Rendered one-at-a-time in the Review screen so an
+/// operator can quickly approve / reject / pass / re-pick.
+///
+/// Fields are decoded tolerantly: `enrichment_confidence` may arrive as a number
+/// or a string, and most metadata is optional (a below-threshold pick may be
+/// missing plot, cast, etc.).
+struct ReviewMovie: Codable, Identifiable, Hashable {
+    let id: String
+    let youtubeVideoId: String
+    let youtubeVideoTitle: String?
+    /// ORIGINAL YouTube description (backfilled), not the pick's plot.
+    let youtubeDescription: String?
+    /// The PICK's title.
+    let title: String?
+    /// The PICK's plot/overview.
+    let description: String?
+    /// The PICK's poster (TMDB relative path or full URL).
+    let posterPath: String?
+    let releaseDate: String?
+    let runtimeMinutes: Int?
+    let enrichmentConfidence: Double?
+    let tmdbId: Int?
+    let imdbId: String?
+    let actors: String?
+    let director: String?
+    let channelTitle: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case youtubeVideoId = "youtube_video_id"
+        case youtubeVideoTitle = "youtube_video_title"
+        case youtubeDescription = "youtube_description"
+        case title
+        case description
+        case posterPath = "poster_path"
+        case releaseDate = "release_date"
+        case runtimeMinutes = "runtime_minutes"
+        case enrichmentConfidence = "enrichment_confidence"
+        case tmdbId = "tmdb_id"
+        case imdbId = "imdb_id"
+        case actors
+        case director
+        case channelTitle = "channel_title"
+    }
+
+    /// Memberwise init (needed because the custom `init(from:)` below suppresses
+    /// the compiler-synthesized one). Used by `mergingPick(from:)` to build a
+    /// merged copy without a network round-trip.
+    init(id: String,
+         youtubeVideoId: String,
+         youtubeVideoTitle: String?,
+         youtubeDescription: String?,
+         title: String?,
+         description: String?,
+         posterPath: String?,
+         releaseDate: String?,
+         runtimeMinutes: Int?,
+         enrichmentConfidence: Double?,
+         tmdbId: Int?,
+         imdbId: String?,
+         actors: String?,
+         director: String?,
+         channelTitle: String?) {
+        self.id = id
+        self.youtubeVideoId = youtubeVideoId
+        self.youtubeVideoTitle = youtubeVideoTitle
+        self.youtubeDescription = youtubeDescription
+        self.title = title
+        self.description = description
+        self.posterPath = posterPath
+        self.releaseDate = releaseDate
+        self.runtimeMinutes = runtimeMinutes
+        self.enrichmentConfidence = enrichmentConfidence
+        self.tmdbId = tmdbId
+        self.imdbId = imdbId
+        self.actors = actors
+        self.director = director
+        self.channelTitle = channelTitle
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        youtubeVideoId = (try? c.decode(String.self, forKey: .youtubeVideoId)) ?? ""
+        youtubeVideoTitle = try? c.decodeIfPresent(String.self, forKey: .youtubeVideoTitle)
+        youtubeDescription = try? c.decodeIfPresent(String.self, forKey: .youtubeDescription)
+        title = try? c.decodeIfPresent(String.self, forKey: .title)
+        description = try? c.decodeIfPresent(String.self, forKey: .description)
+        posterPath = try? c.decodeIfPresent(String.self, forKey: .posterPath)
+        releaseDate = try? c.decodeIfPresent(String.self, forKey: .releaseDate)
+        runtimeMinutes = ReviewMovie.flexibleInt(c, .runtimeMinutes)
+        enrichmentConfidence = ReviewMovie.flexibleDouble(c, .enrichmentConfidence)
+        tmdbId = ReviewMovie.flexibleInt(c, .tmdbId)
+        imdbId = try? c.decodeIfPresent(String.self, forKey: .imdbId)
+        actors = try? c.decodeIfPresent(String.self, forKey: .actors)
+        director = try? c.decodeIfPresent(String.self, forKey: .director)
+        channelTitle = try? c.decodeIfPresent(String.self, forKey: .channelTitle)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(youtubeVideoId, forKey: .youtubeVideoId)
+        try c.encodeIfPresent(youtubeVideoTitle, forKey: .youtubeVideoTitle)
+        try c.encodeIfPresent(youtubeDescription, forKey: .youtubeDescription)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(posterPath, forKey: .posterPath)
+        try c.encodeIfPresent(releaseDate, forKey: .releaseDate)
+        try c.encodeIfPresent(runtimeMinutes, forKey: .runtimeMinutes)
+        try c.encodeIfPresent(enrichmentConfidence, forKey: .enrichmentConfidence)
+        try c.encodeIfPresent(tmdbId, forKey: .tmdbId)
+        try c.encodeIfPresent(imdbId, forKey: .imdbId)
+        try c.encodeIfPresent(actors, forKey: .actors)
+        try c.encodeIfPresent(director, forKey: .director)
+        try c.encodeIfPresent(channelTitle, forKey: .channelTitle)
+    }
+
+    private static func flexibleDouble(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Double? {
+        if let d = try? c.decode(Double.self, forKey: key) { return d }
+        if let i = try? c.decode(Int.self, forKey: key) { return Double(i) }
+        if let s = try? c.decode(String.self, forKey: key) { return Double(s) }
+        return nil
+    }
+
+    private static func flexibleInt(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Int? {
+        if let i = try? c.decode(Int.self, forKey: key) { return i }
+        if let d = try? c.decode(Double.self, forKey: key) { return Int(d) }
+        if let s = try? c.decode(String.self, forKey: key) { return Int(s) }
+        return nil
+    }
+
+    /// ORIGINAL YouTube thumbnail (16:9).
+    var youtubeThumbnailURL: URL? {
+        guard !youtubeVideoId.isEmpty else { return nil }
+        return URL(string: "https://i.ytimg.com/vi/\(youtubeVideoId)/hqdefault.jpg")
+    }
+
+    var youtubeURL: URL? {
+        guard !youtubeVideoId.isEmpty else { return nil }
+        return URL(string: "https://www.youtube.com/watch?v=\(youtubeVideoId)")
+    }
+
+    var releaseYear: String? {
+        guard let releaseDate, releaseDate.count >= 4 else { return nil }
+        return String(releaseDate.prefix(4))
+    }
+
+    /// Returns a copy of `self` with only the PICK-side fields overlaid from
+    /// `other` (title, plot, poster, release date, runtime, confidence, tmdb/imdb
+    /// ids, actors, director). The YouTube/channel-side fields — video id/title/
+    /// description and channel title — are kept from `self`.
+    ///
+    /// Re-match (`set-match`) and manual-IMDB-enrich (`enrich-manual-imdb`)
+    /// responses only carry the updated pick and may omit the joined YouTube
+    /// fields; a wholesale replace would blank those out in the review UI.
+    func mergingPick(from other: ReviewMovie) -> ReviewMovie {
+        ReviewMovie(
+            id: id,
+            youtubeVideoId: youtubeVideoId,
+            youtubeVideoTitle: youtubeVideoTitle,
+            youtubeDescription: youtubeDescription,
+            title: other.title,
+            description: other.description,
+            posterPath: other.posterPath,
+            releaseDate: other.releaseDate,
+            runtimeMinutes: other.runtimeMinutes,
+            enrichmentConfidence: other.enrichmentConfidence,
+            tmdbId: other.tmdbId,
+            imdbId: other.imdbId,
+            actors: other.actors,
+            director: other.director,
+            channelTitle: channelTitle
+        )
+    }
+}
+
+struct ReviewQueueData: Codable {
+    let movies: [ReviewMovie]
+    let pagination: Pagination
+}
+
+/// A TMDB re-pick candidate returned by GET /staging/movies/:id/tmdb-candidates.
+struct TmdbCandidate: Codable, Identifiable, Hashable {
+    let tmdbId: Int
+    let title: String?
+    let year: String?
+    let posterPath: String?
+    let overview: String?
+    let voteAverage: Double?
+
+    var id: Int { tmdbId }
+
+    enum CodingKeys: String, CodingKey {
+        case tmdbId = "tmdb_id"
+        case title, year, overview
+        case posterPath = "poster_path"
+        case voteAverage = "vote_average"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let i = try? c.decode(Int.self, forKey: .tmdbId) {
+            tmdbId = i
+        } else if let s = try? c.decode(String.self, forKey: .tmdbId), let i = Int(s) {
+            tmdbId = i
+        } else {
+            tmdbId = 0
+        }
+        title = try? c.decodeIfPresent(String.self, forKey: .title)
+        if let y = try? c.decodeIfPresent(Int.self, forKey: .year) {
+            year = String(y)
+        } else {
+            year = try? c.decodeIfPresent(String.self, forKey: .year)
+        }
+        posterPath = try? c.decodeIfPresent(String.self, forKey: .posterPath)
+        overview = try? c.decodeIfPresent(String.self, forKey: .overview)
+        if let d = try? c.decode(Double.self, forKey: .voteAverage) {
+            voteAverage = d
+        } else if let i = try? c.decode(Int.self, forKey: .voteAverage) {
+            voteAverage = Double(i)
+        } else if let s = try? c.decode(String.self, forKey: .voteAverage) {
+            voteAverage = Double(s)
+        } else {
+            voteAverage = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(tmdbId, forKey: .tmdbId)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(year, forKey: .year)
+        try c.encodeIfPresent(posterPath, forKey: .posterPath)
+        try c.encodeIfPresent(overview, forKey: .overview)
+        try c.encodeIfPresent(voteAverage, forKey: .voteAverage)
+    }
+}
+
+struct TmdbCandidatesData: Codable {
+    let query: String?
+    let candidates: [TmdbCandidate]
+}

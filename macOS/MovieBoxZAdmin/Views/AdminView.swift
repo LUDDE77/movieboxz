@@ -20,6 +20,8 @@ struct AdminView: View {
                     .tag(7)
                 Label("Verification", systemImage: "checkmark.seal.fill")
                     .tag(8)
+                Label("Review", systemImage: "checkmark.rectangle.stack")
+                    .tag(11)
                 Label("Duplicates", systemImage: "square.on.square")
                     .tag(9)
                 Label("Channel Setup", systemImage: "tv.fill")
@@ -55,6 +57,8 @@ struct AdminView: View {
                     StagingView()
                 case 8:
                     VerificationQueueView()
+                case 11:
+                    ReviewView()
                 case 9:
                     DuplicateManagerView()
                 case 10:
