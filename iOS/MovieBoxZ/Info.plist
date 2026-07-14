@@ -12,12 +12,20 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>MovieBoxZ</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Export compliance: the app uses only standard HTTPS (App Transport
+	     Security), which is exempt encryption, so no ECCN docs are required. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- Schemes we probe with canOpenURL to hand playback to the official
+	     YouTube app (deep-link model — playback, ads, and ToS stay with YouTube). -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>youtube</string>

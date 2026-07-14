@@ -119,6 +119,26 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: Attribution (required by data providers' terms)
+                Section("Data Attribution") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Movie & TV metadata and artwork provided by TMDB.")
+                            .font(.footnote)
+                        Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 2)
+
+                    Text("Ratings provided by OMDb API and IMDb.")
+                        .font(.footnote)
+
+                    Text("Video content is hosted on and streamed from YouTube. MovieBoxZ links to the official YouTube app and does not host, stream, download, or store any video. Playback is subject to YouTube's Terms of Service.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 2)
+                }
+
                 // MARK: Support
                 Section("Support") {
                     Button {
