@@ -45,3 +45,15 @@ struct MovieBoxZApp: App {
         .environmentObject(movieService)
     }
 }
+
+// MARK: - MovieBoxZ brand palette
+// Marquee gold leads the identity; cinema red is reserved for play/live.
+extension Color {
+    static let mbzInk    = Color(red: 0.055, green: 0.043, blue: 0.063) // #0E0B10 Projection Black
+    static let mbzSlate  = Color(red: 0.118, green: 0.090, blue: 0.133) // #1E1722 Reel Slate
+    static let mbzGold   = Color(red: 0.910, green: 0.698, blue: 0.290) // #E8B24A Marquee Gold
+    static let mbzGoldHi = Color(red: 0.965, green: 0.831, blue: 0.533) // #F6D488 Gold highlight
+    static let mbzRed    = Color(red: 0.886, green: 0.227, blue: 0.180) // #E23A2E Cinema Red
+    static let mbzScreen = Color(red: 0.953, green: 0.929, blue: 0.886) // #F3EDE2 Screen White
+    static let mbzMuted  = Color(red: 0.663, green: 0.624, blue: 0.690) // #A99FB0 Plum Grey
+}

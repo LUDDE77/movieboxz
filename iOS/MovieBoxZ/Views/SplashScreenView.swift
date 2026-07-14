@@ -27,22 +27,17 @@ struct SplashScreenView: View {
                     Color.black.ignoresSafeArea()
 
                     VStack(spacing: 30) {
-                        // Logo
-                        Image(systemName: "play.rectangle.fill")
-                            .font(.system(size: 120))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.red, .purple],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                        // Logo — the film-box·Z mark
+                        Image("SplashLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 168, height: 168)
                             .scaleEffect(scale)
 
                         // App Name
                         Text("MovieBoxZ")
                             .font(.system(size: 60, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color(red: 0.953, green: 0.929, blue: 0.886)) // Screen White
 
                         // Version Number - CRITICAL FOR VERIFICATION
                         Text("Version \(AppVersion.fullVersion)")
