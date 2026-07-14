@@ -1141,12 +1141,12 @@ struct MovieCard: View {
             )
         }
 
-        // Open in YouTube app — same service call used everywhere else
+        // Open in YouTube app — routed through the branded pre-roll (ad seam)
         Button {
             #if os(iOS)
             HapticFeedback.medium()
             #endif
-            YouTubePlayerService.shared.playMovie(movie) { _ in }
+            WatchCoordinator.shared.requestWatch(movie)
         } label: {
             Label("Watch on YouTube", systemImage: "play.rectangle")
         }

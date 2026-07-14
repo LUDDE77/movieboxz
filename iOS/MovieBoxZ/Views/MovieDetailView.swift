@@ -7,6 +7,7 @@ struct MovieDetailView: View {
     let movie: Movie
     @Environment(\.dismiss) private var dismiss
     @State private var showYouTubeUnavailableAlert = false
+    @State private var showWatchInterstitial = false
 
     // Platform-specific sizes
     #if os(tvOS)
@@ -103,6 +104,18 @@ struct MovieDetailView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Unable to open this video right now. Please make sure the YouTube app is installed, or try again later.")
+        }
+        // Branded pre-roll before handing off to YouTube (ad slot for later).
+        .fullScreenCover(isPresented: $showWatchInterstitial) {
+            WatchInterstitialView(
+                onComplete: {
+                    showWatchInterstitial = false
+                    watchOnYouTube()
+                },
+                onCancel: {
+                    showWatchInterstitial = false
+                }
+            )
         }
     }
 
@@ -312,7 +325,7 @@ struct MovieDetailView: View {
             // isn't installed), using the same YouTubePlayerService call as
             // the hero banner's context menu.
             Button {
-                watchOnYouTube()
+                showWatchInterstitial = true
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "play.rectangle.fill")

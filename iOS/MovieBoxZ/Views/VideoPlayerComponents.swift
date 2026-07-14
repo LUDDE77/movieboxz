@@ -250,11 +250,8 @@ struct VideoPlayerView: View {
     // MARK: - Helper Methods
 
     private func openInYouTubeApp() {
-        YouTubePlayerService.shared.playMovie(movie) { success in
-            if !success {
-                showYouTubeAppPrompt = true
-            }
-        }
+        // Routed through the branded pre-roll (ad seam) before the YouTube hand-off.
+        WatchCoordinator.shared.requestWatch(movie)
     }
 }
 
