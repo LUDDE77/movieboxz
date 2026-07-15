@@ -19,6 +19,12 @@ struct MainBrowseView: View {
     @State private var tvSeries: [Movie] = [] // Placeholder for TV series
     @State private var topImdbMovies: [Movie] = [] // High Score IMDB row
 
+    // Browse-by-era rows
+    @State private var decade2000s: [Movie] = []   // "Modern Cinema"
+    @State private var decade8090: [Movie] = []    // "The 80s & 90s"
+    @State private var decade6070: [Movie] = []    // "The 60s & 70s"
+    @State private var decadeClassic: [Movie] = [] // "Classic Cinema"
+
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showError = false
@@ -174,6 +180,9 @@ struct MainBrowseView: View {
                                 }
                             }
 
+                            // Browse by era — after genres, before Other/Recent
+                            eraRows
+
                             // Uncategorized Movies
                             if !uncategorizedMovies.isEmpty {
                                 MovieRowView(
@@ -319,6 +328,9 @@ struct MainBrowseView: View {
                                     }
                                 }
 
+                                // Browse by era — after genres, before Other/Recent
+                                eraRows
+
                                 if !uncategorizedMovies.isEmpty {
                                     MovieRowView(
                                         title: "Other",
@@ -391,6 +403,9 @@ struct MainBrowseView: View {
                 if topImdbMovies.isEmpty {
                     loadTopImdb()
                 }
+                if decade2000s.isEmpty && decade8090.isEmpty && decade6070.isEmpty && decadeClassic.isEmpty {
+                    loadEraRowsIfNeeded()
+                }
             } else {
                 loadMovies()
             }
@@ -423,6 +438,60 @@ struct MainBrowseView: View {
         }
     }
 
+    // Browse-by-era rows — rendered as a group after the dynamic genre
+    // carousels and before the "Other"/Recent rows. Shared by both the tvOS
+    // and iOS layout branches so they never drift.
+    @ViewBuilder
+    private var eraRows: some View {
+        if !decade2000s.isEmpty {
+            MovieRowView(
+                title: "Modern Cinema",
+                movies: decade2000s,
+                sectionHeaderSize: sectionHeaderSize,
+                cardTitleSize: cardTitleSize,
+                cardMetadataSize: cardMetadataSize,
+                onPlayVideo: playVideo,
+                onSeeAll: { selectedCategory = .decade(yearMin: 2000, yearMax: nil, title: "Modern Cinema") }
+            )
+        }
+
+        if !decade8090.isEmpty {
+            MovieRowView(
+                title: "The 80s & 90s",
+                movies: decade8090,
+                sectionHeaderSize: sectionHeaderSize,
+                cardTitleSize: cardTitleSize,
+                cardMetadataSize: cardMetadataSize,
+                onPlayVideo: playVideo,
+                onSeeAll: { selectedCategory = .decade(yearMin: 1980, yearMax: 1999, title: "The 80s & 90s") }
+            )
+        }
+
+        if !decade6070.isEmpty {
+            MovieRowView(
+                title: "The 60s & 70s",
+                movies: decade6070,
+                sectionHeaderSize: sectionHeaderSize,
+                cardTitleSize: cardTitleSize,
+                cardMetadataSize: cardMetadataSize,
+                onPlayVideo: playVideo,
+                onSeeAll: { selectedCategory = .decade(yearMin: 1960, yearMax: 1979, title: "The 60s & 70s") }
+            )
+        }
+
+        if !decadeClassic.isEmpty {
+            MovieRowView(
+                title: "Classic Cinema",
+                movies: decadeClassic,
+                sectionHeaderSize: sectionHeaderSize,
+                cardTitleSize: cardTitleSize,
+                cardMetadataSize: cardMetadataSize,
+                onPlayVideo: playVideo,
+                onSeeAll: { selectedCategory = .decade(yearMin: nil, yearMax: 1959, title: "Classic Cinema") }
+            )
+        }
+    }
+
     private func startHeroTimer() {
         stopHeroTimer()
         guard featuredMovies.count > 1 else { return }
@@ -449,6 +518,7 @@ struct MainBrowseView: View {
                 // Resilient: a failure here leaves the row empty rather than
                 // erroring the whole page.
                 topImdbMovies = (try? await topImdb) ?? []
+                await loadEraRows()
 
                 currentHeroIndex = 0
                 startHeroTimer()
@@ -476,12 +546,33 @@ struct MainBrowseView: View {
         }
     }
 
+    /// Loads the four browse-by-era rows in parallel. Resilient: a failure on
+    /// any one bound leaves that row empty rather than erroring the page.
+    private func loadEraRows() async {
+        async let d2000 = movieService.fetchMoviesByYearRange(yearMin: 2000, yearMax: nil, limit: 20)
+        async let d8090 = movieService.fetchMoviesByYearRange(yearMin: 1980, yearMax: 1999, limit: 20)
+        async let d6070 = movieService.fetchMoviesByYearRange(yearMin: 1960, yearMax: 1979, limit: 20)
+        async let dClassic = movieService.fetchMoviesByYearRange(yearMin: nil, yearMax: 1959, limit: 20)
+
+        decade2000s = (try? await d2000) ?? []
+        decade8090 = (try? await d8090) ?? []
+        decade6070 = (try? await d6070) ?? []
+        decadeClassic = (try? await dClassic) ?? []
+    }
+
+    /// Loads just the browse-by-era rows when the shared cache is already
+    /// populated but these @State rows haven't been fetched yet.
+    private func loadEraRowsIfNeeded() {
+        Task { await loadEraRows() }
+    }
+
     /// Manual reload path for pull-to-refresh — bypasses the cache.
     private func refreshMovies() async {
         do {
             async let topImdb = movieService.fetchTopImdbMovies(limit: 20)
             try await movieService.loadBrowseData(force: true)
             topImdbMovies = (try? await topImdb) ?? []
+            await loadEraRows()
             currentHeroIndex = 0
             startHeroTimer()
         } catch {
@@ -501,7 +592,11 @@ struct MainBrowseView: View {
             allMovies,
             uncategorizedMovies,
             tvSeries,
-            topImdbMovies
+            topImdbMovies,
+            decade2000s,
+            decade8090,
+            decade6070,
+            decadeClassic
         ]
 
         for movies in coreArrays {

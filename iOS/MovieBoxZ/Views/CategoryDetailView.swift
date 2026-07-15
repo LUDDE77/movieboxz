@@ -11,6 +11,7 @@ enum CategoryType: Identifiable, Hashable {
     case kids
     case uncategorized
     case topImdb
+    case decade(yearMin: Int?, yearMax: Int?, title: String)
 
     var id: String {
         switch self {
@@ -23,6 +24,7 @@ enum CategoryType: Identifiable, Hashable {
         case .kids: return "kids"
         case .uncategorized: return "uncategorized"
         case .topImdb: return "top-imdb"
+        case .decade(let mn, let mx, _): return "decade-\(mn.map(String.init) ?? "")-\(mx.map(String.init) ?? "")"
         }
     }
 
@@ -37,6 +39,7 @@ enum CategoryType: Identifiable, Hashable {
         case .kids: return "Kids"
         case .uncategorized: return "Other"
         case .topImdb: return "High Score IMDB"
+        case .decade(_, _, let title): return title
         }
     }
 }
@@ -308,6 +311,14 @@ struct CategoryDetailView: View {
 
                 case .uncategorized:
                     fetchedMovies = try await movieService.fetchUncategorizedMovies(
+                        page: 1,
+                        limit: 200
+                    )
+
+                case .decade(let mn, let mx, _):
+                    fetchedMovies = try await movieService.fetchMoviesByYearRange(
+                        yearMin: mn,
+                        yearMax: mx,
                         page: 1,
                         limit: 200
                     )

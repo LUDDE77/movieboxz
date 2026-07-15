@@ -108,6 +108,16 @@ export const dbOperations = {
             query = query.eq('is_kids_content', true)
         }
 
+        // Decade / year-range filter on release_date (yearMin/yearMax = 4-digit years).
+        const yearMin = parseInt(filters.yearMin)
+        const yearMax = parseInt(filters.yearMax)
+        if (Number.isInteger(yearMin)) {
+            query = query.gte('release_date', `${yearMin}-01-01`)
+        }
+        if (Number.isInteger(yearMax)) {
+            query = query.lte('release_date', `${yearMax}-12-31`)
+        }
+
         if (filters.search) {
             // Sanitize search query for PostgreSQL full-text search
             // Convert "big stan" to "big & stan" (AND operator)

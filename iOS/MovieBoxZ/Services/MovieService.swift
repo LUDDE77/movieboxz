@@ -270,6 +270,39 @@ class MovieService: ObservableObject {
         return response.data.movies
     }
 
+    /// Fetches movies constrained to a release-year range. Either bound is
+    /// optional: send only `yearMin` for "and newer", only `yearMax` for
+    /// "and older". Backend excludes TV episodes by default.
+    func fetchMoviesByYearRange(
+        yearMin: Int? = nil,
+        yearMax: Int? = nil,
+        sort: String = "popular",
+        page: Int = 1,
+        limit: Int = 20
+    ) async throws -> [Movie] {
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "sort", value: sort),
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "limit", value: String(limit))
+        ]
+
+        if let yearMin = yearMin {
+            components.queryItems?.append(URLQueryItem(name: "year_min", value: String(yearMin)))
+        }
+
+        if let yearMax = yearMax {
+            components.queryItems?.append(URLQueryItem(name: "year_max", value: String(yearMax)))
+        }
+
+        let queryString = components.percentEncodedQuery ?? ""
+        let response = try await performRequest(
+            endpoint: "/movies?\(queryString)",
+            type: MoviesResponse.self
+        )
+        return response.data.movies
+    }
+
     func searchMovies(
         query: String,
         category: String? = nil,

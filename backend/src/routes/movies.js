@@ -92,6 +92,8 @@ router.get('/', async (req, res, next) => {
             needs_verification,
             is_tv_series,
             is_kids_content,
+            year_min,
+            year_max,
             sort = 'popular',
             page = 1,
             limit = 20
@@ -129,6 +131,10 @@ router.get('/', async (req, res, next) => {
         if (is_kids_content === 'true') {
             filters.isKidsContent = true
         }
+
+        // Decade browse rows pass a release-year range
+        if (year_min) filters.yearMin = year_min
+        if (year_max) filters.yearMax = year_max
 
         // Map sort parameter to database fields
         const sortOptions = {
