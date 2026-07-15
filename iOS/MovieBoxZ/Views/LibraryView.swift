@@ -80,12 +80,10 @@ struct LibraryView: View {
                 .tracking(0.5)
                 .foregroundColor(.mbzGold)
 
-            // Tab Pills
+            // Tab Pills. Switching tabs just toggles which already-loaded list
+            // (favorites vs watched) is shown — no refetch, so a flaky network
+            // can't blank the list when you change tabs.
             TopBarPills(selection: $viewMode)
-                .onChange(of: viewMode) { oldValue, newValue in
-                    // Reload data when switching tabs (in case it changed)
-                    loadLibraryData()
-                }
         }
         #if os(tvOS)
         .padding(.horizontal, 80)
@@ -246,11 +244,20 @@ struct LibraryView: View {
             let (fetchedFavorites, fetchedWatched) = await (favoritesResult, watchedResult)
 
             let favoritesById = Dictionary(uniqueKeysWithValues: fetchedFavorites.map { ($0.id, $0) })
-            favoriteMovies = favoriteIds.compactMap { favoritesById[$0] }
+            let newFavorites = favoriteIds.compactMap { favoritesById[$0] }
+            // Only replace the list when this load actually returned something
+            // (or there genuinely are no favorites). A transient network failure
+            // that fetches nothing must NOT wipe a list the user still has saved.
+            if !newFavorites.isEmpty || favoriteIds.isEmpty {
+                favoriteMovies = newFavorites
+            }
 
             let watchedById = Dictionary(uniqueKeysWithValues: fetchedWatched.map { ($0.id, $0) })
             // Preserve most-recently-watched-first order from LibraryManager
-            watchedMovies = libraryManager.watchHistory.compactMap { watchedById[$0.movieId] }
+            let newWatched = libraryManager.watchHistory.compactMap { watchedById[$0.movieId] }
+            if !newWatched.isEmpty || libraryManager.watchHistory.isEmpty {
+                watchedMovies = newWatched
+            }
 
             isLoading = false
         }

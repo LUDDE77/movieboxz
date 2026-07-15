@@ -226,11 +226,18 @@ struct SearchView: View {
     private func runSearch(query: String) async {
         isSearching = true
         do {
-            searchResults = try await movieService.searchMovies(query: query, limit: 50)
+            let results = try await movieService.searchMovies(query: query, limit: 50)
+            guard !Task.isCancelled else { return }   // superseded by a newer search
+            searchResults = results
+        } catch is CancellationError {
+            return // superseded — not a real error, don't surface an alert
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            return // request cancelled by a newer keystroke — not a real error
         } catch {
+            guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
-        isSearching = false
+        if !Task.isCancelled { isSearching = false }
     }
 }
 
