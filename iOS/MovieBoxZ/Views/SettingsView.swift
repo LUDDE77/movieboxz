@@ -50,8 +50,8 @@ struct SettingsView: View {
     }
 
     // MARK: - Update these URLs when web pages are live
-    private let helpURL = URL(string: "https://movieboxz.app/help")!
-    private let supportEmail = "support@movieboxz.app"
+    private let helpURL = URL(string: "https://movieboxz.com")!
+    private let supportEmail = "support@movieboxz.com"
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"

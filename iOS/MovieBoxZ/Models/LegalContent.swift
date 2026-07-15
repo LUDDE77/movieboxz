@@ -46,7 +46,7 @@ enum LegalContent {
     We may update these Terms from time to time. Continued use of the app after an update means you accept the revised Terms.
 
     10. Contact
-    Questions about these Terms? Contact support@movieboxz.app.
+    Questions about these Terms? Contact support@movieboxz.com.
     """
 
     static let privacyPolicy = """
@@ -80,6 +80,6 @@ enum LegalContent {
     We may update this Privacy Policy from time to time; the "Last updated" date above will change accordingly.
 
     9. Contact
-    Questions about privacy? Contact support@movieboxz.app.
+    Questions about privacy? Contact support@movieboxz.com.
     """
 }
