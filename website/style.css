@@ -1,0 +1,68 @@
+/* MovieBoxZ — shared site styles (brand: marquee gold on projection black) */
+:root{
+  --ink:#0E0B10; --ink-2:#161119; --slate:#1E1722; --line:#2A2230;
+  --gold:#E8B24A; --gold-hi:#F6D488; --red:#E23A2E;
+  --screen:#F3EDE2; --muted:#A99FB0; --muted-2:#6E6577;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --display:"Futura","Jost","Century Gothic","Avenir Next",var(--sans);
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --maxw:1040px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--screen);font-family:var(--sans);line-height:1.65}
+a{color:var(--gold);text-decoration:none}
+a:hover{text-decoration:underline}
+img{max-width:100%}
+.shell{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+/* header / nav */
+.nav{position:sticky;top:0;z-index:20;background:rgba(14,11,16,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .shell{display:flex;align-items:center;justify-content:space-between;height:66px}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:600;font-size:1.15rem;letter-spacing:.03em}
+.brand b{color:var(--gold);font-weight:600}.brand .z{color:var(--red)}
+.nav-links{display:flex;gap:24px;font-size:.92rem}
+.nav-links a{color:var(--muted)}.nav-links a:hover{color:var(--gold);text-decoration:none}
+@media(max-width:600px){.nav-links{display:none}}
+
+/* hero */
+.hero{position:relative;text-align:center;padding:90px 0 70px;overflow:hidden}
+.hero::before{content:"";position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);width:min(620px,85vw);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle,rgba(232,178,74,.18),rgba(226,58,46,.05) 42%,transparent 66%);filter:blur(10px);z-index:0}
+.hero .shell{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:22px}
+.hero h1{font-family:var(--display);font-weight:600;font-size:clamp(2.4rem,6vw,4rem);letter-spacing:.02em;margin:0;line-height:1.05}
+.hero p{max-width:44ch;color:var(--muted);font-size:1.15rem;margin:0}
+.mark{width:120px;height:120px}
+.badge{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+.cta{display:inline-flex;align-items:center;gap:10px;font-family:var(--display);font-weight:600;letter-spacing:.03em;
+  background:linear-gradient(180deg,var(--gold),#D79A2E);color:var(--ink);padding:14px 26px;border-radius:12px;font-size:1.05rem}
+.cta:hover{text-decoration:none;filter:brightness(1.05)}
+
+section{padding:64px 0;border-top:1px solid var(--line)}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
+h2{font-family:var(--display);font-weight:600;font-size:clamp(1.6rem,3.4vw,2.3rem);letter-spacing:.01em;margin:0 0 10px;line-height:1.1}
+.lede{color:var(--muted);font-size:1.06rem;max-width:60ch}
+
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:26px}
+.feature{background:var(--slate);border:1px solid var(--line);border-radius:16px;padding:22px}
+.feature .ic{color:var(--gold);font-family:var(--display);font-weight:600;font-size:1rem;margin-bottom:6px}
+.feature p{margin:0;color:var(--muted);font-size:.92rem}
+
+.company{display:grid;grid-template-columns:1.4fr 1fr;gap:28px;align-items:start}
+@media(max-width:700px){.company{grid-template-columns:1fr}}
+.company .card{background:var(--slate);border:1px solid var(--line);border-radius:16px;padding:24px}
+.company .card h3{font-family:var(--display);color:var(--gold);margin:0 0 8px}
+.company .card p{margin:.4em 0;color:var(--muted);font-size:.95rem}
+
+/* legal pages */
+.doc{padding:56px 0 80px}
+.doc h1{font-family:var(--display);font-weight:600;font-size:clamp(1.9rem,4vw,2.6rem);color:var(--gold);margin:0 0 6px}
+.doc .updated{font-family:var(--mono);font-size:.8rem;color:var(--muted);margin-bottom:30px}
+.doc h2{font-size:1.15rem;color:var(--screen);margin:30px 0 6px}
+.doc p{color:#d9d2df;max-width:70ch}
+.doc a{word-break:break-word}
+
+footer{border-top:1px solid var(--line);padding:40px 0 60px;color:var(--muted-2);font-size:.86rem}
+footer .shell{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:space-between}
+footer a{color:var(--muted)}footer a:hover{color:var(--gold)}
+.foot-links{display:flex;gap:20px;flex-wrap:wrap}
