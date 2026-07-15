@@ -242,6 +242,22 @@ struct Movie: Codable, Identifiable {
         return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
     }
 
+    /// A real 16:9 landscape backdrop (TMDB/OMDb) only — nil when the movie
+    /// has no proper wide art. The tvOS hero uses this so it can fall back to
+    /// an ambient blurred poster instead of stretching a low-res YouTube
+    /// thumbnail across a 4K screen.
+    var heroBackdropURL: URL? {
+        guard let backdropPath = backdropPath else { return nil }
+        if backdropPath.starts(with: "http://") || backdropPath.starts(with: "https://") {
+            return URL(string: backdropPath)
+        }
+        return URL(string: "https://image.tmdb.org/t/p/w1280\(backdropPath)")
+    }
+
+    /// True when the movie has a genuine landscape backdrop suitable for a
+    /// full-bleed hero (vs. only a portrait poster / YouTube thumbnail).
+    var hasLandscapeBackdrop: Bool { backdropPath != nil }
+
     var youtubeThumbURL: URL? {
         // Direct YouTube thumbnail (for attribution section).
         // Optional (not force-unwrapped): a malformed youtubeVideoId would

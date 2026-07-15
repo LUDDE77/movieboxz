@@ -101,6 +101,7 @@ struct MainBrowseView: View {
                                 movie: heroMovie,
                                 heroTitleSize: heroTitleSize,
                                 bodyTextSize: bodyTextSize,
+                                bannerHeight: 780,
                                 totalMovies: featuredMovies.count,
                                 currentIndex: currentHeroIndex,
                                 onSelectIndex: { idx in
@@ -743,13 +744,26 @@ struct FeaturedMovieBanner: View {
     var body: some View {
         ZStack {
             #if os(tvOS)
-            // tvOS: backdrop and gradient live inside the banner.
-            // CrossfadeBackdrop keeps the previous backdrop visible until the
-            // next one finishes loading, then crossfades — no flash to gray.
-            CrossfadeBackdrop(url: movie.backdropURL)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            // tvOS: full-bleed cinematic backdrop. CrossfadeBackdrop keeps the
+            // previous image visible until the next finishes loading, then
+            // crossfades — no flash to gray.
+            Group {
+                if let heroURL = movie.heroBackdropURL {
+                    CrossfadeBackdrop(url: heroURL)
+                } else {
+                    // No real landscape art — use an ambient, heavily-blurred
+                    // poster instead of stretching a low-res thumbnail, so the
+                    // hero always looks intentional rather than cheap.
+                    CrossfadeBackdrop(url: movie.posterURL)
+                        .scaleEffect(1.1)
+                        .blur(radius: 60)
+                        .overlay(Color.mbzInk.opacity(0.35))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
 
+            // Bottom scrim — anchors the content and blends into the rows below.
             LinearGradient(
                 gradient: Gradient(stops: [
                     .init(color: .clear, location: 0.0),
@@ -763,36 +777,40 @@ struct FeaturedMovieBanner: View {
                 endPoint: .bottom
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Left scrim — keeps the bottom-left title/synopsis legible over
+            // bright artwork.
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.mbzInk.opacity(0.8), location: 0.0),
+                    .init(color: Color.mbzInk.opacity(0.35), location: 0.4),
+                    .init(color: .clear, location: 0.7)
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Top scrim — keeps the overlaid tab bar readable over the backdrop.
+            LinearGradient(
+                gradient: Gradient(stops: [
+                    .init(color: Color.mbzInk.opacity(0.65), location: 0.0),
+                    .init(color: .clear, location: 0.2)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             #endif
             // iOS: backdrop and gradient are rendered at the parent ZStack level
             // in MainBrowseView, where .ignoresSafeArea() is guaranteed to work.
             // This view is transparent — just the content overlay.
 
-            // Content
+            // Content — cinematic full-bleed hero, anchored bottom-left, no
+            // floating poster (the backdrop is the hero; title + metadata sit
+            // over the scrim like Apple TV+/Netflix).
             #if os(tvOS)
-            // tvOS: title/poster pinned at y=300 from banner top, rest flows down.
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top, spacing: 36) {
-                    // Poster — fixed size, always same position
-                    AsyncImage(url: movie.posterURL) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().aspectRatio(2/3, contentMode: .fill)
-                        default:
-                            Rectangle().fill(Color.gray.opacity(0.3))
-                        }
-                    }
-                    .frame(width: 180, height: 270)
-                    .cornerRadius(14)
-                    .shadow(color: .black.opacity(0.6), radius: 20, y: 10)
-                    .clipped()
-                    // Crossfade poster when movie changes
-                    .id(currentIndex)
-                    .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.6), value: currentIndex)
-
-                    // Info column
-                    VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 18) {
                         // Title — always reserves 1-line height so the rest of
                         // the block sits at the same Y for every movie.
                         Text(movie.displayTitle)
@@ -878,18 +896,14 @@ struct FeaturedMovieBanner: View {
                                     Image(systemName: "info.circle.fill").foregroundColor(.mbzScreen)
                                     Text("More Info")
                                 }
-                                .font(.system(size: bodyTextSize, weight: .semibold))
-                                .foregroundColor(.mbzScreen)
-                                .padding(.horizontal, 28)
-                                .padding(.vertical, 14)
-                                .background(Color.mbzSlate.opacity(0.9))
-                                .cornerRadius(10)
+                                .font(.system(size: bodyTextSize, weight: .bold))
+                                .foregroundColor(.mbzInk)
+                                .padding(.horizontal, 32)
+                                .padding(.vertical, 16)
+                                .background(Color.mbzGold)
+                                .cornerRadius(12)
                             }
-                            #if os(tvOS)
-                            .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 10)))
-                            #else
-                            .buttonStyle(.plain)
-                            #endif
+                            .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 12)))
                             .accessibilityLabel("More info about \(movie.displayTitle)")
                             .accessibilityHint("Opens movie details")
 
@@ -926,30 +940,25 @@ struct FeaturedMovieBanner: View {
                                 .foregroundColor(.mbzMuted)
                                 .lineLimit(1)
                         }
-                    }
 
-                    Spacer()
-                }
-
-                // Dots — decorative page indicator. Non-interactive on tvOS:
-                // as focusable Buttons they trapped focus on a tiny control
-                // with no visible highlight when moving down toward the rails.
+                // Dots — decorative page indicator, left-aligned under the
+                // content (non-interactive on tvOS to avoid a focus trap).
                 if totalMovies > 1 {
                     HStack(spacing: 10) {
                         ForEach(0..<totalMovies, id: \.self) { idx in
                             Circle()
-                                .fill(idx == currentIndex ? Color.mbzGold : Color.mbzMuted.opacity(0.4))
+                                .fill(idx == currentIndex ? Color.mbzGold : Color.mbzScreen.opacity(0.35))
                                 .frame(width: idx == currentIndex ? 14 : 10,
                                        height: idx == currentIndex ? 14 : 10)
                                 .animation(.easeInOut(duration: 0.2), value: currentIndex)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 4)
                 }
             }
             .padding(.horizontal, 80)
-            .padding(.top, 485)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.bottom, 60)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             #else
             // iOS: ZStack(alignment: .bottom) pins this block to the bottom of the
             // banner frame — no Spacer() needed, so content never shifts per-movie.
