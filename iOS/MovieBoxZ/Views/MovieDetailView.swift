@@ -116,6 +116,11 @@ struct MovieDetailView: View {
                     showWatchInterstitial = false
                 }
             )
+            #if os(tvOS)
+            .onExitCommand {
+                showWatchInterstitial = false
+            }
+            #endif
         }
     }
 

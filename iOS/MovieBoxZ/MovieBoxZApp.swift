@@ -31,6 +31,13 @@ struct MovieBoxZApp: App {
         CommandLine.arguments.contains("UI_TESTING_SKIP_WELCOME")
     }
 
+    init() {
+        // Large shared cache so AsyncImage (which uses URLSession.shared)
+        // caches posters/backdrops across focus/scroll instead of refetching
+        // and redecoding on every card re-instantiation.
+        URLCache.shared = URLCache(memoryCapacity: 100_000_000, diskCapacity: 500_000_000)
+    }
+
     var body: some Scene {
         WindowGroup {
             if hasSeenWelcome || isUITesting {

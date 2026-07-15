@@ -174,7 +174,7 @@ struct Movie: Codable, Identifiable {
                 return URL(string: posterPath)
             }
             // Otherwise, it's a TMDB relative path - prepend base URL
-            return URL(string: "https://image.tmdb.org/t/p/w500\(posterPath)")
+            return URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")
         }
         // Fallback to YouTube thumbnail
         return youtubeThumbURL
@@ -188,7 +188,7 @@ struct Movie: Codable, Identifiable {
                 return URL(string: backdropPath)
             }
             // Otherwise, it's a TMDB relative path - prepend base URL
-            return URL(string: "https://image.tmdb.org/t/p/original\(backdropPath)")
+            return URL(string: "https://image.tmdb.org/t/p/w1280\(backdropPath)")
         }
         // Fallback to YouTube thumbnail (hqdefault always exists, maxresdefault often 404s)
         return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")

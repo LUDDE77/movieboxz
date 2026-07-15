@@ -111,8 +111,10 @@ struct MainBrowseView: View {
                             .layoutPriority(1)
                         }
 
-                        // CATEGORY SECTION (continuous scroll)
-                        VStack(spacing: 100) {
+                        // CATEGORY SECTION (continuous scroll) — Lazy so off-screen
+                        // rails don't instantiate cards / fire image loads until
+                        // scrolled near.
+                        LazyVStack(spacing: 100) {
                             if !trendingMovies.isEmpty {
                                 MovieRowView(
                                     title: "Trending Now",
@@ -396,12 +398,21 @@ struct MainBrowseView: View {
         .onDisappear {
             stopHeroTimer()
         }
+        #if os(tvOS)
+        .fullScreenCover(item: $selectedMovie) { movie in
+            MovieDetailView(movie: movie)
+        }
+        .fullScreenCover(item: $selectedCategory) { category in
+            CategoryDetailView(categoryType: category)
+        }
+        #else
         .sheet(item: $selectedMovie) { movie in
             MovieDetailView(movie: movie)
         }
         .sheet(item: $selectedCategory) { category in
             CategoryDetailView(categoryType: category)
         }
+        #endif
         .alert("Connection Error", isPresented: $showError) {
             Button("Retry") {
                 loadMovies()
@@ -1012,9 +1023,9 @@ struct MovieCard: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isFocused)
         .accessibilityLabel("\(movie.displayTitle). Released in \(movie.formattedReleaseYear ?? "Unknown"). Rating \(movie.formattedRating)")
         .accessibilityHint("Double tap to view movie details")
-        .contextMenu {
-            contextMenuContent
-        }
+        // tvOS: no .contextMenu here — a single clean select→detail
+        // interaction avoids competing with the focus/select action
+        // (contextMenuContent's actions are reachable from MovieDetailView).
         #else
         Button {
             onPlayVideo(movie.youtubeVideoId)

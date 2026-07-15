@@ -35,9 +35,15 @@ struct SearchView: View {
         .task(id: searchText) {
             await debouncedSearch()
         }
+        #if os(tvOS)
+        .fullScreenCover(item: $currentMovie) { movie in
+            MovieDetailView(movie: movie)
+        }
+        #else
         .sheet(item: $currentMovie) { movie in
             MovieDetailView(movie: movie)
         }
+        #endif
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {

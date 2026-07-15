@@ -69,7 +69,7 @@ struct WatchInterstitialView: View {
                             .padding(20)
                     }
                     #if os(tvOS)
-                    .buttonStyle(.card)
+                    .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 100)))
                     #else
                     .buttonStyle(.plain)
                     #endif

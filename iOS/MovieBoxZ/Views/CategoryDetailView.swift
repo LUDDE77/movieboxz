@@ -86,9 +86,15 @@ struct CategoryDetailView: View {
         .onAppear {
             loadMovies()
         }
+        #if os(tvOS)
+        .fullScreenCover(item: $selectedMovie) { movie in
+            MovieDetailView(movie: movie)
+        }
+        #else
         .sheet(item: $selectedMovie) { movie in
             MovieDetailView(movie: movie)
         }
+        #endif
     }
 
     // MARK: - Loading View

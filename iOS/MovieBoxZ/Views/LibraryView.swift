@@ -54,9 +54,15 @@ struct LibraryView: View {
                 }
             }
         }
+        #if os(tvOS)
+        .fullScreenCover(item: $selectedMovie) { movie in
+            MovieDetailView(movie: movie)
+        }
+        #else
         .sheet(item: $selectedMovie) { movie in
             MovieDetailView(movie: movie)
         }
+        #endif
         .onAppear {
             guard !hasLoaded else { return }
             hasLoaded = true
