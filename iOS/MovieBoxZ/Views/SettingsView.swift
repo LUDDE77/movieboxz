@@ -1,9 +1,46 @@
 import SwiftUI
 import UIKit
 
+/// A selectable country for the Region override picker.
+private struct RegionOption: Identifiable, Hashable {
+    let code: String   // ISO 3166-1 alpha-2, e.g. "US". Empty string == Auto.
+    let name: String
+    var id: String { code }
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var movieService: MovieService
     @State private var isConnected = false
+
+    // Bound to the persisted override. Empty string means "Auto (detected)".
+    @AppStorage("regionOverride") private var regionOverride: String = ""
+
+    /// All selectable countries: "Auto" first, then every 2-letter region
+    /// sorted by localized name.
+    private static let regionOptions: [RegionOption] = {
+        var options = Locale.Region.isoRegions
+            .map { $0.identifier }
+            .filter { $0.count == 2 }
+            .map { code -> RegionOption in
+                let name = Locale.current.localizedString(forRegionCode: code) ?? code
+                return RegionOption(code: code, name: name)
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        options.insert(RegionOption(code: "", name: "Auto (detected)"), at: 0)
+        return options
+    }()
+
+    /// A human-readable description of the currently effective region.
+    private var effectiveRegionDescription: String {
+        if let override = movieService.regionOverrideCode {
+            let name = Locale.current.localizedString(forRegionCode: override) ?? override
+            return name
+        }
+        if let detected = Locale.current.region?.identifier {
+            return "Auto (\(detected))"
+        }
+        return "Auto"
+    }
 
     // MARK: - Update these URLs when web pages are live
     private let privacyPolicyURL = URL(string: "https://movieboxz.app/privacy")!
@@ -184,6 +221,35 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                     }
                     #endif
+                }
+
+                // MARK: Region
+                Section("Region") {
+                    HStack {
+                        Image(systemName: "globe")
+                            .foregroundColor(.mbzGold)
+                        Text("Region")
+                        Spacer()
+                        Text(effectiveRegionDescription)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Picker("Catalog Region", selection: $regionOverride) {
+                        ForEach(Self.regionOptions) { option in
+                            Text(option.name).tag(option.code)
+                        }
+                    }
+                    #if os(iOS)
+                    .pickerStyle(.menu)
+                    #endif
+                    .onChange(of: regionOverride) { _, newValue in
+                        movieService.setRegionOverride(newValue.isEmpty ? nil : newValue)
+                    }
+
+                    Text("Choose which country's catalog to browse. Some movies are only available to watch in certain regions.")
+                        .font(.caption)
+                        .foregroundColor(.mbzMuted)
                 }
 
                 // MARK: Privacy Notice

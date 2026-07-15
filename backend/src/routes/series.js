@@ -136,13 +136,29 @@ router.get('/:seriesId/episodes', async (req, res, next) => {
             throw seriesError
         }
 
-        // Fetch all episodes belonging to this series
-        const { data: episodeRows, error: episodesError } = await supabase
+        // Fetch all episodes belonging to this series, hiding any the viewer's
+        // country can't play (same per-country rule as the movie surfaces;
+        // NULL region columns pass = "no restriction = worldwide").
+        const cc = String(req.query.country || req.headers['x-country'] || '').trim().toUpperCase()
+        const validCC = /^[A-Z]{2}$/.test(cc) ? cc : null
+
+        let episodesQuery = supabase
             .from('movies')
             .select('*, channels(id, title, thumbnail_url)')
             .eq('tv_series_id', seriesId)
             .eq('is_tv_series', true)
             .eq('is_available', true)
+
+        if (validCC) {
+            episodesQuery = episodesQuery
+                .or(`region_blocked.is.null,region_blocked.not.cs.{${validCC}}`)
+                .or(`region_allowed.is.null,region_allowed.cs.{${validCC}}`)
+            if (process.env.REGION_FILTER_HIDE_IF_UNKNOWN === 'true') {
+                episodesQuery = episodesQuery.not('region_checked_at', 'is', null)
+            }
+        }
+
+        const { data: episodeRows, error: episodesError } = await episodesQuery
             .order('season_number', { ascending: true })
             .order('episode_number', { ascending: true })
 

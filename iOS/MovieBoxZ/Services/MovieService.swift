@@ -27,6 +27,52 @@ class MovieService: ObservableObject {
     private let baseURL: String
     private let session: URLSession
 
+    // MARK: - Region Override
+    // UserDefaults key holding an optional 2-letter ISO-3166-1 alpha-2 country
+    // code. Empty/absent means "Auto" (use the device locale). On-device only —
+    // no permission, no tracking, ephemeral.
+    private static let regionOverrideKey = "regionOverride"
+
+    /// The raw stored override code, or nil if set to Auto. For the Settings UI.
+    var regionOverrideCode: String? {
+        let stored = UserDefaults.standard.string(forKey: Self.regionOverrideKey)
+        guard let stored, stored.range(of: "^[A-Z]{2}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return stored
+    }
+
+    /// The country to send in the `X-Country` header: the validated override if
+    /// present, otherwise the device locale region.
+    var effectiveRegion: String? {
+        if let override = regionOverrideCode {
+            return override
+        }
+        return Locale.current.region?.identifier
+    }
+
+    /// Persists (or clears) the region override and invalidates the shared
+    /// browse cache so the catalog reloads for the new country the next time
+    /// MainBrowseView appears.
+    func setRegionOverride(_ code: String?) {
+        if let code, code.range(of: "^[A-Z]{2}$", options: .regularExpression) != nil {
+            UserDefaults.standard.set(code, forKey: Self.regionOverrideKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.regionOverrideKey)
+        }
+
+        // Invalidate the shared browse cache so the next load refetches with
+        // the new country header.
+        hasLoadedBrowseData = false
+        featuredMovies = []
+        trendingMovies = []
+        popularMovies = []
+        recentMovies = []
+        genreCategories = []
+        uncategorizedMovies = []
+        allBrowseMovies = []
+    }
+
     init() {
         // Configure for development/production
         self.baseURL = "https://movieboxz-backend-production.up.railway.app/api"
@@ -121,9 +167,10 @@ class MovieService: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // Tell the backend the viewer's country so it can hide movies that
-        // YouTube won't play in this region. Read on-device from the locale
-        // (ISO 3166-1 alpha-2) — no permission, not tracking, ephemeral.
-        if let region = Locale.current.region?.identifier, region.count == 2 {
+        // YouTube won't play in this region. Uses the user's Region override if
+        // set, otherwise the device locale (ISO 3166-1 alpha-2) — on-device
+        // only, no permission, not tracking, ephemeral.
+        if let region = effectiveRegion, region.count == 2 {
             request.setValue(region.uppercased(), forHTTPHeaderField: "X-Country")
         }
 
