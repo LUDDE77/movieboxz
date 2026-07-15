@@ -53,7 +53,12 @@ struct TVSeriesView: View {
                 }
             }
         }
-        .onAppear { loadData() }
+        .onAppear {
+            // Load on first appear or if a previous load failed (list empty).
+            // A populated list is never reloaded, so returning to this tab can't
+            // blank it — and loadData only overwrites on success anyway.
+            if seriesList.isEmpty { loadData() }
+        }
         #if os(tvOS)
         .fullScreenCover(item: $selectedSeries) { series in
             SeriesDetailView(series: series)
@@ -250,7 +255,12 @@ struct TVSeriesView: View {
     private func loadData() {
         Task {
             isLoading = true
-            seriesList = (try? await movieService.fetchAllSeries()) ?? []
+            // Only replace the list on a successful fetch — a transient failure
+            // or a request cancelled during a tab transition must NOT blank a
+            // list we were just showing.
+            if let series = try? await movieService.fetchAllSeries() {
+                seriesList = series
+            }
             isLoading = false
         }
     }
