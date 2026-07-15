@@ -9,6 +9,20 @@ struct MainBrowseView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
 
+    #if os(tvOS)
+    @Namespace private var browseNamespace
+    #endif
+
+    // Non-empty rails in display order — lets us mark the first one as the
+    // default focus target on tvOS.
+    private var rails: [(title: String, movies: [Movie])] {
+        [
+            ("Trending Now", trendingMovies),
+            ("Popular Movies", popularMovies),
+            ("Recently Added", recentMovies)
+        ].filter { !$0.1.isEmpty }
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
@@ -20,33 +34,23 @@ struct MainBrowseView: View {
 
                 // Movie Categories
                 VStack(spacing: 30) {
-                    if !trendingMovies.isEmpty {
+                    ForEach(Array(rails.enumerated()), id: \.offset) { index, rail in
                         MovieRowView(
-                            title: "Trending Now",
-                            movies: trendingMovies,
+                            title: rail.title,
+                            movies: rail.movies,
                             movieService: movieService
                         )
-                    }
-
-                    if !popularMovies.isEmpty {
-                        MovieRowView(
-                            title: "Popular Movies",
-                            movies: popularMovies,
-                            movieService: movieService
-                        )
-                    }
-
-                    if !recentMovies.isEmpty {
-                        MovieRowView(
-                            title: "Recently Added",
-                            movies: recentMovies,
-                            movieService: movieService
-                        )
+                        #if os(tvOS)
+                        .prefersDefaultFocus(index == 0, in: browseNamespace)
+                        #endif
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 50)
             }
+            #if os(tvOS)
+            .focusScope(browseNamespace)
+            #endif
         }
         .background(Color.black)
         .ignoresSafeArea()
@@ -222,6 +226,11 @@ struct MovieRowView: View {
                 .padding(.horizontal, 20)
             }
         }
+        #if os(tvOS)
+        // Group each rail so vertical moves land on a sensible card and the
+        // horizontal scroll remembers its position.
+        .focusSection()
+        #endif
     }
 }
 
@@ -233,6 +242,30 @@ struct MovieCard: View {
     @State private var isPressed = false
 
     var body: some View {
+        #if os(tvOS)
+        // Native card style gives the focus lift/shadow and a reliable
+        // select press, and stops gesture recognizers from swallowing Menu
+        // (which caused the "press twice to exit" feel).
+        Button {
+            openYouTubeVideo(movie.youtubeVideoId)
+        } label: {
+            cardContent
+        }
+        .buttonStyle(.card)
+        #else
+        cardContent
+            .onTapGesture {
+                openYouTubeVideo(movie.youtubeVideoId)
+            }
+            .onLongPressGesture(minimumDuration: 0) { isPressing in
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isPressed = isPressing
+                }
+            }
+        #endif
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Movie Poster
             AsyncImage(url: movie.posterURL) { image in
@@ -274,17 +307,6 @@ struct MovieCard: View {
                     .lineLimit(1)
             }
         }
-        .onTapGesture {
-            openYouTubeVideo(movie.youtubeVideoId)
-        }
-        .onLongPressGesture(minimumDuration: 0) { isPressing in
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isPressed = isPressing
-            }
-        }
-        #if os(tvOS)
-        .focusable()
-        #endif
     }
 
     private func openYouTubeVideo(_ videoId: String) {

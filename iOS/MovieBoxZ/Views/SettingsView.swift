@@ -71,7 +71,7 @@ struct SettingsView: View {
 
     #if os(iOS)
     private var iosBody: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 // MARK: App Identity
                 Section {

@@ -121,7 +121,7 @@ struct VideoPlayerView: View {
     // MARK: - Deep Link Player View (tvOS only)
 
     private var deepLinkPlayerView: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 Color.mbzInk.ignoresSafeArea()
 
