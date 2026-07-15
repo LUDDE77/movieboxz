@@ -515,9 +515,9 @@ struct MainBrowseView: View {
 
                 try await movieService.loadBrowseData()
 
-                // Resilient: a failure here leaves the row empty rather than
-                // erroring the whole page.
-                topImdbMovies = (try? await topImdb) ?? []
+                // Resilient: only overwrite on success so a transient failure
+                // leaves any previously-loaded row intact (never blanks it).
+                if let v = try? await topImdb { topImdbMovies = v }
                 await loadEraRows()
 
                 currentHeroIndex = 0
@@ -542,7 +542,9 @@ struct MainBrowseView: View {
     /// a failure leaves the row empty.
     private func loadTopImdb() {
         Task {
-            topImdbMovies = (try? await movieService.fetchTopImdbMovies(limit: 20)) ?? []
+            if let v = try? await movieService.fetchTopImdbMovies(limit: 20) {
+                topImdbMovies = v
+            }
         }
     }
 
@@ -554,10 +556,12 @@ struct MainBrowseView: View {
         async let d6070 = movieService.fetchMoviesByYearRange(yearMin: 1960, yearMax: 1979, limit: 20)
         async let dClassic = movieService.fetchMoviesByYearRange(yearMin: nil, yearMax: 1959, limit: 20)
 
-        decade2000s = (try? await d2000) ?? []
-        decade8090 = (try? await d8090) ?? []
-        decade6070 = (try? await d6070) ?? []
-        decadeClassic = (try? await dClassic) ?? []
+        // Only overwrite each row on success — a transient failure keeps the
+        // previously-loaded row instead of blanking it on refresh.
+        if let v = try? await d2000 { decade2000s = v }
+        if let v = try? await d8090 { decade8090 = v }
+        if let v = try? await d6070 { decade6070 = v }
+        if let v = try? await dClassic { decadeClassic = v }
     }
 
     /// Loads just the browse-by-era rows when the shared cache is already
@@ -571,7 +575,7 @@ struct MainBrowseView: View {
         do {
             async let topImdb = movieService.fetchTopImdbMovies(limit: 20)
             try await movieService.loadBrowseData(force: true)
-            topImdbMovies = (try? await topImdb) ?? []
+            if let v = try? await topImdb { topImdbMovies = v }
             await loadEraRows()
             currentHeroIndex = 0
             startHeroTimer()
@@ -842,20 +846,17 @@ struct FeaturedMovieBanner: View {
                     Spacer()
                 }
 
-                // Dots — outside the info column, centered across full width
+                // Dots — decorative page indicator. Non-interactive on tvOS:
+                // as focusable Buttons they trapped focus on a tiny control
+                // with no visible highlight when moving down toward the rails.
                 if totalMovies > 1 {
                     HStack(spacing: 10) {
                         ForEach(0..<totalMovies, id: \.self) { idx in
-                            Button {
-                                onSelectIndex?(idx)
-                            } label: {
-                                Circle()
-                                    .fill(idx == currentIndex ? Color.mbzGold : Color.mbzMuted.opacity(0.4))
-                                    .frame(width: idx == currentIndex ? 14 : 10,
-                                           height: idx == currentIndex ? 14 : 10)
-                                    .animation(.easeInOut(duration: 0.2), value: currentIndex)
-                            }
-                            .buttonStyle(.plain)
+                            Circle()
+                                .fill(idx == currentIndex ? Color.mbzGold : Color.mbzMuted.opacity(0.4))
+                                .frame(width: idx == currentIndex ? 14 : 10,
+                                       height: idx == currentIndex ? 14 : 10)
+                                .animation(.easeInOut(duration: 0.2), value: currentIndex)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -1041,7 +1042,11 @@ struct MovieRowView: View {
                     .font(.system(size: sectionHeaderSize - 18, weight: .semibold))
                     .foregroundColor(.mbzGold.opacity(0.85))
                 }
+                #if os(tvOS)
+                .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 8)))
+                #else
                 .buttonStyle(.plain)
+                #endif
             }
             #if os(tvOS)
             .padding(.horizontal, 80)

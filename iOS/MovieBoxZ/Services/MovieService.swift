@@ -338,8 +338,11 @@ class MovieService: ObservableObject {
         page: Int = 1,
         limit: Int = 20
     ) async throws -> [Movie] {
+        // Percent-encode the category so values with spaces/&/# produce a
+        // valid URL instead of nil (which would throw .invalidURL).
+        let encodedCategory = category.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? category
         let response = try await performRequest(
-            endpoint: "/movies/category/\(category)?page=\(page)&limit=\(limit)",
+            endpoint: "/movies/category/\(encodedCategory)?page=\(page)&limit=\(limit)",
             type: MoviesResponse.self
         )
         return response.data.movies

@@ -586,8 +586,12 @@ struct SeriesDetailView: View {
                 )
             }.sorted { $0.seasonNumber < $1.seasonNumber }
             selectedSeasonIndex = 0
+        } catch is CancellationError {
+            // superseded load — ignore
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // ignore
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Couldn't load this series. Please check your connection and try again."
         }
     }
 }

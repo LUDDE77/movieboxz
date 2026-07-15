@@ -104,11 +104,18 @@ struct VideoPlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.mbzInk)
         .fullScreenCover(isPresented: $showingSafariPlayer) {
-            SafariPlayerView(
-                url: URL(string: "https://www.youtube.com/watch?v=\(movie.youtubeVideoId)")!,
-                onDismiss: { showingSafariPlayer = false }
-            )
-            .ignoresSafeArea()
+            if let url = movie.youtubeURL {
+                SafariPlayerView(
+                    url: url,
+                    onDismiss: { showingSafariPlayer = false }
+                )
+                .ignoresSafeArea()
+            } else {
+                // Malformed video id — don't crash; dismiss immediately.
+                Color.mbzInk
+                    .ignoresSafeArea()
+                    .onAppear { showingSafariPlayer = false }
+            }
         }
         #if os(tvOS)
         .onExitCommand {

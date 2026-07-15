@@ -534,6 +534,11 @@ private struct TVRegionPickerView: View {
                             .font(.system(size: 56, weight: .heavy))
                             .tracking(0.5)
                             .foregroundColor(.mbzGold)
+                        Spacer()
+                        // Explicit way out — selecting a row isn't the only exit.
+                        Button("Close") { dismiss() }
+                            .font(.system(size: 28, weight: .semibold))
+                            .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 10)))
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
@@ -570,6 +575,8 @@ private struct TVRegionPickerView: View {
                 .padding(.vertical, 60)
             }
         }
+        // Menu closes the picker instead of falling through to the system.
+        .onExitCommand { dismiss() }
     }
 }
 #endif

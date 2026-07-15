@@ -68,6 +68,17 @@ struct LibraryView: View {
             hasLoaded = true
             loadLibraryData()
         }
+        // Reflect favorites/watch changes made anywhere (e.g. the detail
+        // sheet, or another tab on tvOS where this view stays alive) without
+        // requiring an app relaunch. Refresh silently — no spinner flash.
+        .onChange(of: libraryManager.favorites) {
+            guard hasLoaded else { return }
+            loadLibraryData(isRefresh: true)
+        }
+        .onChange(of: libraryManager.watchHistory.map(\.movieId)) {
+            guard hasLoaded else { return }
+            loadLibraryData(isRefresh: true)
+        }
     }
 
     // MARK: - Header Section
@@ -226,9 +237,11 @@ struct LibraryView: View {
 
     // MARK: - Data Loading
 
-    private func loadLibraryData() {
+    private func loadLibraryData(isRefresh: Bool = false) {
         Task {
-            isLoading = true
+            // On a background refresh keep the current grid visible instead
+            // of flashing the loading spinner.
+            if !isRefresh { isLoading = true }
 
             // Get favorite and watched movie IDs from LibraryManager
             let favoriteIds = libraryManager.favoriteMovieIds

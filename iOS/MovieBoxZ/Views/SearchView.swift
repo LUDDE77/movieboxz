@@ -172,22 +172,27 @@ struct SearchView: View {
 
     #if os(tvOS)
     private var tvOSLayout: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 40) {
-                ForEach(searchResults) { movie in
-                    MovieCard(
-                        movie: movie,
-                        cardTitleSize: cardTitleSize,
-                        cardMetadataSize: cardMetadataSize,
-                        onPlayVideo: { _ in currentMovie = movie }
-                    )
+        // .searchable requires a navigation container ancestor on tvOS;
+        // without NavigationStack the search field/keyboard never renders,
+        // leaving the Search tab unusable.
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 40) {
+                    ForEach(searchResults) { movie in
+                        MovieCard(
+                            movie: movie,
+                            cardTitleSize: cardTitleSize,
+                            cardMetadataSize: cardMetadataSize,
+                            onPlayVideo: { _ in currentMovie = movie }
+                        )
+                    }
                 }
+                .padding(.horizontal, 80)
+                .padding(.bottom, 100)
             }
-            .padding(.horizontal, 80)
-            .padding(.bottom, 100)
+            .searchable(text: $searchText, placement: .automatic)
+            .onSubmit(of: .search) { performSearch() }
         }
-        .searchable(text: $searchText, placement: .automatic)
-        .onSubmit(of: .search) { performSearch() }
     }
     #endif
 

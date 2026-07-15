@@ -98,6 +98,11 @@ struct CategoryDetailView: View {
             MovieDetailView(movie: movie)
         }
         #endif
+        #if os(tvOS)
+        // Menu returns to the previous screen instead of falling through to
+        // the system (which could background the app).
+        .onExitCommand { dismiss() }
+        #endif
     }
 
     // MARK: - Loading View
@@ -328,9 +333,14 @@ struct CategoryDetailView: View {
                     self.movies = fetchedMovies
                     self.isLoading = false
                 }
+            } catch is CancellationError {
+                await MainActor.run { self.isLoading = false }
+            } catch let urlError as URLError where urlError.code == .cancelled {
+                await MainActor.run { self.isLoading = false }
             } catch {
                 await MainActor.run {
-                    self.errorMessage = error.localizedDescription
+                    // Friendly, non-technical message (no raw error strings).
+                    self.errorMessage = "Couldn't load \(categoryType.title). Please check your connection and try again."
                     self.isLoading = false
                 }
             }

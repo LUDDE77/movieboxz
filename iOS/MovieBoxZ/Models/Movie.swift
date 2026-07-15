@@ -154,6 +154,54 @@ struct Movie: Codable, Identifiable {
         case lastValidated = "last_validated"
     }
 
+    // Resilient decoding: each field is decoded with `try?` and a sane
+    // default so a single dirty/null/wrong-typed column in one row can't
+    // throw a DecodingError and blank the ENTIRE array (a rail, a genre
+    // page, search results). Availability flags default to `true` so a
+    // missing flag shows the movie rather than silently hiding it.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        youtubeVideoId    = (try? c.decode(String.self, forKey: .youtubeVideoId)) ?? ""
+        title             = (try? c.decode(String.self, forKey: .title)) ?? ""
+        originalTitle     = try? c.decode(String.self, forKey: .originalTitle)
+        description       = try? c.decode(String.self, forKey: .description)
+        releaseDate       = try? c.decode(Date.self, forKey: .releaseDate)
+        runtimeMinutes    = try? c.decode(Int.self, forKey: .runtimeMinutes)
+        youtubeVideoTitle = (try? c.decode(String.self, forKey: .youtubeVideoTitle)) ?? ""
+        channelId         = (try? c.decode(String.self, forKey: .channelId)) ?? ""
+        channelTitle      = (try? c.decode(String.self, forKey: .channelTitle)) ?? ""
+        channelThumbnail  = try? c.decode(String.self, forKey: .channelThumbnail)
+        viewCount         = (try? c.decode(Int.self, forKey: .viewCount)) ?? 0
+        likeCount         = try? c.decode(Int.self, forKey: .likeCount)
+        commentCount      = try? c.decode(Int.self, forKey: .commentCount)
+        publishedAt       = try? c.decode(Date.self, forKey: .publishedAt)
+        lastRefreshed     = try? c.decode(Date.self, forKey: .lastRefreshed)
+        tmdbId            = try? c.decode(Int.self, forKey: .tmdbId)
+        imdbId            = try? c.decode(String.self, forKey: .imdbId)
+        posterPath        = try? c.decode(String.self, forKey: .posterPath)
+        backdropPath      = try? c.decode(String.self, forKey: .backdropPath)
+        voteAverage       = try? c.decode(Double.self, forKey: .voteAverage)
+        voteCount         = try? c.decode(Int.self, forKey: .voteCount)
+        popularity        = try? c.decode(Double.self, forKey: .popularity)
+        imdbRating        = try? c.decode(Double.self, forKey: .imdbRating)
+        rated             = try? c.decode(String.self, forKey: .rated)
+        category          = try? c.decode(String.self, forKey: .category)
+        quality           = try? c.decode(String.self, forKey: .quality)
+        featured          = (try? c.decode(Bool.self, forKey: .featured)) ?? false
+        trending          = (try? c.decode(Bool.self, forKey: .trending)) ?? false
+        isAvailable       = (try? c.decode(Bool.self, forKey: .isAvailable)) ?? true
+        isEmbeddable      = (try? c.decode(Bool.self, forKey: .isEmbeddable)) ?? true
+        genres            = try? c.decode([Genre].self, forKey: .genres)
+        isTvSeries        = try? c.decode(Bool.self, forKey: .isTvSeries)
+        tvSeriesId        = try? c.decode(String.self, forKey: .tvSeriesId)
+        seasonNumber      = try? c.decode(Int.self, forKey: .seasonNumber)
+        episodeNumber     = try? c.decode(Int.self, forKey: .episodeNumber)
+        seriesType        = try? c.decode(String.self, forKey: .seriesType)
+        addedAt           = (try? c.decode(Date.self, forKey: .addedAt)) ?? Date()
+        lastValidated     = try? c.decode(Date.self, forKey: .lastValidated)
+    }
+
     // Computed properties for UI
 
     /// Display title with fallback logic
@@ -194,9 +242,11 @@ struct Movie: Codable, Identifiable {
         return URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
     }
 
-    var youtubeThumbURL: URL {
-        // Direct YouTube thumbnail (for attribution section)
-        URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")!
+    var youtubeThumbURL: URL? {
+        // Direct YouTube thumbnail (for attribution section).
+        // Optional (not force-unwrapped): a malformed youtubeVideoId would
+        // otherwise crash every screen that shows a thumbnail.
+        URL(string: "https://img.youtube.com/vi/\(youtubeVideoId)/hqdefault.jpg")
     }
 
     var youtubeURL: URL? {

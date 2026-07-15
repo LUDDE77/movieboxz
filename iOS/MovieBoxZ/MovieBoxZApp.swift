@@ -31,7 +31,13 @@ struct MovieBoxZApp: App {
     @StateObject private var movieService = MovieService()
 
     private var isUITesting: Bool {
-        CommandLine.arguments.contains("UI_TESTING_SKIP_WELCOME")
+        // Compiled out of Release: the legal-acceptance gate can never be
+        // skipped via a launch argument in a shipping build.
+        #if DEBUG
+        return CommandLine.arguments.contains("UI_TESTING_SKIP_WELCOME")
+        #else
+        return false
+        #endif
     }
 
     init() {

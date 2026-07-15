@@ -2,6 +2,11 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab = 0
+    // Tabs the user has opened at least once. On iOS we keep these views
+    // alive (below) so returning to a tab doesn't tear down its @State and
+    // re-fetch — which previously showed a spinner and, on a flaky network,
+    // an empty list (e.g. "TV Series empty when I come back").
+    @State private var visitedTabs: Set<Int> = [0]
 
     var body: some View {
         #if os(tvOS)
@@ -78,11 +83,32 @@ struct ContentView: View {
         // geo.size matches the physical screen (landscape: 852 x 393).
         .ignoresSafeArea()
         .statusBarHidden()
+        .onChange(of: selectedTab) {
+            visitedTabs.insert(selectedTab)
+        }
+    }
+
+    // Keep every already-visited tab in the hierarchy and just show/hide it,
+    // so its @State (loaded lists, scroll position) survives tab switches.
+    // Tabs are still lazily created on first visit, so we don't fire six
+    // network loads at launch.
+    @ViewBuilder
+    private var tabContent: some View {
+        ZStack {
+            ForEach(0..<6, id: \.self) { index in
+                if visitedTabs.contains(index) {
+                    tabView(for: index)
+                        .opacity(selectedTab == index ? 1 : 0)
+                        .allowsHitTesting(selectedTab == index)
+                        .accessibilityHidden(selectedTab != index)
+                }
+            }
+        }
     }
 
     @ViewBuilder
-    private var tabContent: some View {
-        switch selectedTab {
+    private func tabView(for index: Int) -> some View {
+        switch index {
         case 0: MainBrowseView()
         case 1: TVSeriesView()
         case 2: KidsView()
