@@ -667,7 +667,9 @@ struct CrossfadeBackdrop: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                Color.mbzSlate
+                // Dark ink base (not a light gray) so an in-flight load reads as
+                // an intentional dark stage rather than a blank flash.
+                Color.mbzInk
             }
             if let incomingImage {
                 incomingImage
@@ -747,21 +749,17 @@ struct FeaturedMovieBanner: View {
             // tvOS: full-bleed cinematic backdrop. CrossfadeBackdrop keeps the
             // previous image visible until the next finishes loading, then
             // crossfades — no flash to gray.
-            Group {
-                if let heroURL = movie.heroBackdropURL {
-                    CrossfadeBackdrop(url: heroURL)
-                } else {
-                    // No real landscape art — use an ambient, heavily-blurred
-                    // poster instead of stretching a low-res thumbnail, so the
-                    // hero always looks intentional rather than cheap.
-                    CrossfadeBackdrop(url: movie.posterURL)
-                        .scaleEffect(1.1)
-                        .blur(radius: 60)
-                        .overlay(Color.mbzInk.opacity(0.35))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            // ONE backdrop view (stable identity across movie changes) so its
+            // crossfade image state never resets to a blank frame. Movies with
+            // a real 16:9 backdrop show it sharp; movies without one blur their
+            // poster into an ambient wash (radius/scale toggled by modifier, not
+            // by swapping the view — swapping would reload from scratch).
+            CrossfadeBackdrop(url: movie.heroBackdropURL ?? movie.posterURL)
+                .scaleEffect(movie.hasLandscapeBackdrop ? 1.0 : 1.1)
+                .blur(radius: movie.hasLandscapeBackdrop ? 0 : 40)
+                .overlay(movie.hasLandscapeBackdrop ? Color.clear : Color.mbzInk.opacity(0.4))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
 
             // Bottom scrim — anchors the content and blends into the rows below.
             LinearGradient(
