@@ -5,8 +5,20 @@ import SwiftUI
 
 struct WelcomeView: View {
     @Binding var hasSeenWelcome: Bool
+    // Recording acceptance of the current Terms happens here, alongside
+    // hasSeenWelcome, whenever the user taps Get Started (or Continue Anyway).
+    @AppStorage("acceptedTermsVersion") private var acceptedTermsVersion = 0
     @State private var showYouTubeAlert = false
+    @State private var showTermsOfService = false
+    @State private var showPrivacyPolicy = false
     @FocusState private var buttonFocused: Bool  // Focus management for tvOS
+
+    /// Marks the Welcome flow complete and records acceptance of the current
+    /// Terms/Privacy version. Called from every path that dismisses Welcome.
+    private func acceptAndContinue() {
+        acceptedTermsVersion = LegalContent.termsVersion
+        hasSeenWelcome = true
+    }
 
     #if os(tvOS)
     private let appIconSize: CGFloat = 200
@@ -137,11 +149,11 @@ struct WelcomeView: View {
                             #if os(tvOS)
                             // On tvOS, skip YouTube detection and proceed directly
                             // User can browse regardless of YouTube app installation
-                            hasSeenWelcome = true
+                            acceptAndContinue()
                             #else
                             // On iOS, check if YouTube is installed
                             if YouTubePlayerService.shared.isYouTubeAppInstalled() {
-                                hasSeenWelcome = true
+                                acceptAndContinue()
                             } else {
                                 showYouTubeAlert = true
                             }
@@ -171,10 +183,38 @@ struct WelcomeView: View {
                         .focused($buttonFocused)  // Attach focus state for tvOS
                         .shadow(radius: 10)
 
-                        Text("By continuing, you agree to YouTube's Terms of Service")
+                        Text("By tapping Get Started you agree to our Terms of Service and Privacy Policy.")
                             .font(.caption)
                             .foregroundColor(.mbzMuted)
                             .multilineTextAlignment(.center)
+
+                        // Read-before-accept: open the same in-app pop-ups used
+                        // in Settings so the user can review before tapping.
+                        HStack(spacing: 24) {
+                            Button {
+                                showTermsOfService = true
+                            } label: {
+                                Text("Terms of Service")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.mbzGold)
+                            }
+                            #if os(tvOS)
+                            .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 8)))
+                            #endif
+
+                            Button {
+                                showPrivacyPolicy = true
+                            } label: {
+                                Text("Privacy Policy")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.mbzGold)
+                            }
+                            #if os(tvOS)
+                            .buttonStyle(FocusBorderButtonStyle(variant: .utility(cornerRadius: 8)))
+                            #endif
+                        }
                     }
                     .padding(.horizontal, 32)
 
@@ -198,12 +238,27 @@ struct WelcomeView: View {
             }
             #endif
             Button("Continue Anyway") {
-                hasSeenWelcome = true
+                acceptAndContinue()
             }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("MovieBoxZ requires the YouTube app to play videos. You can browse movies, but you'll need to install YouTube to watch them.\n\nDownload the free YouTube app from the App Store to get started.")
         }
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $showTermsOfService) {
+            LegalDocumentView(title: "Terms of Service", text: LegalContent.termsOfService)
+        }
+        .fullScreenCover(isPresented: $showPrivacyPolicy) {
+            LegalDocumentView(title: "Privacy Policy", text: LegalContent.privacyPolicy)
+        }
+        #else
+        .sheet(isPresented: $showTermsOfService) {
+            LegalDocumentView(title: "Terms of Service", text: LegalContent.termsOfService)
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            LegalDocumentView(title: "Privacy Policy", text: LegalContent.privacyPolicy)
+        }
+        #endif
     }
 }
 

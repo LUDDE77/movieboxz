@@ -18,6 +18,9 @@ struct MovieBoxZApp: App {
     #endif
 
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+    // Records the LegalContent.termsVersion the user accepted on the Welcome
+    // screen. A future version bump makes this < current and re-shows Welcome.
+    @AppStorage("acceptedTermsVersion") private var acceptedTermsVersion = 0
 
     // One MovieService instance for the whole app lifetime. Injected via
     // .environmentObject so every screen (and everything it presents in a
@@ -40,7 +43,7 @@ struct MovieBoxZApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if hasSeenWelcome || isUITesting {
+            if isUITesting || (hasSeenWelcome && acceptedTermsVersion >= LegalContent.termsVersion) {
                 SplashScreenView()
                     #if os(iOS)
                     .ignoresSafeArea()

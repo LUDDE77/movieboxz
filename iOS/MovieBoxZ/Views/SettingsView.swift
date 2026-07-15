@@ -15,6 +15,10 @@ struct SettingsView: View {
     @State private var showRegionPicker = false
     #endif
 
+    // Drives the in-app legal document pop-ups.
+    @State private var showPrivacyPolicy = false
+    @State private var showTermsOfService = false
+
     // Bound to the persisted override. Empty string means "Auto (detected)".
     @AppStorage("regionOverride") private var regionOverride: String = ""
 
@@ -46,8 +50,6 @@ struct SettingsView: View {
     }
 
     // MARK: - Update these URLs when web pages are live
-    private let privacyPolicyURL = URL(string: "https://movieboxz.app/privacy")!
-    private let termsOfServiceURL = URL(string: "https://movieboxz.app/terms")!
     private let helpURL = URL(string: "https://movieboxz.app/help")!
     private let supportEmail = "support@movieboxz.app"
 
@@ -92,7 +94,7 @@ struct SettingsView: View {
                 // MARK: About
                 Section("About") {
                     Button {
-                        UIApplication.shared.open(privacyPolicyURL)
+                        showPrivacyPolicy = true
                     } label: {
                         HStack {
                             Image(systemName: "shield.checkered")
@@ -100,14 +102,14 @@ struct SettingsView: View {
                             Text("Privacy Policy")
                                 .foregroundColor(.primary)
                             Spacer()
-                            Image(systemName: "arrow.up.right")
+                            Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
 
                     Button {
-                        UIApplication.shared.open(termsOfServiceURL)
+                        showTermsOfService = true
                     } label: {
                         HStack {
                             Image(systemName: "doc.text")
@@ -115,7 +117,7 @@ struct SettingsView: View {
                             Text("Terms of Service")
                                 .foregroundColor(.primary)
                             Spacer()
-                            Image(systemName: "arrow.up.right")
+                            Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -242,6 +244,12 @@ struct SettingsView: View {
             #endif
             .navigationTitle("Settings")
         }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            LegalDocumentView(title: "Privacy Policy", text: LegalContent.privacyPolicy)
+        }
+        .sheet(isPresented: $showTermsOfService) {
+            LegalDocumentView(title: "Terms of Service", text: LegalContent.termsOfService)
+        }
     }
     #endif
 
@@ -285,6 +293,12 @@ struct SettingsView: View {
                 regionOverride = code
                 movieService.setRegionOverride(code.isEmpty ? nil : code)
             }
+        }
+        .fullScreenCover(isPresented: $showPrivacyPolicy) {
+            LegalDocumentView(title: "Privacy Policy", text: LegalContent.privacyPolicy)
+        }
+        .fullScreenCover(isPresented: $showTermsOfService) {
+            LegalDocumentView(title: "Terms of Service", text: LegalContent.termsOfService)
         }
     }
 
@@ -397,10 +411,10 @@ struct SettingsView: View {
     private var tvAboutSection: some View {
         tvSection("About") {
             tvLinkButton(icon: "shield.checkered", label: "Privacy Policy") {
-                UIApplication.shared.open(privacyPolicyURL)
+                showPrivacyPolicy = true
             }
             tvLinkButton(icon: "doc.text", label: "Terms of Service") {
-                UIApplication.shared.open(termsOfServiceURL)
+                showTermsOfService = true
             }
         }
     }
