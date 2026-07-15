@@ -1321,6 +1321,11 @@ router.post('/publish', async (req, res, next) => {
                         series_type: stagedMovie.series_type || null,
                         category: mapToContentCategory(stagedMovie.category),
                         region_restrictions: stagedMovie.region_restrictions || null,
+                        // Project region_restrictions into queryable array columns so
+                        // newly-published movies are immediately region-filter-ready.
+                        region_blocked: stagedMovie.region_restrictions?.blocked ?? null,
+                        region_allowed: stagedMovie.region_restrictions?.allowed ?? null,
+                        region_checked_at: stagedMovie.region_restrictions ? new Date().toISOString() : null,
                         enrichment_source: stagedMovie.enrichment_source,
                         enrichment_confidence: enrichmentConfidence,
                         is_available: true

@@ -120,6 +120,13 @@ class MovieService: ObservableObject {
         request.httpMethod = method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Tell the backend the viewer's country so it can hide movies that
+        // YouTube won't play in this region. Read on-device from the locale
+        // (ISO 3166-1 alpha-2) — no permission, not tracking, ephemeral.
+        if let region = Locale.current.region?.identifier, region.count == 2 {
+            request.setValue(region.uppercased(), forHTTPHeaderField: "X-Country")
+        }
+
         if let body = body {
             request.httpBody = body
         }

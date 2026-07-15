@@ -115,13 +115,14 @@ router.get('/genres/:genreId', async (req, res, next) => {
             })
         }
 
-        // Get movies by genre
+        // Get movies by genre (per-country availability filter)
         const result = await dbOperations.getMoviesByGenre(
             genreId,
             limit,
             offset,
             sortConfig.sortBy,
-            sortConfig.sortOrder
+            sortConfig.sortOrder,
+            req.query.country || req.headers['x-country'] || null
         )
 
         res.set('Cache-Control', PUBLIC_CACHE_CONTROL)

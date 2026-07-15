@@ -14,6 +14,11 @@ const MAX_LIMIT = 100
 // Cache-Control for public read-only list endpoints
 const PUBLIC_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600'
 
+// Resolve the requesting user's country (ISO-3166-1 alpha-2) for per-country
+// availability filtering. Prefer explicit ?country=, fall back to x-country
+// header. getMovies/getMoviesByGenre sanitize/validate the value.
+const userCountry = (req) => req.query.country || req.headers['x-country'] || null
+
 // =============================================================================
 // YOUTUBE TOS COMPLIANCE HELPERS
 // =============================================================================
@@ -135,6 +140,7 @@ router.get('/', async (req, res, next) => {
         const sortConfig = sortOptions[sort] || sortOptions.popular
         filters.sortBy = sortConfig.sortBy
         filters.sortOrder = sortConfig.sortOrder
+        filters.country = userCountry(req)
 
         // If genre filter is provided, use genre-specific query
         let result
@@ -144,7 +150,8 @@ router.get('/', async (req, res, next) => {
                 limitNum,
                 offset,
                 sortConfig.sortBy,
-                sortConfig.sortOrder
+                sortConfig.sortOrder,
+                userCountry(req)
             )
         } else {
             result = await dbOperations.getMovies(filters, limitNum, offset)
@@ -186,7 +193,7 @@ router.get('/featured', async (req, res, next) => {
         // Use getMovies to get fully-shaped movie objects (with channel_title, genres, etc.)
         // sorted by featured_order so the admin-curated order is preserved
         const result = await dbOperations.getMovies(
-            { featured: true, excludeTvSeries: true, sortBy: 'featured_order', sortOrder: 'asc' },
+            { featured: true, excludeTvSeries: true, sortBy: 'featured_order', sortOrder: 'asc', country: userCountry(req) },
             5,
             0
         )
@@ -219,7 +226,8 @@ router.get('/trending', async (req, res, next) => {
 
         let result = await dbOperations.getMovies({
             trending: true,
-            excludeTvSeries: true
+            excludeTvSeries: true,
+            country: userCountry(req)
         }, limit, offset)
 
         // No movies are flagged trending — fall back to most viewed so the
@@ -230,7 +238,8 @@ router.get('/trending', async (req, res, next) => {
             result = await dbOperations.getMovies({
                 sortBy: 'view_count',
                 sortOrder: 'desc',
-                excludeTvSeries: true
+                excludeTvSeries: true,
+                country: userCountry(req)
             }, limit, offset)
         }
 
@@ -274,7 +283,8 @@ router.get('/popular', async (req, res, next) => {
         const result = await dbOperations.getMovies({
             sortBy,
             sortOrder: 'desc',
-            excludeTvSeries: true
+            excludeTvSeries: true,
+            country: userCountry(req)
         }, limit, offset)
 
         res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
@@ -335,6 +345,19 @@ router.get('/top-rated', async (req, res, next) => {
             query = query.not('is_tv_series', 'is', true)
         }
 
+        // Per-country availability filter (same semantics as getMovies).
+        // SHOW-IF-UNKNOWN: the `.is.null` branch lets movies with no region
+        // data pass (worldwide). It is REQUIRED.
+        const cc = String(req.query.country || req.headers['x-country'] || '').trim().toUpperCase()
+        const validCC = /^[A-Z]{2}$/.test(cc) ? cc : null
+        if (validCC) {
+            query = query.or(`region_blocked.is.null,region_blocked.not.cs.{${validCC}}`)
+            query = query.or(`region_allowed.is.null,region_allowed.cs.{${validCC}}`)
+            if (process.env.REGION_FILTER_HIDE_IF_UNKNOWN === 'true') {
+                query = query.not('region_checked_at', 'is', null)
+            }
+        }
+
         const { data, error, count } = await query
             .order(ratingColumn, { ascending: false })
             .range(offset, offset + limit - 1)
@@ -390,7 +413,8 @@ router.get('/recent', async (req, res, next) => {
         const result = await dbOperations.getMovies({
             sortBy: 'added_at',
             sortOrder: 'desc',
-            excludeTvSeries: true
+            excludeTvSeries: true,
+            country: userCountry(req)
         }, limit, offset)
 
         res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
@@ -425,7 +449,8 @@ router.get('/search', validateRequest(movieQuerySchema), async (req, res, next) 
         logger.info(`Searching movies: "${q}", category: ${category}, year: ${year}`)
 
         const filters = {
-            search: q
+            search: q,
+            country: userCountry(req)
         }
 
         if (category) {
@@ -475,7 +500,8 @@ router.get('/category/:category', async (req, res, next) => {
         const result = await dbOperations.getMovies({
             category,
             sortBy: 'vote_average',
-            sortOrder: 'desc'
+            sortOrder: 'desc',
+            country: userCountry(req)
         }, limit, offset)
 
         res.json({
@@ -517,7 +543,8 @@ router.get('/channel/:channelId', async (req, res, next) => {
         const result = await dbOperations.getMovies({
             channelId,
             sortBy: 'published_at',
-            sortOrder: 'desc'
+            sortOrder: 'desc',
+            country: userCountry(req)
         }, limit, offset)
 
         res.json({

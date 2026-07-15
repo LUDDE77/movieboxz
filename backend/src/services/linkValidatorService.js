@@ -169,6 +169,15 @@ class LinkValidatorService {
                         const isAlive = videoData && videoData.status !== 'unavailable'
                         checked++
 
+                        // Region availability backfill: refresh the per-country
+                        // restriction data for every video still live on YouTube.
+                        // Orthogonal to is_available — a region block NEVER marks
+                        // a movie unavailable. Zero extra quota (contentDetails
+                        // rode along on the same videos.list call above).
+                        if (isAlive) {
+                            await this.updateRegionData(movie.id, videoData.regionRestriction || null)
+                        }
+
                         if (isAlive && movie.is_available === false) {
                             // RESURRECTION: dead video is alive again
                             await this.resurrectMovie(movie)
@@ -336,8 +345,11 @@ class LinkValidatorService {
      */
     async checkVideosAvailability(videoIds) {
         try {
+            // contentDetails carries regionRestriction (allowed/blocked country
+            // lists) and rides along on the same videos.list call for zero extra
+            // quota — used to backfill per-country availability nightly.
             const url = `${this.YOUTUBE_VIDEOS_ENDPOINT}?` +
-                `part=status&id=${videoIds}&key=${this.YOUTUBE_API_KEY}`
+                `part=status,contentDetails&id=${videoIds}&key=${this.YOUTUBE_API_KEY}`
 
             const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
             const data = await response.json()
@@ -364,7 +376,9 @@ class LinkValidatorService {
                     results[id] = {
                         status: 'available',
                         embeddable: videoData.status.embeddable,
-                        privacyStatus: videoData.status.privacyStatus
+                        privacyStatus: videoData.status.privacyStatus,
+                        // Per-country availability (may be null = worldwide)
+                        regionRestriction: videoData.contentDetails?.regionRestriction || null
                     }
                 }
             }
@@ -444,6 +458,37 @@ class LinkValidatorService {
 
         } catch (error) {
             logger.error('Error updating validation timestamp:', error)
+            // Non-critical error, don't throw
+        }
+    }
+
+    /**
+     * Backfill/refresh a movie's per-country availability from a YouTube
+     * regionRestriction object. NEVER touches is_available — region blocking is
+     * orthogonal to whether the video plays at all. A null rr means worldwide
+     * (both array columns cleared to null).
+     *
+     * @param {string} movieId - Movie ID
+     * @param {Object|null} rr - YouTube contentDetails.regionRestriction, or null
+     */
+    async updateRegionData(movieId, rr) {
+        try {
+            const { error } = await supabase
+                .from('movies')
+                .update({
+                    region_blocked: rr?.blocked ?? null,
+                    region_allowed: rr?.allowed ?? null,
+                    region_restrictions: rr,
+                    region_checked_at: new Date().toISOString()
+                })
+                .eq('id', movieId)
+
+            if (error) {
+                throw error
+            }
+
+        } catch (error) {
+            logger.error('Error updating region data:', error)
             // Non-critical error, don't throw
         }
     }

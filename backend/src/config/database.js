@@ -120,6 +120,26 @@ export const dbOperations = {
             query = query.textSearch('search_vector', sanitizedQuery)
         }
 
+        // Per-country availability filter.
+        // Semantics: NULL/empty region_allowed AND region_blocked = worldwide.
+        // A movie is visible in country CC iff:
+        //   (region_blocked IS NULL OR NOT region_blocked contains CC)
+        //   AND (region_allowed IS NULL OR region_allowed contains CC)
+        // Policy is SHOW-IF-UNKNOWN: a movie with no region data still shows,
+        // which falls out of the `.is.null` branch in each OR passing.
+        // Admin callers pass includeUnavailable to opt out of region filtering.
+        const cc = String(filters.country || '').trim().toUpperCase()
+        const validCC = /^[A-Z]{2}$/.test(cc) ? cc : null
+        if (validCC && !filters.includeUnavailable) {
+            // NULL columns pass (worldwide) — the `.is.null` branch is REQUIRED.
+            query = query.or(`region_blocked.is.null,region_blocked.not.cs.{${validCC}}`)
+            query = query.or(`region_allowed.is.null,region_allowed.cs.{${validCC}}`)
+            // Stricter opt-in: hide movies whose region data was never checked.
+            if (process.env.REGION_FILTER_HIDE_IF_UNKNOWN === 'true') {
+                query = query.not('region_checked_at', 'is', null)
+            }
+        }
+
         // Sorting
         const sortBy = filters.sortBy || 'added_at'
         const sortOrder = filters.sortOrder || 'desc'
@@ -385,7 +405,7 @@ export const dbOperations = {
         }
     },
 
-    async getMoviesByGenre(genreId, limit = 20, offset = 0, sortBy = 'view_count', sortOrder = 'desc') {
+    async getMoviesByGenre(genreId, limit = 20, offset = 0, sortBy = 'view_count', sortOrder = 'desc', country = null) {
         // Get movies that have this genre
         let query = supabase
             .from('movie_genres')
@@ -400,6 +420,25 @@ export const dbOperations = {
             .eq('movies.is_available', true)
             // Genre browse rows are movie surfaces — episodes stay in TV Series/Kids series sections
             .not('movies.is_tv_series', 'is', true)
+
+        // Per-country availability filter on the embedded `movies` resource.
+        // Same semantics as getMovies: NULL region_allowed AND region_blocked =
+        // worldwide (SHOW-IF-UNKNOWN). Visible in CC iff:
+        //   (region_blocked IS NULL OR NOT contains CC)
+        //   AND (region_allowed IS NULL OR contains CC).
+        // Uses { referencedTable: 'movies' } so the OR applies to the joined
+        // movie columns (mirrors the movies.is_available filter above).
+        const cc = String(country || '').trim().toUpperCase()
+        const validCC = /^[A-Z]{2}$/.test(cc) ? cc : null
+        if (validCC) {
+            // NULL columns pass (worldwide) — the `.is.null` branch is REQUIRED.
+            query = query.or(`region_blocked.is.null,region_blocked.not.cs.{${validCC}}`, { referencedTable: 'movies' })
+            query = query.or(`region_allowed.is.null,region_allowed.cs.{${validCC}}`, { referencedTable: 'movies' })
+            // Stricter opt-in: hide movies whose region data was never checked.
+            if (process.env.REGION_FILTER_HIDE_IF_UNKNOWN === 'true') {
+                query = query.not('movies.region_checked_at', 'is', null)
+            }
+        }
 
         // Apply sorting on the movies relation
         query = query.order(sortBy, {
