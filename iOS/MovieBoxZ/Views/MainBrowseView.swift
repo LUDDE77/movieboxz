@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import UIKit
 
 struct MainBrowseView: View {
     @EnvironmentObject private var movieService: MovieService
@@ -60,20 +61,14 @@ struct MainBrowseView: View {
             #if os(iOS)
             if !featuredMovies.isEmpty, !isLoading {
                 let heroMovie = featuredMovies[min(currentHeroIndex, featuredMovies.count - 1)]
-                // .id forces a new view on each index change so .transition fires.
-                // Only the backdrop animates — content layout stays static.
-                AsyncImage(url: heroMovie.backdropURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        Color.clear
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .id(currentHeroIndex)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.8), value: currentHeroIndex)
+                // CrossfadeBackdrop keeps the previously-loaded backdrop on screen
+                // until the next one has finished loading, then crossfades between
+                // them — no flash to an empty/gray frame on index change.
+                // .ignoresSafeArea() so the hero bleeds edge-to-edge on iPhone
+                // (dynamic island / home indicator), matching iPad/tvOS.
+                CrossfadeBackdrop(url: heroMovie.backdropURL)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
 
                 LinearGradient(
                     gradient: Gradient(stops: [
@@ -87,6 +82,7 @@ struct MainBrowseView: View {
                     endPoint: .bottom
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
             }
             #endif
 
@@ -390,6 +386,11 @@ struct MainBrowseView: View {
                         await refreshMovies()
                     }
                 }
+                // Re-assert ignoresSafeArea() here (matching the tvOS branch above)
+                // so screenGeo.size is the true full-screen frame and the hero/
+                // content bleed edge-to-edge on iPhone instead of being inset by
+                // the dynamic-island/home-indicator safe areas.
+                .ignoresSafeArea()
                 #endif
             }
         }
@@ -642,6 +643,76 @@ struct MainBrowseView: View {
     }
 }
 
+// MARK: - Crossfade Backdrop
+
+/// Hero backdrop image that never flashes to empty/gray when the movie
+/// changes. It keeps whatever image is currently on screen ("base") visible
+/// while the next URL loads in the background, then crossfades a new layer
+/// ("incoming") on top of it before promoting it to the base. Because the
+/// view identity never changes across index changes (no `.id()` on the
+/// caller), this state survives every hero rotation.
+struct CrossfadeBackdrop: View {
+    let url: URL?
+
+    @State private var baseImage: Image?
+    @State private var incomingImage: Image?
+    @State private var incomingOpacity: Double = 0
+    @State private var loadedURL: URL?
+
+    var body: some View {
+        ZStack {
+            if let baseImage {
+                baseImage
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Color.mbzSlate
+            }
+            if let incomingImage {
+                incomingImage
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .opacity(incomingOpacity)
+            }
+        }
+        .task(id: url) {
+            await load(url)
+        }
+    }
+
+    @MainActor
+    private func load(_ url: URL?) async {
+        guard let url, url != loadedURL else { return }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let uiImage = UIImage(data: data) else { return }
+        guard !Task.isCancelled else { return }
+        let image = Image(uiImage: uiImage)
+
+        if baseImage == nil {
+            // First load ever — nothing to crossfade from yet.
+            baseImage = image
+            loadedURL = url
+            return
+        }
+
+        incomingImage = image
+        incomingOpacity = 0
+        withAnimation(.easeInOut(duration: 0.8)) {
+            incomingOpacity = 1
+        }
+        loadedURL = url
+
+        try? await Task.sleep(nanoseconds: 850_000_000)
+
+        // Only promote if this is still the most recently requested image
+        // (guards against rapid dot-tapping racing multiple loads).
+        guard !Task.isCancelled, loadedURL == url else { return }
+        baseImage = incomingImage
+        incomingImage = nil
+        incomingOpacity = 0
+    }
+}
+
 // MARK: - Featured Movie Banner
 
 struct FeaturedMovieBanner: View {
@@ -654,27 +725,30 @@ struct FeaturedMovieBanner: View {
     var onSelectIndex: ((Int) -> Void)? = nil
     let onPlayVideo: (String) -> Void
 
+    // Fixed block heights so the info layout is IDENTICAL for every movie —
+    // reserved regardless of whether a given movie actually has a short
+    // title, a description, or any metadata badges. This is what keeps the
+    // buttons/channel line pinned to the same Y as the carousel rotates.
+    #if os(tvOS)
+    private var titleBlockHeight: CGFloat { heroTitleSize * 1.25 } // 1 line
+    private var genreRowHeight: CGFloat { (bodyTextSize - 10) * 1.3 + 10 }
+    private var metadataRowHeight: CGFloat { (bodyTextSize - 8) * 1.3 + 12 }
+    private var descriptionBlockHeight: CGFloat { bodyTextSize * 1.3 * 2 } // 2 lines
+    #else
+    private var titleBlockHeight: CGFloat { heroTitleSize * 1.25 * 2 } // 2 lines
+    private var metadataRowHeight: CGFloat { (bodyTextSize - 4) * 1.3 + 10 }
+    private var descriptionBlockHeight: CGFloat { bodyTextSize * 1.3 * 2 } // 2 lines
+    #endif
+
     var body: some View {
         ZStack {
             #if os(tvOS)
-            // tvOS: backdrop and gradient live inside the banner
-            AsyncImage(url: movie.backdropURL) { phase in
-                switch phase {
-                case .empty:
-                    Rectangle().fill(Color.gray.opacity(0.2)).shimmer()
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                case .failure:
-                    Rectangle().fill(Color.gray.opacity(0.3))
-                @unknown default:
-                    EmptyView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            .id(currentIndex)
-            .transition(.opacity)
-            .animation(.easeInOut(duration: 0.8), value: currentIndex)
+            // tvOS: backdrop and gradient live inside the banner.
+            // CrossfadeBackdrop keeps the previous backdrop visible until the
+            // next one finishes loading, then crossfades — no flash to gray.
+            CrossfadeBackdrop(url: movie.backdropURL)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
 
             LinearGradient(
                 gradient: Gradient(stops: [
@@ -719,15 +793,19 @@ struct FeaturedMovieBanner: View {
 
                     // Info column
                     VStack(alignment: .leading, spacing: 14) {
+                        // Title — always reserves 1-line height so the rest of
+                        // the block sits at the same Y for every movie.
                         Text(movie.displayTitle)
                             .font(.system(size: heroTitleSize, weight: .black))
                             .foregroundColor(.mbzScreen)
                             .lineLimit(1)
+                            .frame(height: titleBlockHeight, alignment: .bottomLeading)
                             .shadow(radius: 10)
 
-                        // Genre chips
-                        if let genres = movie.genres, !genres.isEmpty {
-                            HStack(spacing: 8) {
+                        // Genre chips — HStack always present (even with zero
+                        // chips) so this row's height never collapses to 0.
+                        HStack(spacing: 8) {
+                            if let genres = movie.genres, !genres.isEmpty {
                                 ForEach(genres.prefix(3), id: \.id) { genre in
                                     Text(genre.name)
                                         .font(.system(size: bodyTextSize - 10, weight: .medium))
@@ -741,8 +819,10 @@ struct FeaturedMovieBanner: View {
                                 }
                             }
                         }
+                        .frame(height: genreRowHeight, alignment: .leading)
 
-                        // Metadata badges
+                        // Metadata badges — fixed row height regardless of how
+                        // many of year/rating/runtime are actually available.
                         HStack(spacing: 8) {
                             if let year = movie.formattedReleaseYear {
                                 Text(year)
@@ -775,14 +855,19 @@ struct FeaturedMovieBanner: View {
                                     .cornerRadius(6)
                             }
                         }
+                        .frame(height: metadataRowHeight, alignment: .leading)
 
-                        if let overview = movie.description {
-                            Text(overview)
-                                .font(.system(size: bodyTextSize))
-                                .foregroundColor(.mbzMuted)
-                                .lineLimit(2)
-                                .shadow(radius: 5)
-                        }
+                        // Description — always reserves its 2-line height, even
+                        // when the movie has no description, via an invisible
+                        // placeholder of the same size.
+                        Text(movie.description ?? " ")
+                            .font(.system(size: bodyTextSize))
+                            .foregroundColor(.mbzMuted)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .frame(height: descriptionBlockHeight, alignment: .topLeading)
+                            .opacity(movie.description == nil ? 0 : 1)
+                            .shadow(radius: 5)
 
                         // Action buttons
                         HStack(spacing: 20) {
@@ -871,14 +956,18 @@ struct FeaturedMovieBanner: View {
             VStack(spacing: 0) {
                 // Left-aligned content block
                 VStack(alignment: .leading, spacing: 10) {
-                    // Title
+                    // Title — always reserves 2-line height so shorter titles
+                    // don't shift the metadata/description/buttons below.
                     Text(movie.displayTitle)
                         .font(.system(size: heroTitleSize, weight: .black))
                         .foregroundColor(.mbzScreen)
                         .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(height: titleBlockHeight, alignment: .bottomLeading)
                         .shadow(radius: 10)
 
-                    // Metadata badges: year · rating · runtime
+                    // Metadata badges: year · rating · runtime — fixed row
+                    // height regardless of how many badges are present.
                     HStack(spacing: 8) {
                         if let year = movie.formattedReleaseYear {
                             Text(year)
@@ -911,15 +1000,19 @@ struct FeaturedMovieBanner: View {
                                 .cornerRadius(6)
                         }
                     }
+                    .frame(height: metadataRowHeight, alignment: .leading)
 
-                    // Description
-                    if let overview = movie.description {
-                        Text(overview)
-                            .font(.system(size: bodyTextSize))
-                            .foregroundColor(.mbzMuted)
-                            .lineLimit(2)
-                            .shadow(radius: 5)
-                    }
+                    // Description — always reserves its 2-line height, even
+                    // when the movie has no description, via an invisible
+                    // placeholder of the same size (so buttons below never move).
+                    Text(movie.description ?? " ")
+                        .font(.system(size: bodyTextSize))
+                        .foregroundColor(.mbzMuted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(height: descriptionBlockHeight, alignment: .topLeading)
+                        .opacity(movie.description == nil ? 0 : 1)
+                        .shadow(radius: 5)
 
                     // Action buttons
                     HStack(spacing: 12) {
