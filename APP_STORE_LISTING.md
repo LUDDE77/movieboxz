@@ -14,10 +14,12 @@ film noir,westerns,cult,sci-fi,retro,cinema,oldies,Hollywood,thriller,horror,dra
 ## Promotional Text  (166/170)
 Thousands of full, free classic movies — noir, westerns, sci-fi, cult favorites and prestige TV — beautifully organized and one tap from playing. No account, no cost.
 
-## Description  (1751/4000)
+## Description  (2081/4000)
 Free, beautifully curated classic cinema — one tap from playing on your screen.
 
-MovieBoxZ is a movie-discovery app for lovers of classic and cult film. It gathers thousands of full-length movies that are already free and public on YouTube — golden-age Hollywood, film noir, spaghetti westerns, sci-fi, horror, cult oddities and prestige TV — and gives them a home that's actually a joy to browse. When you press play, the movie opens in the official YouTube app. We don't host or stream video; we make finding something great to watch effortless.
+MovieBoxZ is a movie-discovery app for lovers of classic and cult film. It gathers thousands of full-length movies that are free and publicly available to stream, and gives them a home that's actually a joy to browse — golden-age Hollywood, film noir, spaghetti westerns, sci-fi, horror, cult oddities and prestige TV. When you press play, the movie opens in the free app that hosts it (today, the official YouTube app). We don't host, stream or store any video ourselves — we simply make finding something great to watch effortless.
+
+MovieBoxZ isn't tied to a single service. It's a discovery layer for free, publicly-available content, and it hands off playback to the provider's own app — starting with YouTube, with more of the free video sources available on your device to come.
 
 WHY YOU'LL LOVE IT
 
@@ -25,7 +27,7 @@ WHY YOU'LL LOVE IT
 
 • Browse by era — from Modern Cinema back through the 80s & 90s, the 60s & 70s, to Classic Cinema, plus High Score IMDb picks.
 
-• Region-aware — we hide titles YouTube can't play where you are, so you never hit a dead end.
+• Region-aware — we hide titles that can't play where you are, so you never hit a dead end.
 
 • A family corner — a dedicated Kids section of curated cartoons and family films.
 
@@ -35,7 +37,7 @@ WHY YOU'LL LOVE IT
 
 HOW IT WORKS
 
-Browse or search, tap a movie, and it plays in the official YouTube app (or youtube.com). There's nothing to sign up for and nothing to pay. Availability is controlled by YouTube and the content owners, so a title may occasionally be unavailable in your country.
+Browse or search, tap a movie, and it plays in the provider's official app (today, YouTube). There's nothing to sign up for and nothing to pay. Availability is controlled by the content owners and the hosting service, so a title may occasionally be unavailable in your country.
 
 Movie and TV information and artwork are provided by TMDB and OMDb/IMDb. This product uses the TMDB API but is not endorsed or certified by TMDB.
 
@@ -63,16 +65,19 @@ No account. No cost. Enjoy the movies.
 
 ## App Privacy (nutrition label)
 - Data Not Collected — the app has no account and collects no personal data.
-  (Answer every data-type question as "not collected".)
+  Answer every data-type question as "not collected".
 
-## Age Rating — DECISION NEEDED
-- The app deep-links to YouTube, whose content is not age-filtered by us, and
-  can fall back to opening youtube.com in the browser. In Apple's questionnaire
-  that "web content" / unrestricted-web-access question typically pushes the
-  rating to 17+. Expect 12+ at minimum, likely 17+. Answer honestly.
+## Age Rating — 17+
+- Chosen: 17+. The app hands off to third-party video apps / the web (YouTube
+  today), whose content is not age-filtered by MovieBoxZ. Answer the
+  questionnaire honestly; "Unrestricted Web Access" -> Yes gives 17+.
 
-## Review notes (paste into "Notes for Reviewer")
-MovieBoxZ is a discovery app. It does not host, stream, upload or store any
-video. Every title is publicly available on YouTube; tapping play opens the
-official YouTube app (or youtube.com) to watch. No account or purchase is
-required. Metadata/artwork are from TMDB and OMDb/IMDb.
+## Notes for Reviewer (paste verbatim)
+MovieBoxZ is a content-discovery app. It does NOT host, stream, upload or store
+any video. It surfaces movies that are free and publicly available and hands
+off playback to the hosting provider's own app — currently the official YouTube
+app (or youtube.com). MovieBoxZ is not exclusive to YouTube: it is designed as a
+general discovery layer that links out to free, publicly-available content
+across the video apps and services available on iOS, and more sources will be
+added over time. No account, sign-up or purchase is required. Titles, artwork
+and ratings are provided by TMDB and OMDb/IMDb.
