@@ -661,22 +661,33 @@ struct CrossfadeBackdrop: View {
     @State private var loadedURL: URL?
 
     var body: some View {
-        ZStack {
-            if let baseImage {
-                baseImage
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                // Dark ink base (not a light gray) so an in-flight load reads as
+        // Bound the images to the view's actual size. Without an explicit
+        // frame, a portrait poster filling a wide 16:9 area produces a huge
+        // unbounded layout that can suppress sibling views in the parent
+        // ZStack (this is what blanked the hero for movies with no landscape
+        // backdrop).
+        GeometryReader { geo in
+            ZStack {
+                // Dark ink base (not light gray) so an in-flight load reads as
                 // an intentional dark stage rather than a blank flash.
                 Color.mbzInk
+                if let baseImage {
+                    baseImage
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                if let incomingImage {
+                    incomingImage
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .opacity(incomingOpacity)
+                }
             }
-            if let incomingImage {
-                incomingImage
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .opacity(incomingOpacity)
-            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
         .task(id: url) {
             await load(url)
@@ -755,10 +766,11 @@ struct FeaturedMovieBanner: View {
             // poster into an ambient wash (radius/scale toggled by modifier, not
             // by swapping the view — swapping would reload from scratch).
             CrossfadeBackdrop(url: movie.heroBackdropURL ?? movie.posterURL)
-                .scaleEffect(movie.hasLandscapeBackdrop ? 1.0 : 1.1)
-                .blur(radius: movie.hasLandscapeBackdrop ? 0 : 40)
-                .overlay(movie.hasLandscapeBackdrop ? Color.clear : Color.mbzInk.opacity(0.4))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Movies without a real 16:9 backdrop show a blurred, darkened
+                // poster as ambient art instead of a hard-cropped portrait.
+                .blur(radius: movie.hasLandscapeBackdrop ? 0 : 40)
+                .overlay(movie.hasLandscapeBackdrop ? Color.clear : Color.mbzInk.opacity(0.45))
                 .clipped()
 
             // Bottom scrim — anchors the content and blends into the rows below.
