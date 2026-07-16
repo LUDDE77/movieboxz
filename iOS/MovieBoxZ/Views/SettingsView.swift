@@ -53,12 +53,6 @@ struct SettingsView: View {
     private let helpURL = URL(string: "https://movieboxz.com")!
     private let supportEmail = "support@movieboxz.com"
 
-    private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "Version \(version) (\(build))"
-    }
-
     var body: some View {
         #if os(tvOS)
         tvBody
@@ -82,9 +76,6 @@ struct SettingsView: View {
                         VStack(alignment: .leading) {
                             Text("MovieBoxZ")
                                 .font(.headline)
-                            Text(appVersion)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                         }
                         Spacer()
                     }
@@ -399,9 +390,6 @@ struct SettingsView: View {
                     Text("MovieBoxZ")
                         .font(.system(size: 34, weight: .semibold))
                         .foregroundColor(.mbzScreen)
-                    Text(appVersion)
-                        .font(.system(size: 24))
-                        .foregroundColor(.mbzMuted)
                 }
                 Spacer()
             }
