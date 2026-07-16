@@ -258,6 +258,31 @@ class TMDBService {
     }
 
     /**
+     * All images (backdrops + posters) TMDB has for a movie — used by the
+     * Hero Builder so an admin can pick the best one. Returns full CDN URLs.
+     * @param {number|string} movieId - TMDB movie id
+     * @returns {Promise<{backdrops: string[], posters: string[]}>}
+     */
+    async getMovieImages(movieId) {
+        try {
+            // include_image_language=null,en pulls language-neutral art too
+            const data = await this.makeRequest(`/movie/${movieId}/images`, {
+                include_image_language: 'en,null'
+            })
+            const backdrops = (data.backdrops || [])
+                .slice(0, 12)
+                .map(img => `${this.imageBaseURL}/w1280${img.file_path}`)
+            const posters = (data.posters || [])
+                .slice(0, 8)
+                .map(img => `${this.imageBaseURL}/w780${img.file_path}`)
+            return { backdrops, posters }
+        } catch (error) {
+            logger.error(`Failed to get TMDB images for ID ${movieId}:`, error.message)
+            return { backdrops: [], posters: [] }
+        }
+    }
+
+    /**
      * Lightweight genre lookup for a single movie — plain /movie/{id} call
      * (no append_to_response), so it is much cheaper than getMovieDetails.
      * Uses the standard rate limiting + 10s timeout via makeRequest.

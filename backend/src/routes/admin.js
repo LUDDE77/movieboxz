@@ -5,6 +5,7 @@ import { youtubeService } from '../services/youtubeService.js'
 import { channelPatternDetector } from '../services/channelPatternDetector.js'
 import { titleFixer } from '../scripts/fixMovieTitles.js'
 import { enhancedEnrichment } from '../services/enhancedEnrichment.js'
+import { tmdbService } from '../services/tmdbService.js'
 import { dbOperations, supabase } from '../config/database.js'
 import { logger } from '../utils/logger.js'
 import manualEnrichmentQueue from '../services/manualEnrichmentQueue.js'
@@ -1522,7 +1523,8 @@ router.patch('/movies/:id', async (req, res, next) => {
         const allowedFields = [
             'title', 'description', 'release_date', 'director', 'actors',
             'is_tv_series', 'is_kids_content', 'is_available', 'needs_verification',
-            'runtime_minutes', 'imdb_rating', 'imdb_votes'
+            'runtime_minutes', 'imdb_rating', 'imdb_votes',
+            'hero_image_url' // Hero Builder: admin-curated carousel image (nullable)
         ]
 
         const cleanUpdates = {}
@@ -2082,7 +2084,7 @@ router.get('/featured', async (req, res, next) => {
     try {
         const { data, error } = await supabase
             .from('movies')
-            .select('id, title, poster_path, backdrop_path, release_date, imdb_rating, vote_average, featured_order')
+            .select('id, title, poster_path, backdrop_path, hero_image_url, release_date, imdb_rating, vote_average, featured_order')
             .eq('featured', true)
             .not('featured_order', 'is', null)
             .order('featured_order', { ascending: true })
@@ -2093,6 +2095,65 @@ router.get('/featured', async (req, res, next) => {
             success: true,
             data: { movies: data || [], count: (data || []).length },
             message: `${(data || []).length} featured movies`
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// GET /api/admin/movies/:id/hero-candidates — image options for the Hero Builder.
+// Returns TMDB alternates (multiple backdrops + posters) plus the movie's current
+// backdrop/poster and YouTube thumbnails, so an admin can pick the best hero image.
+router.get('/movies/:id/hero-candidates', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { data: movie, error } = await supabase
+            .from('movies')
+            .select('id, title, tmdb_id, poster_path, backdrop_path, hero_image_url, youtube_video_id')
+            .eq('id', id)
+            .single()
+        if (error) throw error
+        if (!movie) return res.status(404).json({ success: false, error: 'Movie not found' })
+
+        const TMDB = 'https://image.tmdb.org/t/p'
+        const toFull = (path, size) => {
+            if (!path) return null
+            if (path.startsWith('http')) return path
+            return `${TMDB}/${size}${path}`
+        }
+
+        const candidates = []
+        const seen = new Set()
+        const add = (url, type, source) => {
+            if (!url || seen.has(url)) return
+            seen.add(url)
+            candidates.push({ url, type, source })
+        }
+
+        // TMDB alternates first (usually several backdrops to choose from)
+        if (movie.tmdb_id) {
+            const imgs = await tmdbService.getMovieImages(movie.tmdb_id)
+            imgs.backdrops.forEach(u => add(u, 'backdrop', 'tmdb'))
+            imgs.posters.forEach(u => add(u, 'poster', 'tmdb'))
+        }
+        // The movie's current images
+        add(toFull(movie.backdrop_path, 'w1280'), 'backdrop', 'current')
+        add(toFull(movie.poster_path, 'w780'), 'poster', 'current')
+        // YouTube thumbnails (last resort)
+        if (movie.youtube_video_id) {
+            add(`https://img.youtube.com/vi/${movie.youtube_video_id}/maxresdefault.jpg`, 'thumbnail', 'youtube')
+            add(`https://img.youtube.com/vi/${movie.youtube_video_id}/hqdefault.jpg`, 'thumbnail', 'youtube')
+        }
+
+        res.json({
+            success: true,
+            data: {
+                movieId: movie.id,
+                title: movie.title,
+                current: movie.hero_image_url || null,
+                candidates
+            },
+            message: `${candidates.length} hero image candidates`
         })
     } catch (error) {
         next(error)

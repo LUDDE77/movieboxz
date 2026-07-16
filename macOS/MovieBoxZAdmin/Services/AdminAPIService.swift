@@ -1308,6 +1308,21 @@ class AdminAPIService: ObservableObject {
         try await requestBasic(endpoint: "/featured/reorder", method: "PATCH", body: ReorderBody(movieIds: movieIds))
     }
 
+    // MARK: - Hero Builder
+
+    /// Image candidates (TMDB alternates + current images + YouTube thumbs) for a movie.
+    func getHeroCandidates(movieId: String) async throws -> HeroCandidatesData {
+        let response: APIResponse<HeroCandidatesData> = try await request(endpoint: "/movies/\(movieId)/hero-candidates")
+        return response.data
+    }
+
+    /// Set (or clear, with nil) the curated hero image for a movie.
+    func setHeroImage(movieId: String, url: String?) async throws {
+        struct Body: Codable { let hero_image_url: String? }
+        // PATCH returns the full movie ({ success, data }); decode tolerantly.
+        try await requestBasic(endpoint: "/movies/\(movieId)", method: "PATCH", body: Body(hero_image_url: url))
+    }
+
     /// Enrich a production movie with a manual IMDB ID
     func enrichProductionMovieWithManualIMDB(movieId: String, imdbId: String) async throws -> Movie {
         let endpoint = "/movies/\(movieId)/enrich-manual-imdb"

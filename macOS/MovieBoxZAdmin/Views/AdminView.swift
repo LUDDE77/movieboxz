@@ -34,6 +34,8 @@ struct AdminView: View {
                     .tag(10)
                 Label("Featured", systemImage: "star.fill")
                     .tag(5)
+                Label("Hero Builder", systemImage: "photo.stack.fill")
+                    .tag(12)
                 Label("Settings", systemImage: "gearshape.fill")
                     .tag(6)
             }
@@ -71,6 +73,8 @@ struct AdminView: View {
                     TVSeriesView()
                 case 5:
                     FeaturedMoviesView()
+                case 12:
+                    HeroBuilderView()
                 case 6:
                     AppSettingsView()
                 default:

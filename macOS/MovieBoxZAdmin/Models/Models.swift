@@ -264,6 +264,7 @@ struct FeaturedMovieItem: Codable, Identifiable {
     let title: String
     let posterPath: String?
     let backdropPath: String?
+    let heroImageUrl: String?
     let featuredOrder: Int
 
     enum CodingKeys: String, CodingKey {
@@ -271,6 +272,7 @@ struct FeaturedMovieItem: Codable, Identifiable {
         case title
         case posterPath = "poster_path"
         case backdropPath = "backdrop_path"
+        case heroImageUrl = "hero_image_url"
         case featuredOrder = "featured_order"
     }
 
@@ -282,6 +284,40 @@ struct FeaturedMovieItem: Codable, Identifiable {
         }
         return URL(string: "https://image.tmdb.org/t/p/w342\(path)")
     }
+
+    var backdropURL: URL? {
+        guard let path = backdropPath, !path.isEmpty else { return nil }
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            return URL(string: path)
+        }
+        return URL(string: "https://image.tmdb.org/t/p/w780\(path)")
+    }
+
+    /// What the app currently shows as this movie's hero: the curated image if
+    /// set, else the backdrop, else the poster.
+    var currentHeroURL: URL? {
+        if let hero = heroImageUrl, !hero.isEmpty { return URL(string: hero) }
+        return backdropURL ?? posterURL
+    }
+
+    var hasCustomHero: Bool { !(heroImageUrl ?? "").isEmpty }
+}
+
+// MARK: - Hero Builder candidates
+struct HeroCandidatesData: Codable {
+    let movieId: String
+    let title: String
+    let current: String?
+    let candidates: [HeroCandidate]
+}
+
+struct HeroCandidate: Codable, Identifiable {
+    let url: String
+    let type: String   // backdrop | poster | thumbnail
+    let source: String // tmdb | current | youtube
+    var id: String { url }
+    var imageURL: URL? { URL(string: url) }
+    var isLandscape: Bool { type != "poster" }
 }
 
 // MARK: - TV Info Update Result

@@ -57,6 +57,9 @@ struct Movie: Codable, Identifiable {
     let episodeNumber: Int?
     let seriesType: String?
 
+    // Hero Builder: admin-curated image (full URL) for the featured carousel.
+    let heroImageUrl: String?
+
     init(id: String, youtubeVideoId: String, title: String, originalTitle: String?, description: String?,
          releaseDate: Date?, runtimeMinutes: Int?, youtubeVideoTitle: String, channelId: String,
          channelTitle: String, channelThumbnail: String?, viewCount: Int, likeCount: Int?,
@@ -66,7 +69,7 @@ struct Movie: Codable, Identifiable {
          featured: Bool, trending: Bool, isAvailable: Bool, isEmbeddable: Bool, genres: [Genre]?,
          addedAt: Date, lastValidated: Date?,
          isTvSeries: Bool? = nil, tvSeriesId: String? = nil, seasonNumber: Int? = nil,
-         episodeNumber: Int? = nil, seriesType: String? = nil) {
+         episodeNumber: Int? = nil, seriesType: String? = nil, heroImageUrl: String? = nil) {
         self.id = id
         self.youtubeVideoId = youtubeVideoId
         self.title = title
@@ -106,6 +109,7 @@ struct Movie: Codable, Identifiable {
         self.seasonNumber = seasonNumber
         self.episodeNumber = episodeNumber
         self.seriesType = seriesType
+        self.heroImageUrl = heroImageUrl
     }
 
     // Timestamps
@@ -150,6 +154,7 @@ struct Movie: Codable, Identifiable {
         case seasonNumber = "season_number"
         case episodeNumber = "episode_number"
         case seriesType = "series_type"
+        case heroImageUrl = "hero_image_url"
         case addedAt = "added_at"
         case lastValidated = "last_validated"
     }
@@ -198,6 +203,7 @@ struct Movie: Codable, Identifiable {
         seasonNumber      = try? c.decode(Int.self, forKey: .seasonNumber)
         episodeNumber     = try? c.decode(Int.self, forKey: .episodeNumber)
         seriesType        = try? c.decode(String.self, forKey: .seriesType)
+        heroImageUrl      = try? c.decode(String.self, forKey: .heroImageUrl)
         addedAt           = (try? c.decode(Date.self, forKey: .addedAt)) ?? Date()
         lastValidated     = try? c.decode(Date.self, forKey: .lastValidated)
     }
@@ -257,6 +263,17 @@ struct Movie: Codable, Identifiable {
     /// True when the movie has a genuine landscape backdrop suitable for a
     /// full-bleed hero (vs. only a portrait poster / YouTube thumbnail).
     var hasLandscapeBackdrop: Bool { backdropPath != nil }
+
+    /// The image shown in the featured hero carousel: the admin-curated Hero
+    /// Builder image if set, else the real landscape backdrop, else the poster.
+    var heroDisplayURL: URL? {
+        if let hero = heroImageUrl, let url = URL(string: hero) { return url }
+        return heroBackdropURL ?? posterURL
+    }
+
+    /// True when the hero image is a deliberate/landscape choice that should be
+    /// shown sharp (admin-picked, or a real backdrop) rather than blurred.
+    var hasWideHero: Bool { heroImageUrl != nil || backdropPath != nil }
 
     var youtubeThumbURL: URL? {
         // Direct YouTube thumbnail (for attribution section).

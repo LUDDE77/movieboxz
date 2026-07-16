@@ -66,8 +66,12 @@ struct MainBrowseView: View {
                 // them — no flash to an empty/gray frame on index change.
                 // .ignoresSafeArea() so the hero bleeds edge-to-edge on iPhone
                 // (dynamic island / home indicator), matching iPad/tvOS.
-                CrossfadeBackdrop(url: heroMovie.backdropURL)
+                CrossfadeBackdrop(url: heroMovie.heroDisplayURL)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Admin-picked / real backdrop shows sharp; poster-only
+                    // fallback is blurred into ambient art.
+                    .blur(radius: heroMovie.hasWideHero ? 0 : 40)
+                    .overlay(heroMovie.hasWideHero ? Color.clear : Color.mbzInk.opacity(0.35))
                     .ignoresSafeArea()
 
                 LinearGradient(
@@ -765,12 +769,13 @@ struct FeaturedMovieBanner: View {
             // a real 16:9 backdrop show it sharp; movies without one blur their
             // poster into an ambient wash (radius/scale toggled by modifier, not
             // by swapping the view — swapping would reload from scratch).
-            CrossfadeBackdrop(url: movie.heroBackdropURL ?? movie.posterURL)
+            CrossfadeBackdrop(url: movie.heroDisplayURL)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // Movies without a real 16:9 backdrop show a blurred, darkened
-                // poster as ambient art instead of a hard-cropped portrait.
-                .blur(radius: movie.hasLandscapeBackdrop ? 0 : 40)
-                .overlay(movie.hasLandscapeBackdrop ? Color.clear : Color.mbzInk.opacity(0.45))
+                // Admin-picked hero images and real backdrops show sharp; a
+                // poster-only fallback is blurred into ambient art instead of
+                // a hard-cropped portrait.
+                .blur(radius: movie.hasWideHero ? 0 : 40)
+                .overlay(movie.hasWideHero ? Color.clear : Color.mbzInk.opacity(0.45))
                 .clipped()
 
             // Bottom scrim — anchors the content and blends into the rows below.
