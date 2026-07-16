@@ -201,4 +201,70 @@ router.get('/uncategorized', async (req, res, next) => {
     }
 })
 
+// GET /api/browse/home
+// The ENTIRE Browse tab in a single response — featured, popular, trending,
+// recent, all, uncategorized, High Score IMDb, every genre carousel, and the
+// decade rails. This replaces ~20 separate requests the client used to fire on
+// each Browse load, which is far friendlier to the API rate limit and faster.
+router.get('/home', async (req, res, next) => {
+    try {
+        const cc = String(req.query.country || req.headers['x-country'] || '').trim().toUpperCase()
+        const country = /^[A-Z]{2}$/.test(cc) ? cc : null
+        const base = { excludeTvSeries: true, country }
+        const pop = { sortBy: 'view_count', sortOrder: 'desc' }
+
+        logger.info(`Browse home (country=${country || 'all'})`)
+
+        // Genres (with counts) first, so we know which carousels to build.
+        const genresWithCounts = await dbOperations.getGenresWithCounts()
+        const activeGenres = (genresWithCounts || []).filter(g => (g.movie_count || 0) > 0)
+
+        // Everything else in parallel — one DB round trip's worth of work,
+        // one HTTP response.
+        const [
+            featured, popular, recent, allMovies, uncategorized, topImdb,
+            modern, eighties90s, sixties70s, classic, genreCarousels
+        ] = await Promise.all([
+            dbOperations.getMovies({ ...base, featured: true, sortBy: 'featured_order', sortOrder: 'asc' }, 10),
+            dbOperations.getMovies({ ...base, ...pop }, 10),
+            dbOperations.getMovies({ ...base, sortBy: 'added_at', sortOrder: 'desc' }, 50),
+            dbOperations.getMovies({ ...base, ...pop }, 50),
+            dbOperations.getUncategorizedMovies(10, 0, 'view_count', 'desc'),
+            dbOperations.getMovies({ ...base, imdbRanked: true, sortBy: 'imdb_rating', sortOrder: 'desc' }, 20),
+            dbOperations.getMovies({ ...base, ...pop, yearMin: 2000 }, 20),
+            dbOperations.getMovies({ ...base, ...pop, yearMin: 1980, yearMax: 1999 }, 20),
+            dbOperations.getMovies({ ...base, ...pop, yearMin: 1960, yearMax: 1979 }, 20),
+            dbOperations.getMovies({ ...base, ...pop, yearMax: 1959 }, 20),
+            Promise.all(activeGenres.map(async (g) => ({
+                genre: { id: g.id, name: g.name },
+                movies: (await dbOperations.getMoviesByGenre(g.id, 10, 0, 'view_count', 'desc', country)).movies
+            })))
+        ])
+
+        res.set('Cache-Control', PUBLIC_CACHE_CONTROL)
+        res.json({
+            success: true,
+            data: {
+                featured: featured.movies,
+                popular: popular.movies,
+                trending: recent.movies.filter(m => m.trending),
+                recent: recent.movies,
+                allMovies: allMovies.movies,
+                uncategorized: uncategorized.movies,
+                topImdb: topImdb.movies,
+                genres: genreCarousels.filter(g => g.movies.length > 0),
+                eras: {
+                    modern: modern.movies,
+                    eighties90s: eighties90s.movies,
+                    sixties70s: sixties70s.movies,
+                    classic: classic.movies
+                }
+            },
+            message: 'Browse home'
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 export default router

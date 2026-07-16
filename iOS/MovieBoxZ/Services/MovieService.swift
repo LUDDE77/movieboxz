@@ -22,6 +22,11 @@ class MovieService: ObservableObject {
     @Published private(set) var genreCategories: [(genre: Genre, movies: [Movie])] = []
     @Published private(set) var uncategorizedMovies: [Movie] = []
     @Published private(set) var allBrowseMovies: [Movie] = []
+    @Published private(set) var topImdbMovies: [Movie] = []
+    @Published private(set) var decade2000s: [Movie] = []    // "Modern Cinema"
+    @Published private(set) var decade8090: [Movie] = []     // "The 80s & 90s"
+    @Published private(set) var decade6070: [Movie] = []     // "The 60s & 70s"
+    @Published private(set) var decadeClassic: [Movie] = []  // "Classic Cinema"
     @Published private(set) var hasLoadedBrowseData = false
 
     private let baseURL: String
@@ -109,44 +114,26 @@ class MovieService: ObservableObject {
     func loadBrowseData(force: Bool = false) async throws {
         if hasLoadedBrowseData && !force { return }
 
-        // Featured / popular / recent movies in parallel
-        async let featuredResult = fetchFeaturedMovies()
-        async let popularResult = fetchPopularMovies(page: 1, limit: 10)
-        async let recentResult = fetchRecentMovies(page: 1, limit: 50)
+        // One request for the entire Browse tab (featured, popular, trending,
+        // recent, all, uncategorized, High Score IMDb, every genre carousel and
+        // the decade rails) instead of ~20 — much friendlier to the rate limit.
+        let response = try await performRequest(endpoint: "/browse/home", type: BrowseHomeResponse.self)
+        let d = response.data
 
-        let (fetchedFeatured, fetchedPopular, recentBatch) = try await (featuredResult, popularResult, recentResult)
-
-        // Fetch all genres from backend
-        let genres = try await fetchAllGenres()
-        let genresWithMovies = genres.filter { ($0.movieCount ?? 0) > 0 }
-
-        // Fetch genre movies, allMovies, and uncategorized in parallel
-        async let allMoviesResult = fetchAllMovies(sort: "popularity", limit: 50)
-        async let uncategorizedResult = fetchUncategorizedMovies(limit: 10)
-
-        var genreResults: [(genre: Genre, movies: [Movie])] = []
-        await withTaskGroup(of: (Genre, [Movie]).self) { group in
-            for genre in genresWithMovies {
-                group.addTask {
-                    let movies = (try? await self.fetchMoviesByGenre(genreId: genre.id, limit: 10)) ?? []
-                    return (genre, movies)
-                }
-            }
-            for await (genre, movies) in group {
-                genreResults.append((genre: genre, movies: movies))
-            }
-        }
-        genreResults.sort { $0.genre.name < $1.genre.name }
-
-        let (allMoviesData, uncategorizedData) = try await (allMoviesResult, uncategorizedResult)
-
-        self.featuredMovies = fetchedFeatured.isEmpty ? Array(recentBatch.prefix(3)) : fetchedFeatured
-        self.popularMovies = fetchedPopular
-        self.trendingMovies = recentBatch.filter { $0.trending }
-        self.recentMovies = recentBatch
-        self.genreCategories = genreResults
-        self.allBrowseMovies = allMoviesData
-        self.uncategorizedMovies = uncategorizedData
+        self.featuredMovies = d.featured.isEmpty ? Array(d.recent.prefix(3)) : d.featured
+        self.popularMovies = d.popular
+        self.trendingMovies = d.trending
+        self.recentMovies = d.recent
+        self.genreCategories = d.genres
+            .map { (genre: $0.genre, movies: $0.movies) }
+            .sorted { $0.genre.name < $1.genre.name }
+        self.allBrowseMovies = d.allMovies
+        self.uncategorizedMovies = d.uncategorized
+        self.topImdbMovies = d.topImdb
+        self.decade2000s = d.eras.modern
+        self.decade8090 = d.eras.eighties90s
+        self.decade6070 = d.eras.sixties70s
+        self.decadeClassic = d.eras.classic
         self.hasLoadedBrowseData = true
     }
 

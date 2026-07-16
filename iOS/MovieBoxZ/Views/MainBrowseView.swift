@@ -18,13 +18,15 @@ struct MainBrowseView: View {
     private var allMovies: [Movie] { movieService.allBrowseMovies }
 
     @State private var tvSeries: [Movie] = [] // Placeholder for TV series
-    @State private var topImdbMovies: [Movie] = [] // High Score IMDB row
 
-    // Browse-by-era rows
-    @State private var decade2000s: [Movie] = []   // "Modern Cinema"
-    @State private var decade8090: [Movie] = []    // "The 80s & 90s"
-    @State private var decade6070: [Movie] = []    // "The 60s & 70s"
-    @State private var decadeClassic: [Movie] = [] // "Classic Cinema"
+    // High Score IMDB + browse-by-era rows now come from the shared service
+    // (loaded in one /browse/home request) instead of separate calls, so they
+    // survive tab switches with the rest of the Browse cache.
+    private var topImdbMovies: [Movie] { movieService.topImdbMovies }
+    private var decade2000s: [Movie] { movieService.decade2000s }      // "Modern Cinema"
+    private var decade8090: [Movie] { movieService.decade8090 }        // "The 80s & 90s"
+    private var decade6070: [Movie] { movieService.decade6070 }        // "The 60s & 70s"
+    private var decadeClassic: [Movie] { movieService.decadeClassic }  // "Classic Cinema"
 
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -401,17 +403,11 @@ struct MainBrowseView: View {
         }
         .onAppear {
             if movieService.hasLoadedBrowseData {
-                // Data already cached from a previous appearance (or the
-                // splash-screen preload) — just resume the hero carousel,
-                // no refetch, no skeleton.
+                // Data already cached (including High Score IMDb + era rows,
+                // which now load with everything else) — just resume the hero
+                // carousel, no refetch, no skeleton.
                 currentHeroIndex = min(currentHeroIndex, max(featuredMovies.count - 1, 0))
                 startHeroTimer()
-                if topImdbMovies.isEmpty {
-                    loadTopImdb()
-                }
-                if decade2000s.isEmpty && decade8090.isEmpty && decade6070.isEmpty && decadeClassic.isEmpty {
-                    loadEraRowsIfNeeded()
-                }
             } else {
                 loadMovies()
             }
@@ -517,22 +513,12 @@ struct MainBrowseView: View {
                 isLoading = true
                 errorMessage = nil
 
-                async let topImdb = movieService.fetchTopImdbMovies(limit: 20)
-
+                // One request loads the entire Browse tab (rails + genres +
+                // High Score IMDb + era rows) via the shared service.
                 try await movieService.loadBrowseData()
-
-                // Resilient: only overwrite on success so a transient failure
-                // leaves any previously-loaded row intact (never blanks it).
-                if let v = try? await topImdb { topImdbMovies = v }
-                await loadEraRows()
 
                 currentHeroIndex = 0
                 startHeroTimer()
-
-                // TODO: TV Series - Backend endpoint doesn't exist yet
-                // When backend adds /api/series endpoint, add:
-                // self.tvSeries = try await seriesService.fetchTVSeries(limit: 50)
-
                 isLoading = false
             } catch {
                 isLoading = false
@@ -543,46 +529,10 @@ struct MainBrowseView: View {
         }
     }
 
-    /// Loads just the High Score IMDB row (used when the shared browse cache is
-    /// already populated but this @State row hasn't been fetched yet). Resilient:
-    /// a failure leaves the row empty.
-    private func loadTopImdb() {
-        Task {
-            if let v = try? await movieService.fetchTopImdbMovies(limit: 20) {
-                topImdbMovies = v
-            }
-        }
-    }
-
-    /// Loads the four browse-by-era rows in parallel. Resilient: a failure on
-    /// any one bound leaves that row empty rather than erroring the page.
-    private func loadEraRows() async {
-        async let d2000 = movieService.fetchMoviesByYearRange(yearMin: 2000, yearMax: nil, limit: 20)
-        async let d8090 = movieService.fetchMoviesByYearRange(yearMin: 1980, yearMax: 1999, limit: 20)
-        async let d6070 = movieService.fetchMoviesByYearRange(yearMin: 1960, yearMax: 1979, limit: 20)
-        async let dClassic = movieService.fetchMoviesByYearRange(yearMin: nil, yearMax: 1959, limit: 20)
-
-        // Only overwrite each row on success — a transient failure keeps the
-        // previously-loaded row instead of blanking it on refresh.
-        if let v = try? await d2000 { decade2000s = v }
-        if let v = try? await d8090 { decade8090 = v }
-        if let v = try? await d6070 { decade6070 = v }
-        if let v = try? await dClassic { decadeClassic = v }
-    }
-
-    /// Loads just the browse-by-era rows when the shared cache is already
-    /// populated but these @State rows haven't been fetched yet.
-    private func loadEraRowsIfNeeded() {
-        Task { await loadEraRows() }
-    }
-
     /// Manual reload path for pull-to-refresh — bypasses the cache.
     private func refreshMovies() async {
         do {
-            async let topImdb = movieService.fetchTopImdbMovies(limit: 20)
             try await movieService.loadBrowseData(force: true)
-            if let v = try? await topImdb { topImdbMovies = v }
-            await loadEraRows()
             currentHeroIndex = 0
             startHeroTimer()
         } catch {

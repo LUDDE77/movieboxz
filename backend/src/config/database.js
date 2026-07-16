@@ -118,6 +118,15 @@ export const dbOperations = {
             query = query.lte('release_date', `${yearMax}-12-31`)
         }
 
+        // High-score IMDb rail: only movies with a real IMDb rating and enough
+        // votes (so the "High Score IMDB" row is trustworthy). Pair with
+        // sortBy: 'imdb_rating', sortOrder: 'desc'.
+        if (filters.imdbRanked) {
+            query = query
+                .not('imdb_rating', 'is', null)
+                .gte('imdb_votes', parseInt(filters.minImdbVotes) || 1000)
+        }
+
         if (filters.search) {
             // Sanitize search query for PostgreSQL full-text search
             // Convert "big stan" to "big & stan" (AND operator)

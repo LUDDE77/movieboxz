@@ -397,6 +397,34 @@ struct GenreMoviesData: Codable {
     let pagination: Pagination
 }
 
+/// The entire Browse tab in one response (from GET /api/browse/home) — replaces
+/// ~20 separate requests.
+struct BrowseHomeResponse: Codable {
+    let data: BrowseHomeData
+
+    struct BrowseHomeData: Codable {
+        let featured: [Movie]
+        let popular: [Movie]
+        let trending: [Movie]
+        let recent: [Movie]
+        let allMovies: [Movie]
+        let uncategorized: [Movie]
+        let topImdb: [Movie]
+        let genres: [GenreCarousel]
+        let eras: Eras
+    }
+    struct GenreCarousel: Codable {
+        let genre: Genre
+        let movies: [Movie]
+    }
+    struct Eras: Codable {
+        let modern: [Movie]
+        let eighties90s: [Movie]
+        let sixties70s: [Movie]
+        let classic: [Movie]
+    }
+}
+
 /// A page of a category, with the real total count so "See All" screens can
 /// show the true count and a Load More button.
 struct MoviePage {
