@@ -397,6 +397,26 @@ struct GenreMoviesData: Codable {
     let pagination: Pagination
 }
 
+/// A page of a category, with the real total count so "See All" screens can
+/// show the true count and a Load More button.
+struct MoviePage {
+    let movies: [Movie]
+    let total: Int?
+}
+
+/// Decodes both the /movies* (MoviesData) and /browse/genres/:id
+/// (GenreMoviesData) paged shapes — both expose `data.movies` and a total
+/// via `data.pagination.total` (MoviesData may also carry `data.total`).
+struct PagedMoviesResponse: Codable {
+    let data: PageData
+    struct PageData: Codable {
+        let movies: [Movie]
+        let total: Int?
+        let pagination: Pagination?
+    }
+    var totalCount: Int? { data.total ?? data.pagination?.total }
+}
+
 // MARK: - TV Series Models
 
 struct TVSeries: Codable, Identifiable {

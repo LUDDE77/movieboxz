@@ -386,6 +386,14 @@ class MovieService: ObservableObject {
         return response.data.movies
     }
 
+    /// Fetch one page of any category endpoint, returning the movies AND the
+    /// real total count (from pagination) so "See All" screens can show the
+    /// count and a Load More button. Works for both /movies* and /browse/*.
+    func fetchMoviePage(endpoint: String) async throws -> MoviePage {
+        let response = try await performRequest(endpoint: endpoint, type: PagedMoviesResponse.self)
+        return MoviePage(movies: response.data.movies, total: response.totalCount)
+    }
+
     func fetchUncategorizedMovies(
         page: Int = 1,
         limit: Int = 20

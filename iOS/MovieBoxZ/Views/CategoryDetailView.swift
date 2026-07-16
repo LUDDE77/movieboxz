@@ -55,7 +55,13 @@ struct CategoryDetailView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedMovie: Movie?
+    @State private var total: Int?          // real total count from the backend
+    @State private var page = 1             // last loaded page
+    @State private var isLoadingMore = false
+    @State private var canLoadMore = false
     @Environment(\.dismiss) private var dismiss
+
+    private let pageSize = 60
 
     // Platform-specific grid columns
     #if os(tvOS)
@@ -214,8 +220,9 @@ struct CategoryDetailView: View {
                 .padding(.top, 20)
                 #endif
 
-                // Movie count
-                Text("\(movies.count) \(movies.count == 1 ? "movie" : "movies")")
+                // Movie count — the real category total from the backend when
+                // known, otherwise the number loaded so far.
+                Text(total.map { "\($0) \($0 == 1 ? "movie" : "movies")" } ?? "\(movies.count) movies")
                     .font(.system(size: headerSize - 28))
                     .foregroundColor(.mbzMuted)
                     #if os(tvOS)
@@ -239,11 +246,41 @@ struct CategoryDetailView: View {
                 }
                 #if os(tvOS)
                 .padding(.horizontal, 80)
-                .padding(.bottom, 100)
+                .padding(.bottom, 40)
                 #else
                 .padding(.horizontal, 16)
-                .padding(.bottom, 50)
+                .padding(.bottom, 20)
                 #endif
+
+                // Load More — appears when the category has more than the loaded page.
+                if canLoadMore {
+                    Button {
+                        loadMore()
+                    } label: {
+                        HStack(spacing: 10) {
+                            if isLoadingMore {
+                                ProgressView().tint(.mbzInk)
+                            } else {
+                                Image(systemName: "arrow.down.circle.fill")
+                            }
+                            Text(isLoadingMore ? "Loading…" : "Load More")
+                        }
+                        .font(.system(size: cardTitleSize, weight: .semibold))
+                        .foregroundColor(.mbzInk)
+                        .padding(.horizontal, 34)
+                        .padding(.vertical, 14)
+                        .background(Color.mbzGold)
+                        .cornerRadius(12)
+                    }
+                    #if os(tvOS)
+                    .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 12)))
+                    #else
+                    .buttonStyle(.plain)
+                    #endif
+                    .disabled(isLoadingMore)
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 60)
+                }
             }
         }
     }
@@ -251,86 +288,18 @@ struct CategoryDetailView: View {
     // MARK: - Data Loading
 
     private func loadMovies() {
+        page = 1
         isLoading = true
         errorMessage = nil
 
         Task {
             do {
-                let fetchedMovies: [Movie]
-
-                switch categoryType {
-                case .genre(let genreId, _):
-                    // Fetch all movies for this genre (high limit to get all)
-                    fetchedMovies = try await movieService.fetchMoviesByGenre(
-                        genreId: genreId,
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .trending:
-                    fetchedMovies = try await movieService.fetchTrendingMovies(
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .popular:
-                    fetchedMovies = try await movieService.fetchPopularMovies(
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .topImdb:
-                    fetchedMovies = try await movieService.fetchTopImdbMovies(
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .recent:
-                    fetchedMovies = try await movieService.fetchRecentMovies(
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .allMovies:
-                    fetchedMovies = try await movieService.fetchAllMovies(
-                        sort: "popularity",
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .tvSeries:
-                    // TV Movie genre (TMDB id 10770)
-                    fetchedMovies = try await movieService.fetchMoviesByGenre(
-                        genreId: 10770,
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .kids:
-                    // Family (10751) + Animation (16) genres combined and deduplicated
-                    async let familyMovies = movieService.fetchMoviesByGenre(genreId: 10751, page: 1, limit: 100)
-                    async let animationMovies = movieService.fetchMoviesByGenre(genreId: 16, page: 1, limit: 100)
-                    let (family, animation) = try await (familyMovies, animationMovies)
-                    var seen = Set<String>()
-                    fetchedMovies = (family + animation).filter { seen.insert($0.id).inserted }
-
-                case .uncategorized:
-                    fetchedMovies = try await movieService.fetchUncategorizedMovies(
-                        page: 1,
-                        limit: 200
-                    )
-
-                case .decade(let mn, let mx, _):
-                    fetchedMovies = try await movieService.fetchMoviesByYearRange(
-                        yearMin: mn,
-                        yearMax: mx,
-                        page: 1,
-                        limit: 200
-                    )
-                }
-
+                let result = try await fetchPage(1)
                 await MainActor.run {
-                    self.movies = fetchedMovies
+                    self.movies = result.movies
+                    self.total = result.total
+                    self.canLoadMore = result.hasMore
+                    self.page = 1
                     self.isLoading = false
                 }
             } catch is CancellationError {
@@ -344,6 +313,80 @@ struct CategoryDetailView: View {
                     self.isLoading = false
                 }
             }
+        }
+    }
+
+    private func loadMore() {
+        guard canLoadMore, !isLoadingMore, !isLoading else { return }
+        isLoadingMore = true
+        let next = page + 1
+
+        Task {
+            do {
+                let result = try await fetchPage(next)
+                await MainActor.run {
+                    // Append, de-duplicating against what's already shown.
+                    var seen = Set(self.movies.map { $0.id })
+                    let fresh = result.movies.filter { seen.insert($0.id).inserted }
+                    self.movies.append(contentsOf: fresh)
+                    if let t = result.total { self.total = t }
+                    self.page = next
+                    self.canLoadMore = result.hasMore
+                    self.isLoadingMore = false
+                }
+            } catch {
+                // Keep what we have; just stop the spinner so the user can retry.
+                await MainActor.run { self.isLoadingMore = false }
+            }
+        }
+    }
+
+    /// Fetches one page for the current category, returning the movies, the real
+    /// total count, and whether more pages remain.
+    private func fetchPage(_ page: Int) async throws -> (movies: [Movie], total: Int?, hasMore: Bool) {
+        // Kids = Family (10751) + Animation (16), deduped. Paginated in lockstep;
+        // the exact combined total is unknown (overlap), so Load More runs while
+        // either source still returns a full page.
+        if case .kids = categoryType {
+            async let familyPage = movieService.fetchMoviePage(endpoint: "/browse/genres/10751?page=\(page)&limit=\(pageSize)")
+            async let animationPage = movieService.fetchMoviePage(endpoint: "/browse/genres/16?page=\(page)&limit=\(pageSize)")
+            let (fam, ani) = try await (familyPage, animationPage)
+            var seen = Set<String>()
+            let combined = (fam.movies + ani.movies).filter { seen.insert($0.id).inserted }
+            let more = fam.movies.count == pageSize || ani.movies.count == pageSize
+            return (combined, nil, more)
+        }
+
+        guard let endpoint = endpoint(page: page) else { return ([], nil, false) }
+        let result = try await movieService.fetchMoviePage(endpoint: endpoint)
+        let hasMore: Bool
+        if let total = result.total {
+            hasMore = page * pageSize < total
+        } else {
+            // No total from the backend — assume more while pages come back full.
+            hasMore = result.movies.count == pageSize
+        }
+        return (result.movies, result.total, hasMore)
+    }
+
+    /// The API endpoint for a given page of the current category.
+    private func endpoint(page: Int) -> String? {
+        let pl = "page=\(page)&limit=\(pageSize)"
+        switch categoryType {
+        case .genre(let id, _):        return "/browse/genres/\(id)?\(pl)"
+        case .trending:                return "/movies/trending?\(pl)"
+        case .popular:                 return "/movies/popular?\(pl)"
+        case .topImdb:                 return "/movies/top-rated?source=imdb&\(pl)"
+        case .recent:                  return "/movies/recent?\(pl)"
+        case .allMovies:               return "/movies?sort=popularity&\(pl)"
+        case .tvSeries:                return "/browse/genres/10770?\(pl)"
+        case .uncategorized:           return "/browse/uncategorized?\(pl)"
+        case .decade(let mn, let mx, _):
+            var s = "/movies?sort=popular&\(pl)"
+            if let mn { s += "&year_min=\(mn)" }
+            if let mx { s += "&year_max=\(mx)" }
+            return s
+        case .kids:                    return nil // handled above
         }
     }
 
