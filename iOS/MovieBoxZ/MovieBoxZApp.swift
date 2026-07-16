@@ -30,6 +30,10 @@ struct MovieBoxZApp: App {
     // refetched everything on every tab switch).
     @StateObject private var movieService = MovieService()
 
+    #if os(iOS)
+    @State private var safeInsets = EdgeInsets()
+    #endif
+
     private var isUITesting: Bool {
         // Compiled out of Release: the legal-acceptance gate can never be
         // skipped via a launch argument in a shipping build.
@@ -51,14 +55,27 @@ struct MovieBoxZApp: App {
         WindowGroup {
             if isUITesting || (hasSeenWelcome && acceptedTermsVersion >= LegalContent.termsVersion) {
                 #if os(iOS)
-                // Read the REAL safe-area insets here (above .ignoresSafeArea,
-                // so they aren't zeroed) and inject them so content can stay
-                // clear of the notch in landscape while backdrops bleed.
-                GeometryReader { proxy in
-                    SplashScreenView()
-                        .ignoresSafeArea()
-                        .environment(\.contentSafeInsets, proxy.safeAreaInsets)
-                }
+                // Read the REAL safe-area insets via a BACKGROUND reader (which
+                // doesn't bound the content — a GeometryReader wrapper would clip
+                // the fullscreen backdrop to the safe area and leave a black
+                // strip). Inject them so content clears the notch in landscape
+                // while backdrops still bleed edge-to-edge.
+                SplashScreenView()
+                    // .background BEFORE .ignoresSafeArea so the reader still
+                    // sees the REAL insets (they get zeroed after ignore). The
+                    // background doesn't constrain the content, so the backdrop
+                    // still bleeds to every edge — no black strip.
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: SafeInsetsPreferenceKey.self,
+                                value: proxy.safeAreaInsets
+                            )
+                        }
+                    )
+                    .ignoresSafeArea()
+                    .onPreferenceChange(SafeInsetsPreferenceKey.self) { safeInsets = $0 }
+                    .environment(\.contentSafeInsets, safeInsets)
                 #else
                 SplashScreenView()
                 #endif

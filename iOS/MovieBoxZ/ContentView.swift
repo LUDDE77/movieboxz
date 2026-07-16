@@ -1,12 +1,23 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab = 0
+    @State private var selectedTab = ContentView.launchTab
     // Tabs the user has opened at least once. On iOS we keep these views
     // alive (below) so returning to a tab doesn't tear down its @State and
     // re-fetch — which previously showed a spinner and, on a flaky network,
     // an empty list (e.g. "TV Series empty when I come back").
-    @State private var visitedTabs: Set<Int> = [0]
+    @State private var visitedTabs: Set<Int> = [ContentView.launchTab]
+
+    // DEBUG-only: open a specific tab at launch (for screenshot automation),
+    // e.g. `simctl launch … UI_TAB=1`. Compiled out of Release.
+    static var launchTab: Int {
+        #if DEBUG
+        for arg in CommandLine.arguments where arg.hasPrefix("UI_TAB=") {
+            if let n = Int(arg.dropFirst(7)) { return n }
+        }
+        #endif
+        return 0
+    }
 
     var body: some View {
         #if os(tvOS)
@@ -132,6 +143,16 @@ extension EnvironmentValues {
     var contentSafeInsets: EdgeInsets {
         get { self[ContentSafeInsetsKey.self] }
         set { self[ContentSafeInsetsKey.self] = newValue }
+    }
+}
+
+/// Carries the real safe-area insets up from a background reader so we can
+/// inject them WITHOUT bounding the content (a GeometryReader wrapper would
+/// clip the fullscreen backdrop to the safe area, leaving a black strip).
+struct SafeInsetsPreferenceKey: PreferenceKey {
+    static let defaultValue = EdgeInsets()
+    static func reduce(value: inout EdgeInsets, nextValue: () -> EdgeInsets) {
+        value = nextValue()
     }
 }
 
