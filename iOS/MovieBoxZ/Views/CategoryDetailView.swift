@@ -233,7 +233,7 @@ struct CategoryDetailView: View {
 
                 // Grid of movies
                 LazyVGrid(columns: columns, spacing: 40) {
-                    ForEach(movies) { movie in
+                    ForEach(Array(movies.enumerated()), id: \.element.id) { index, movie in
                         MovieCard(
                             movie: movie,
                             cardTitleSize: cardTitleSize,
@@ -242,6 +242,13 @@ struct CategoryDetailView: View {
                                 playVideo(movie)
                             }
                         )
+                        .onAppear {
+                            // Infinite scroll: as the user nears the end of the
+                            // grid, load the next page automatically.
+                            if index >= movies.count - 10 {
+                                loadMore()
+                            }
+                        }
                     }
                 }
                 #if os(tvOS)
@@ -252,34 +259,14 @@ struct CategoryDetailView: View {
                 .padding(.bottom, 20)
                 #endif
 
-                // Load More — appears when the category has more than the loaded page.
-                if canLoadMore {
-                    Button {
-                        loadMore()
-                    } label: {
-                        HStack(spacing: 10) {
-                            if isLoadingMore {
-                                ProgressView().tint(.mbzInk)
-                            } else {
-                                Image(systemName: "arrow.down.circle.fill")
-                            }
-                            Text(isLoadingMore ? "Loading…" : "Load More")
-                        }
-                        .font(.system(size: cardTitleSize, weight: .semibold))
-                        .foregroundColor(.mbzInk)
-                        .padding(.horizontal, 34)
-                        .padding(.vertical, 14)
-                        .background(Color.mbzGold)
-                        .cornerRadius(12)
-                    }
-                    #if os(tvOS)
-                    .buttonStyle(FocusBorderButtonStyle(variant: .action(cornerRadius: 12)))
-                    #else
-                    .buttonStyle(.plain)
-                    #endif
-                    .disabled(isLoadingMore)
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 60)
+                // Infinite scroll spinner — shown while the next page loads.
+                if isLoadingMore {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .tint(.mbzGold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 30)
+                        .padding(.bottom, 40)
                 }
             }
         }
