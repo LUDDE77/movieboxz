@@ -738,6 +738,10 @@ struct FeaturedMovieBanner: View {
     var onSelectIndex: ((Int) -> Void)? = nil
     let onPlayVideo: (String) -> Void
 
+    // Real safe-area insets (notch) so the bottom-left content stays clear of
+    // the camera cutout in landscape while the backdrop still bleeds to edges.
+    @Environment(\.contentSafeInsets) private var safeInsets
+
     // Fixed block heights so the info layout is IDENTICAL for every movie —
     // reserved regardless of whether a given movie actually has a short
     // title, a description, or any metadata badges. This is what keeps the
@@ -1083,9 +1087,12 @@ struct FeaturedMovieBanner: View {
                             .lineLimit(1)
                     }
                 }
-                // Full width, content left-anchored
+                // Full width, content left-anchored. Leading/trailing padding
+                // includes the safe-area inset so the title/buttons never sit
+                // under the notch in landscape (backdrop still bleeds behind).
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
+                .padding(.leading, 20 + safeInsets.leading)
+                .padding(.trailing, 20 + safeInsets.trailing)
                 .padding(.bottom, 12)
 
                 // Dots — .frame(maxWidth:.infinity, alignment:.center) centers the

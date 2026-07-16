@@ -50,10 +50,18 @@ struct MovieBoxZApp: App {
     var body: some Scene {
         WindowGroup {
             if isUITesting || (hasSeenWelcome && acceptedTermsVersion >= LegalContent.termsVersion) {
+                #if os(iOS)
+                // Read the REAL safe-area insets here (above .ignoresSafeArea,
+                // so they aren't zeroed) and inject them so content can stay
+                // clear of the notch in landscape while backdrops bleed.
+                GeometryReader { proxy in
+                    SplashScreenView()
+                        .ignoresSafeArea()
+                        .environment(\.contentSafeInsets, proxy.safeAreaInsets)
+                }
+                #else
                 SplashScreenView()
-                    #if os(iOS)
-                    .ignoresSafeArea()
-                    #endif
+                #endif
             } else {
                 WelcomeView(hasSeenWelcome: $hasSeenWelcome)
             }

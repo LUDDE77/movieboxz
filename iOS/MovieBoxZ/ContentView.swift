@@ -79,8 +79,9 @@ struct ContentView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
-        // The GeometryReader must see the full screen dimensions so that
-        // geo.size matches the physical screen (landscape: 852 x 393).
+        // geo.size == the physical screen (landscape: 852 x 393) so backdrops
+        // bleed to every edge. Real safe-area insets are injected at the app
+        // root (MovieBoxZApp) as \.contentSafeInsets — see FeaturedMovieBanner.
         .ignoresSafeArea()
         .statusBarHidden()
         .onChange(of: selectedTab) {
@@ -118,6 +119,20 @@ struct ContentView: View {
         }
     }
     #endif
+}
+
+// Real safe-area insets injected from the top level (where they aren't zeroed
+// by .ignoresSafeArea()), so screens can keep text/controls clear of the notch
+// in landscape while backdrops bleed edge-to-edge. Defined for both platforms
+// (defaults to zero); only iOS injects real values, tvOS just reads zero.
+struct ContentSafeInsetsKey: EnvironmentKey {
+    static let defaultValue = EdgeInsets()
+}
+extension EnvironmentValues {
+    var contentSafeInsets: EdgeInsets {
+        get { self[ContentSafeInsetsKey.self] }
+        set { self[ContentSafeInsetsKey.self] = newValue }
+    }
 }
 
 #if os(iOS)
