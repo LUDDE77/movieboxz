@@ -184,7 +184,7 @@ final class MovieURLTests: XCTestCase {
 
     func testYouTubeThumbURL() {
         let movie = Movie.make(youtubeVideoId: "abc123")
-        XCTAssertEqual(movie.youtubeThumbURL.absoluteString,
+        XCTAssertEqual(movie.youtubeThumbURL?.absoluteString,
                        "https://img.youtube.com/vi/abc123/hqdefault.jpg")
     }
 
