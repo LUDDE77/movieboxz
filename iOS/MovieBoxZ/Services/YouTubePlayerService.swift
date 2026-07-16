@@ -137,6 +137,14 @@ class YouTubePlayerService {
 
     /// Play a YouTube video using a Movie object
     func playMovie(_ movie: Movie, completion: @escaping (Bool) -> Void = { _ in }) {
+        // Record the watch HERE — the single point where a movie is actually
+        // handed off to YouTube. Opening a movie's detail card must NOT count
+        // as watched; only pressing "Watch on YouTube" (which routes here) does.
+        LibraryManager.shared.trackWatch(
+            movieId: movie.id,
+            movieTitle: movie.displayTitle,
+            posterURL: movie.posterURL
+        )
         playVideo(videoID: movie.youtubeVideoId, completion: completion)
     }
 

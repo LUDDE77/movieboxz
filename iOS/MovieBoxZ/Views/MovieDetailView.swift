@@ -595,16 +595,9 @@ struct MovieDetailView: View {
         HapticFeedback.medium()
         #endif
 
-        // Track watch in LibraryManager
-        LibraryManager.shared.trackWatch(
-            movieId: movie.id,
-            movieTitle: movie.displayTitle,
-            posterURL: movie.posterURL
-        )
-
-        // Same service call used by the hero banner and card context menu:
-        // deep-links into the native YouTube app first, falls back to the
-        // web browser if it isn't installed.
+        // Deep-links into the native YouTube app first, falls back to the web
+        // browser if it isn't installed. playMovie records the watch (the single
+        // hand-off point), so we don't track here.
         YouTubePlayerService.shared.playMovie(movie) { success in
             if !success {
                 showYouTubeUnavailableAlert = true

@@ -630,13 +630,8 @@ struct MainBrowseView: View {
             return
         }
 
-        // Track watch in LibraryManager
-        LibraryManager.shared.trackWatch(
-            movieId: movie.id,
-            movieTitle: movie.displayTitle,
-            posterURL: movie.posterURL
-        )
-
+        // Opening the detail card is NOT a watch — tracking happens only when
+        // the user actually launches YouTube (YouTubePlayerService.playMovie).
         #if os(tvOS)
         // tvOS: Delay presentation to let focus system settle
         DispatchQueue.main.async {

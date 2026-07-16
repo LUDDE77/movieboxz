@@ -350,13 +350,8 @@ struct CategoryDetailView: View {
     // MARK: - Video Playback
 
     private func playVideo(_ movie: Movie) {
-        // Track watch in LibraryManager
-        LibraryManager.shared.trackWatch(
-            movieId: movie.id,
-            movieTitle: movie.displayTitle,
-            posterURL: movie.posterURL
-        )
-
+        // Opening the detail card is NOT a watch — tracking happens only on the
+        // actual YouTube hand-off (YouTubePlayerService.playMovie).
         #if os(tvOS)
         // tvOS: Delay presentation to let focus system settle
         DispatchQueue.main.async {

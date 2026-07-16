@@ -304,13 +304,8 @@ struct LibraryView: View {
         if let movie = favoriteMovies.first(where: { $0.youtubeVideoId == videoId }) ??
                        watchedMovies.first(where: { $0.youtubeVideoId == videoId }) {
 
-            // Track watch in LibraryManager
-            libraryManager.trackWatch(
-                movieId: movie.id,
-                movieTitle: movie.displayTitle,
-                posterURL: movie.posterURL
-            )
-
+            // Opening the detail card is NOT a watch — tracking happens only on
+            // the actual YouTube hand-off (YouTubePlayerService.playMovie).
             // Show detail view
             #if os(tvOS)
             // tvOS: Delay presentation to let focus system settle
