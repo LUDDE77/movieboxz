@@ -877,6 +877,28 @@ router.post('/movies/:id/enrich-manual-imdb', async (req, res, next) => {
             updated_at: new Date().toISOString()
         }
 
+        // OMDB has posters but NO backdrop image, so the detail-page hero/background
+        // (movies.backdrop_path) would be left stale/blank on a manual IMDB match.
+        // Pull the matching backdrop (and TMDB id) from TMDB via the same IMDB id.
+        logger.info(`[Staging] Step 4b: Fetch TMDB backdrop for ${imdbId}`)
+        try {
+            const tmdbFind = await tmdbService.findByImdbId(imdbId)
+            const tmdbMovie = tmdbFind?.movie_results?.[0]
+            if (tmdbMovie?.backdrop_path) {
+                updateData.backdrop_path = tmdbMovie.backdrop_path
+                logger.info(`[Staging] ✅ TMDB backdrop: ${tmdbMovie.backdrop_path}`)
+            } else {
+                logger.info(`[Staging] ℹ️  No TMDB backdrop available for ${imdbId}`)
+            }
+            if (tmdbMovie?.id) updateData.tmdb_id = tmdbMovie.id
+            // Fill a poster from TMDB only if OMDB didn't provide one
+            if (!updateData.poster_path && tmdbMovie?.poster_path) {
+                updateData.poster_path = tmdbMovie.poster_path
+            }
+        } catch (tmdbErr) {
+            logger.warn(`[Staging] ⚠️  TMDB backdrop lookup failed for ${imdbId} (non-fatal): ${tmdbErr.message}`)
+        }
+
         logger.info(`[Staging] ✅ Update data object built`)
         logger.info(`[Staging]   Fields to update: ${Object.keys(updateData).join(', ')}`)
         logger.info(`[Staging]   Full update data:`, JSON.stringify(updateData, null, 2))

@@ -1524,6 +1524,7 @@ router.patch('/movies/:id', async (req, res, next) => {
             'title', 'description', 'release_date', 'director', 'actors',
             'is_tv_series', 'is_kids_content', 'is_available', 'needs_verification',
             'runtime_minutes', 'imdb_rating', 'imdb_votes',
+            'backdrop_path', // detail-page hero/background image (TMDB path or full URL)
             'hero_image_url' // Hero Builder: admin-curated carousel image (nullable)
         ]
 
@@ -2255,6 +2256,162 @@ router.patch('/featured/reorder', async (req, res, next) => {
         )
 
         res.json({ success: true, message: 'Featured movies reordered' })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
+// MAINTENANCE / DATA-QUALITY TOOLS
+// =============================================================================
+
+// Fetch every production row matching a Supabase filter, paging past the 1000-row cap.
+async function fetchAllMovies(selectCols, applyFilters) {
+    const all = []
+    const pageSize = 1000
+    let from = 0
+    while (true) {
+        let query = supabase.from('movies').select(selectCols).range(from, from + pageSize - 1)
+        query = applyFilters(query)
+        const { data, error } = await query
+        if (error) throw error
+        if (!data || data.length === 0) break
+        all.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+    }
+    return all
+}
+
+// GET /api/admin/maintenance/short-clips?maxMinutes=20
+// READ-ONLY. Scans real movies (not kids, not TV) and returns those whose ACTUAL
+// YouTube video length is under maxMinutes — i.e. clips/trailers mis-imported as
+// movies. Uses live YouTube durations because movies.runtime_minutes holds the
+// film's metadata runtime, not the video length. ~1 quota unit per 50 movies.
+router.get('/maintenance/short-clips', async (req, res, next) => {
+    try {
+        const maxMinutes = parseInt(req.query.maxMinutes) || 20
+
+        const movies = await fetchAllMovies(
+            'id, title, youtube_video_id, runtime_minutes',
+            (q) => q
+                .not('is_kids_content', 'is', true)
+                .not('is_tv_series', 'is', true)
+                .not('is_tv_show', 'is', true)
+        )
+
+        const ids = movies.map(m => m.youtube_video_id).filter(Boolean)
+        const durations = await youtubeService.getVideoDurations(ids)
+
+        const clips = []
+        const unavailable = []
+        for (const m of movies) {
+            const mins = durations.get(m.youtube_video_id)
+            if (mins === undefined) {
+                unavailable.push({ id: m.id, title: m.title, youtube_video_id: m.youtube_video_id })
+                continue
+            }
+            if (mins < maxMinutes) {
+                clips.push({ id: m.id, title: m.title, youtube_video_id: m.youtube_video_id, minutes: mins })
+            }
+        }
+        clips.sort((a, b) => a.minutes - b.minutes)
+
+        res.json({
+            success: true,
+            data: {
+                scanned: movies.length,
+                maxMinutes,
+                clipCount: clips.length,
+                clips,
+                unavailableCount: unavailable.length,
+                unavailable
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// POST /api/admin/maintenance/delete-movies  { ids: [...] }
+// Permanently removes the given production movies (and their movie_genres rows).
+router.post('/maintenance/delete-movies', async (req, res, next) => {
+    try {
+        const { ids } = req.body || {}
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, error: 'ids must be a non-empty array' })
+        }
+        if (ids.length > 5000) {
+            return res.status(400).json({ success: false, error: 'Too many ids in one request (max 5000)' })
+        }
+
+        // Chunk to keep each PostgREST request URL a sane length.
+        const chunk = (arr, n) => arr.reduce((acc, _, i) => (i % n ? acc : [...acc, arr.slice(i, i + n)]), [])
+        let deleted = 0
+        for (const batch of chunk(ids, 200)) {
+            await supabase.from('movie_genres').delete().in('movie_id', batch)
+            const { data, error } = await supabase.from('movies').delete().in('id', batch).select('id')
+            if (error) throw error
+            deleted += data?.length || 0
+        }
+
+        logger.info(`[Maintenance] Deleted ${deleted}/${ids.length} production movies`)
+        res.json({ success: true, data: { requested: ids.length, deleted } })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// POST /api/admin/maintenance/backfill-backdrops?dryRun=true&limit=500
+// Repairs the detail-page hero for movies enriched via the manual-IMDB path, which
+// used OMDB (no backdrop) and so left backdrop_path stale/blank. Re-fetches the
+// correct backdrop from TMDB by imdb_id. dryRun (default true) reports proposed
+// changes without writing.
+router.post('/maintenance/backfill-backdrops', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const limit = Math.min(parseInt(req.query.limit) || 500, 2000)
+
+        const { data: movies, error } = await supabase
+            .from('movies')
+            .select('id, title, imdb_id, backdrop_path')
+            .eq('enrichment_source', 'manual_imdb')
+            .not('imdb_id', 'is', null)
+            .limit(limit)
+        if (error) throw error
+
+        const updated = []
+        const skipped = []
+        for (const m of movies) {
+            try {
+                const find = await tmdbService.findByImdbId(m.imdb_id)
+                const tm = find?.movie_results?.[0]
+                if (!tm?.backdrop_path) { skipped.push({ id: m.id, title: m.title, reason: 'no TMDB backdrop' }); continue }
+                if (m.backdrop_path === tm.backdrop_path) { skipped.push({ id: m.id, title: m.title, reason: 'already correct' }); continue }
+                if (!dryRun) {
+                    const { error: uErr } = await supabase
+                        .from('movies')
+                        .update({ backdrop_path: tm.backdrop_path, updated_at: new Date().toISOString() })
+                        .eq('id', m.id)
+                    if (uErr) throw uErr
+                }
+                updated.push({ id: m.id, title: m.title, from: m.backdrop_path, to: tm.backdrop_path })
+            } catch (e) {
+                skipped.push({ id: m.id, title: m.title, reason: e.message })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun,
+                candidates: movies.length,
+                updatedCount: updated.length,
+                updated: updated.slice(0, 100),
+                skippedCount: skipped.length,
+                skipped: skipped.slice(0, 50)
+            }
+        })
     } catch (error) {
         next(error)
     }

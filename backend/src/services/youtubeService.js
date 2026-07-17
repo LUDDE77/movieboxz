@@ -214,6 +214,40 @@ class YouTubeService {
         }
     }
 
+    // Batch-fetch durations (in minutes) for many video IDs. videos.list accepts
+    // up to 50 IDs per call and costs 1 quota unit per call regardless of count,
+    // so this is ~1 unit per 50 videos. Returns a Map<videoId, minutes>. Video IDs
+    // that YouTube no longer returns (deleted/private) are simply absent from the map.
+    async getVideoDurations(videoIds) {
+        const result = new Map()
+        const ids = [...new Set((videoIds || []).filter(Boolean))]
+
+        for (let i = 0; i < ids.length; i += 50) {
+            const batch = ids.slice(i, i + 50)
+            const startTime = Date.now()
+            try {
+                this.ensureQuota(1)
+                const response = await this.youtube.videos.list({
+                    part: ['contentDetails'],
+                    id: batch,
+                    maxResults: 50
+                })
+                this.updateQuotaUsage(1)
+                await dbOperations.logApiUsage('youtube', 'videos.list', 'GET', 1, 200, Date.now() - startTime)
+
+                for (const video of (response.data.items || [])) {
+                    result.set(video.id, this.parseDuration(video.contentDetails?.duration))
+                }
+            } catch (error) {
+                logger.error(`Error fetching durations for batch starting at ${i}:`, error.message)
+                await dbOperations.logApiUsage('youtube', 'videos.list', 'GET', 1, error.response?.status || 500, Date.now() - startTime, error.message)
+                throw error
+            }
+        }
+
+        return result
+    }
+
     async checkVideoAvailability(videoId) {
         try {
             const videoInfo = await this.getVideoInfo(videoId)
