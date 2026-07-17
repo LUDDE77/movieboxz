@@ -976,6 +976,12 @@ async function processImport(importId, channelId, channelTitle, limit, sortOrder
                     // Propagate channel-level flags
                     is_tv_series: channelSettings?.is_tv_series_channel || false,
                     is_kids_content: channelSettings?.is_kids_content || false,
+                    // Episode metadata extracted from the title pattern (season/
+                    // episode/name) — required so TV-series episodes land in the
+                    // right season and order, not just flagged as a series.
+                    episode_name: parsed.episode_name || null,
+                    season_number: parsed.season || null,
+                    episode_number: parsed.episode || null,
                     // Save extracted metadata from pattern
                     pattern_matched: parsed.patternMatched || false,
                     pattern_confidence: parsed.confidence || 0
