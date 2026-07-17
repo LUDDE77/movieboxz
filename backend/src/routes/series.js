@@ -21,10 +21,16 @@ router.get('/', async (req, res, next) => {
 
         logger.info(`Fetching series list - page ${page}, limit ${limit}`)
 
-        // Fetch one page of tv_series rows joined with their episodes.
-        // movies!inner restricts to series with at least one non-unavailable
-        // episode, pagination happens in the database via .range(), and
-        // count: 'exact' returns the total matching series without loading them.
+        // Viewer's country, for region filtering (same rule as GET /:seriesId/episodes).
+        const cc = String(req.query.country || req.headers['x-country'] || '').trim().toUpperCase()
+        const validCC = /^[A-Z]{2}$/.test(cc) ? cc : null
+
+        // Fetch one page of tv_series rows joined with their PLAYABLE episodes.
+        // movies!inner restricts to series that have at least one episode a viewer
+        // in this country can actually open. The join uses the SAME filters as the
+        // episodes endpoint (is_tv_series + is_available + region), so a series never
+        // appears in Browse only to open to an empty screen. Pagination happens in the
+        // database via .range(); count: 'exact' returns the total matching series.
         let seriesQuery = supabase
             .from('tv_series')
             .select(`
@@ -42,11 +48,23 @@ router.get('/', async (req, res, next) => {
                     is_kids_content
                 )
             `, { count: 'exact' })
-            .not('movies.is_available', 'is', false)
+            .eq('movies.is_tv_series', true)
+            .eq('movies.is_available', true)
 
         if (kidsOnly) {
             // Kids surface: only series whose episodes are kids content
             seriesQuery = seriesQuery.eq('movies.is_kids_content', true)
+        }
+
+        // Hide series whose only episodes can't play in the viewer's country
+        // (NULL region columns pass = "no restriction = worldwide").
+        if (validCC) {
+            seriesQuery = seriesQuery
+                .or(`region_blocked.is.null,region_blocked.not.cs.{${validCC}}`, { referencedTable: 'movies' })
+                .or(`region_allowed.is.null,region_allowed.cs.{${validCC}}`, { referencedTable: 'movies' })
+            if (process.env.REGION_FILTER_HIDE_IF_UNKNOWN === 'true') {
+                seriesQuery = seriesQuery.not('movies.region_checked_at', 'is', null)
+            }
         }
 
         const { data: seriesRows, error: seriesError, count } = await seriesQuery
