@@ -2370,14 +2370,24 @@ router.post('/maintenance/delete-movies', async (req, res, next) => {
 router.post('/maintenance/backfill-backdrops', async (req, res, next) => {
     try {
         const dryRun = req.query.dryRun !== 'false'
-        const limit = Math.min(parseInt(req.query.limit) || 500, 2000)
+        // Each row costs a rate-limited TMDB call, so keep batches small and page
+        // through with offset to stay under the request timeout.
+        const limit = Math.min(parseInt(req.query.limit) || 100, 300)
+        const offset = parseInt(req.query.offset) || 0
+
+        const { count: total } = await supabase
+            .from('movies')
+            .select('id', { count: 'exact', head: true })
+            .eq('enrichment_source', 'manual_imdb')
+            .not('imdb_id', 'is', null)
 
         const { data: movies, error } = await supabase
             .from('movies')
             .select('id, title, imdb_id, backdrop_path')
             .eq('enrichment_source', 'manual_imdb')
             .not('imdb_id', 'is', null)
-            .limit(limit)
+            .order('id', { ascending: true })
+            .range(offset, offset + limit - 1)
         if (error) throw error
 
         const updated = []
@@ -2405,7 +2415,12 @@ router.post('/maintenance/backfill-backdrops', async (req, res, next) => {
             success: true,
             data: {
                 dryRun,
-                candidates: movies.length,
+                total,
+                offset,
+                limit,
+                batchSize: movies.length,
+                nextOffset: offset + movies.length,
+                done: offset + movies.length >= (total || 0),
                 updatedCount: updated.length,
                 updated: updated.slice(0, 100),
                 skippedCount: skipped.length,
