@@ -2474,11 +2474,44 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
         }
 
         let episodesUpdated = 0
+        let seriesCreated = 0
+        let productionLinked = 0
         if (!dryRun) {
             for (const s of shows) {
                 if (!s.best || !s.best.posterPath) continue // skip non-matches (promos/awards)
+
+                // Find or create the tv_series row (keyed by tmdb_id). Episodes with a
+                // season number can't publish without a tv_series_id (check constraint
+                // movies_episode_requires_series), and the app groups episodes by series.
+                let seriesId
+                const { data: existingSeries } = await supabase
+                    .from('tv_series').select('id').eq('tmdb_id', s.best.id).maybeSingle()
+                if (existingSeries) {
+                    seriesId = existingSeries.id
+                } else {
+                    const yr = s.best.firstAirDate ? parseInt(s.best.firstAirDate.slice(0, 4)) : null
+                    const { data: created, error: cErr } = await supabase
+                        .from('tv_series')
+                        .insert({
+                            tmdb_id: s.best.id,
+                            title: s.best.name,
+                            description: s.best.overview || null,
+                            first_air_date: s.best.firstAirDate || null,
+                            poster_path: s.best.posterPath,
+                            backdrop_path: s.best.backdropPath || null,
+                            vote_average: s.best.voteAverage ?? null,
+                            year_start: yr,
+                            updated_at: new Date().toISOString()
+                        })
+                        .select('id').single()
+                    if (cErr) throw cErr
+                    seriesId = created.id
+                    seriesCreated++
+                }
+
                 const upd = {
                     tmdb_id: s.best.id,
+                    tv_series_id: seriesId,
                     poster_path: s.best.posterPath,
                     backdrop_path: s.best.backdropPath || null,
                     description: s.best.overview || null,
@@ -2493,6 +2526,16 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
                 const { error: uErr } = await supabase.from('staged_movies').update(upd).in('id', s.ids)
                 if (uErr) throw uErr
                 episodesUpdated += s.ids.length
+
+                // Link any already-published episodes of this show that leaked into
+                // production unlinked (e.g. number-less episodes that published before
+                // the series existed) so they appear under the series too.
+                const { data: linked } = await supabase
+                    .from('movies')
+                    .update({ tv_series_id: seriesId, updated_at: new Date().toISOString() })
+                    .eq('channel_id', channelId).eq('title', s.showName).is('tv_series_id', null)
+                    .select('id')
+                productionLinked += (linked?.length || 0)
             }
         }
 
@@ -2502,6 +2545,8 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
                 dryRun,
                 distinctShows: shows.length,
                 episodesUpdated,
+                seriesCreated,
+                productionLinked,
                 shows: shows.map(s => ({
                     show: s.showName,
                     episodes: s.ids.length,
