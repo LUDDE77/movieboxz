@@ -2446,31 +2446,44 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
             return res.status(400).json({ success: false, error: 'channelId is required' })
         }
 
-        const { data: movies, error } = await supabase
+        // Gather episodes needing a series from BOTH staged (unpublished) and
+        // production orphans (already published but with no tv_series_id — e.g.
+        // number-less episodes that published before the series existed).
+        const { data: staged, error: stErr } = await supabase
             .from('staged_movies')
-            .select('id, title, is_tv_series, approval_status')
+            .select('id, title')
             .eq('channel_id', channelId)
             .eq('is_tv_series', true)
             .not('approval_status', 'in', '("published","publishing")')
-        if (error) throw error
+        if (stErr) throw stErr
+
+        const { data: prodOrphans, error: poErr } = await supabase
+            .from('movies')
+            .select('id, title')
+            .eq('channel_id', channelId)
+            .eq('is_tv_series', true)
+            .is('tv_series_id', null)
+        if (poErr) throw poErr
 
         const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
-        // Group episodes by show name
+        // Group by show name -> { staged:[ids], prod:[ids] }
         const byShow = new Map()
-        for (const m of movies) {
-            const key = (m.title || '').trim()
-            if (!key) continue
-            if (!byShow.has(key)) byShow.set(key, [])
-            byShow.get(key).push(m.id)
+        const bucket = (title) => {
+            const key = (title || '').trim()
+            if (!key) return null
+            if (!byShow.has(key)) byShow.set(key, { staged: [], prod: [] })
+            return byShow.get(key)
         }
+        for (const m of (staged || [])) { const b = bucket(m.title); if (b) b.staged.push(m.id) }
+        for (const m of (prodOrphans || [])) { const b = bucket(m.title); if (b) b.prod.push(m.id) }
 
         const shows = []
-        for (const [showName, ids] of byShow) {
+        for (const [showName, grp] of byShow) {
             const results = await tmdbService.searchTVSeries(showName)
             const best = results.find(r => norm(r.name) === norm(showName)) || results[0] || null
             const nameMatch = best ? norm(best.name) === norm(showName) : false
-            shows.push({ showName, ids, best, nameMatch })
+            shows.push({ showName, staged: grp.staged, prod: grp.prod, best, nameMatch })
         }
 
         let episodesUpdated = 0
@@ -2509,33 +2522,41 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
                     seriesCreated++
                 }
 
-                const upd = {
-                    tmdb_id: s.best.id,
-                    tv_series_id: seriesId,
-                    poster_path: s.best.posterPath,
-                    backdrop_path: s.best.backdropPath || null,
-                    description: s.best.overview || null,
-                    release_date: s.best.firstAirDate || null,
-                    vote_average: s.best.voteAverage ?? null,
-                    is_tv_show: true,
-                    enrichment_source: 'tmdb_tv',
-                    enrichment_confidence: s.nameMatch ? 90 : 60,
-                    enriched_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                if (s.staged.length) {
+                    const upd = {
+                        tmdb_id: s.best.id,
+                        tv_series_id: seriesId,
+                        poster_path: s.best.posterPath,
+                        backdrop_path: s.best.backdropPath || null,
+                        description: s.best.overview || null,
+                        release_date: s.best.firstAirDate || null,
+                        vote_average: s.best.voteAverage ?? null,
+                        is_tv_show: true,
+                        enrichment_source: 'tmdb_tv',
+                        enrichment_confidence: s.nameMatch ? 90 : 60,
+                        enriched_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }
+                    const { error: uErr } = await supabase.from('staged_movies').update(upd).in('id', s.staged)
+                    if (uErr) throw uErr
+                    episodesUpdated += s.staged.length
                 }
-                const { error: uErr } = await supabase.from('staged_movies').update(upd).in('id', s.ids)
-                if (uErr) throw uErr
-                episodesUpdated += s.ids.length
 
-                // Link any already-published episodes of this show that leaked into
-                // production unlinked (e.g. number-less episodes that published before
-                // the series existed) so they appear under the series too.
-                const { data: linked } = await supabase
-                    .from('movies')
-                    .update({ tv_series_id: seriesId, updated_at: new Date().toISOString() })
-                    .eq('channel_id', channelId).eq('title', s.showName).is('tv_series_id', null)
-                    .select('id')
-                productionLinked += (linked?.length || 0)
+                // Link + re-art already-published orphan episodes of this show.
+                if (s.prod.length) {
+                    const { data: linked } = await supabase
+                        .from('movies')
+                        .update({
+                            tv_series_id: seriesId,
+                            tmdb_id: s.best.id,
+                            poster_path: s.best.posterPath,
+                            backdrop_path: s.best.backdropPath || null,
+                            updated_at: new Date().toISOString()
+                        })
+                        .in('id', s.prod)
+                        .select('id')
+                    productionLinked += (linked?.length || 0)
+                }
             }
         }
 
@@ -2549,7 +2570,8 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
                 productionLinked,
                 shows: shows.map(s => ({
                     show: s.showName,
-                    episodes: s.ids.length,
+                    staged: s.staged.length,
+                    published: s.prod.length,
                     matched: s.best ? `${s.best.name} (${(s.best.firstAirDate || '').slice(0, 4)}) [tv:${s.best.id}]` : null,
                     nameMatch: s.nameMatch,
                     hasPoster: !!(s.best && s.best.posterPath)
