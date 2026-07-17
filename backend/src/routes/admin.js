@@ -2432,4 +2432,88 @@ router.post('/maintenance/backfill-backdrops', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/enrich-tv-series?dryRun=true   Body: { channelId }
+// TV-aware enrichment. The standard batch-enrich searches TMDB *movies*, so a
+// series that shares its name with a film (e.g. "Rules of Engagement") gets the
+// film's poster/description. This groups a channel's staged episodes by show
+// name and matches each show against TMDB's TV database once, applying the show's
+// artwork/overview to every episode. dryRun (default) previews the per-show match.
+router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { channelId } = req.body || {}
+        if (!channelId) {
+            return res.status(400).json({ success: false, error: 'channelId is required' })
+        }
+
+        const { data: movies, error } = await supabase
+            .from('staged_movies')
+            .select('id, title, is_tv_series, approval_status')
+            .eq('channel_id', channelId)
+            .eq('is_tv_series', true)
+            .not('approval_status', 'in', '("published","publishing")')
+        if (error) throw error
+
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+        // Group episodes by show name
+        const byShow = new Map()
+        for (const m of movies) {
+            const key = (m.title || '').trim()
+            if (!key) continue
+            if (!byShow.has(key)) byShow.set(key, [])
+            byShow.get(key).push(m.id)
+        }
+
+        const shows = []
+        for (const [showName, ids] of byShow) {
+            const results = await tmdbService.searchTVSeries(showName)
+            const best = results.find(r => norm(r.name) === norm(showName)) || results[0] || null
+            const nameMatch = best ? norm(best.name) === norm(showName) : false
+            shows.push({ showName, ids, best, nameMatch })
+        }
+
+        let episodesUpdated = 0
+        if (!dryRun) {
+            for (const s of shows) {
+                if (!s.best || !s.best.posterPath) continue // skip non-matches (promos/awards)
+                const upd = {
+                    tmdb_id: s.best.id,
+                    poster_path: s.best.posterPath,
+                    backdrop_path: s.best.backdropPath || null,
+                    description: s.best.overview || null,
+                    release_date: s.best.firstAirDate || null,
+                    vote_average: s.best.voteAverage ?? null,
+                    is_tv_show: true,
+                    enrichment_source: 'tmdb_tv',
+                    enrichment_confidence: s.nameMatch ? 90 : 60,
+                    enriched_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                }
+                const { error: uErr } = await supabase.from('staged_movies').update(upd).in('id', s.ids)
+                if (uErr) throw uErr
+                episodesUpdated += s.ids.length
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun,
+                distinctShows: shows.length,
+                episodesUpdated,
+                shows: shows.map(s => ({
+                    show: s.showName,
+                    episodes: s.ids.length,
+                    matched: s.best ? `${s.best.name} (${(s.best.firstAirDate || '').slice(0, 4)}) [tv:${s.best.id}]` : null,
+                    nameMatch: s.nameMatch,
+                    hasPoster: !!(s.best && s.best.posterPath)
+                }))
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 export default router
