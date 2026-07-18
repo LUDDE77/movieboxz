@@ -2831,9 +2831,10 @@ router.post('/maintenance/make-series', async (req, res, next) => {
         // --- find / create tv_series ---
         let seriesId = null
         let seriesCreated = false
-        const { data: existing } = art.tmdb_id
-            ? await supabase.from('tv_series').select('id').eq('tmdb_id', art.tmdb_id).maybeSingle()
-            : await supabase.from('tv_series').select('id').eq('title', finalTitle).maybeSingle()
+        const { data: existRows } = art.tmdb_id
+            ? await supabase.from('tv_series').select('id').eq('tmdb_id', art.tmdb_id).limit(1)
+            : await supabase.from('tv_series').select('id').eq('title', finalTitle).limit(1)
+        const existing = existRows && existRows[0]
         if (!dryRun) {
             if (existing) {
                 seriesId = existing.id
@@ -2877,15 +2878,20 @@ router.post('/maintenance/make-series', async (req, res, next) => {
         let updated = 0
         if (!dryRun && seriesId) {
             for (const a of assign) {
-                const { error: uErr } = await supabase.from('movies').update({
+                const upd = {
                     is_tv_series: true,
                     is_tv_show: true,
                     tv_series_id: seriesId,
                     season_number: 1,
                     episode_number: a.episode,
-                    episode_name: a.episode_name,
+                    series_type: 'tv_series',
                     updated_at: new Date().toISOString()
-                }).eq('id', a.id)
+                }
+                // The app shows movie.title as the episode name, so give each episode
+                // its distinctive name instead of all reading as the series title.
+                // (movies has no episode_name column — only staged_movies does.)
+                if (a.episode_name && a.episode_name !== finalTitle) upd.title = a.episode_name
+                const { error: uErr } = await supabase.from('movies').update(upd).eq('id', a.id)
                 if (uErr) throw uErr
                 updated++
             }
@@ -2904,6 +2910,29 @@ router.post('/maintenance/make-series', async (req, res, next) => {
                 sampleEpisodes: assign.slice(0, 8).map(a => `E${a.episode}: ${(a.episode_name || '').slice(0, 45)}`)
             }
         })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// POST /api/admin/maintenance/delete-empty-series
+// Remove tv_series rows that have no linked movies (orphans from failed conversions).
+router.post('/maintenance/delete-empty-series', async (req, res, next) => {
+    try {
+        const { data: series, error } = await supabase.from('tv_series').select('id, title, tmdb_id')
+        if (error) throw error
+        let deleted = 0
+        const removed = []
+        for (const s of (series || [])) {
+            const { count } = await supabase.from('movies')
+                .select('id', { count: 'exact', head: true }).eq('tv_series_id', s.id)
+            if (!count) {
+                await supabase.from('tv_series').delete().eq('id', s.id)
+                deleted++
+                removed.push(s.title)
+            }
+        }
+        res.json({ success: true, data: { deleted, removed: removed.slice(0, 50) } })
     } catch (error) {
         next(error)
     }
