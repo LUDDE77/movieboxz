@@ -2630,41 +2630,61 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             if (m.enrichment_confidence != null && m.enrichment_confidence >= minConfidence) continue
             const raw = m.youtube_video_title || m.title || ''
 
-            // Clean the title down to the film name.
-            let title = raw
-                .replace(/\s*\/\/.*$/, '')                                  // "Title // promo tag"
-                .replace(/[|\-–—]\s*(full|complete)\s*(tv\s*)?(movie|film).*$/i, '')
-                .replace(/[|\-–—]\s*starring.*$/i, '')
-                .replace(/[|\-–—]\s*(free\s*movie|hd|4k|official|tv\s*movie).*$/i, '')
-                .replace(/\((?:19|20)\d{2}\)/g, '')
-                .replace(/[|\-–—\s]+$/, '')
-                .trim()
-
             // Year from the raw title first, then the description.
             const ym = raw.match(/\((19|20)(\d{2})\)/) || (m.description || '').match(/\b(19|20)\d{2}\b/)
             const year = ym ? parseInt(ym[0].replace(/[()]/g, ''), 10) : null
 
-            // Cast from the description: names in parentheses, and after "starring/stars".
+            // Cast signal: names in the description (parenthesised / after "starring")
+            // plus actor-name segments FilmRise embeds in the title
+            // ("NICOLAS CAGE | Grand Isle | FULL MOVIE").
             const desc = m.description || ''
             const castSet = new Set()
             for (const mm of desc.matchAll(/\(([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})\)/g)) castSet.add(mm[1])
             for (const mm of desc.matchAll(/\b(?:starring|stars?|featuring|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})/g)) castSet.add(mm[1])
+
+            const GENRE = /^(crime|thriller|horror|drama|comedy|action|sci-?fi|science fiction|romance|romantic|mystery|documentary|western|fantasy|adventure|psychological|historical|zombie|slasher|cult(\s+horror)?|inspiring.*|creature feature|unexplained ufos|.*adaptation|ghost story|murder mystery|all-new.*|based on.*|a heartwarming.*|sweet second.*|new movie|q&a.*|update of a classic)$/i
+            const stripJunk = (s) => s
+                .replace(/\s*\/\/.*$/, '')
+                .replace(/\b(free\s+)?(full|complete)\s+(\w+\s+)?(movie|film|episode|documentary|special)\b.*$/i, '')
+                .replace(/\bstarring\b.*$/i, '')
+                .replace(/\((?:19|20)\d{2}\)/g, '')
+                .replace(/\b(hd|4k|official|uncut|filmrise(\s+movies)?)\b/ig, '')
+                .replace(/\ba\.k\.a\.?.*$/i, '')
+                .replace(/[|\-–—:]+\s*$/, '')
+                .trim()
+
+            // Candidate title strings. For pipe-delimited titles, each non-junk,
+            // non-genre segment is a candidate (the film title may be any of them);
+            // 2–3 word ALL-CAPS segments are person names → cast signal, not title.
+            const cand = []
+            for (const seg0 of (raw.includes('|') ? raw.split('|') : [raw])) {
+                const seg = seg0.trim()
+                const words = seg.split(/\s+/)
+                if (/^[A-Z][A-Z .'’-]+$/.test(seg) && words.length >= 2 && words.length <= 3) {
+                    castSet.add(words.map(w => w[0] + w.slice(1).toLowerCase()).join(' '))
+                    continue
+                }
+                const c = stripJunk(seg)
+                if (c && !GENRE.test(c)) cand.push(c)
+            }
+            const candTitles = [...new Set(cand.filter(Boolean))].slice(0, 3)
             const castNames = [...castSet].slice(0, 8)
             const castNorm = castNames.map(norm)
 
             let best = null
             let bestScore = -1
-            if (title) {
-                const candidates = await tmdbService.searchMovies(title, year)
-                for (const c of candidates.slice(0, 4)) {
+            let title = candTitles[0] || ''
+            for (const ct of candTitles) {
+                const candidates = await tmdbService.searchMovies(ct, year)
+                for (const c of candidates.slice(0, 3)) {
                     const det = await tmdbService.getMovieDetails(c.id).catch(() => null)
                     if (!det) continue
                     const tmdbCast = new Set((det.credits?.cast || []).slice(0, 12).map(p => norm(p.name)))
                     const overlap = castNorm.filter(n => tmdbCast.has(n)).length
-                    const titleMatch = norm(det.title) === norm(title) ? 1 : 0
+                    const titleMatch = norm(det.title) === norm(ct) ? 1 : 0
                     const yearMatch = (year && det.release_date && det.release_date.slice(0, 4) === String(year)) ? 1 : 0
                     const score = overlap * 3 + titleMatch * 2 + yearMatch
-                    if (score > bestScore) { bestScore = score; best = { det, overlap, titleMatch, yearMatch } }
+                    if (score > bestScore) { bestScore = score; best = { det, overlap, titleMatch, yearMatch }; title = ct }
                 }
             }
 
@@ -2673,7 +2693,10 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
                 confidence = Math.min(50 + best.overlap * 15 + best.titleMatch * 20 + best.yearMatch * 10, 99)
             }
 
-            const willApply = !dryRun && best && best.det.poster_path && confidence >= 60
+            // Require a real title or cast match (not just a coincidental year) so the
+            // wider multi-segment candidate search can't apply a spurious match.
+            const willApply = !dryRun && best && best.det.poster_path && confidence >= 60 &&
+                (best.titleMatch === 1 || best.overlap >= 1)
             if (willApply) {
                 const castStr = (best.det.credits?.cast || []).slice(0, 6).map(p => p.name).join(', ') || (castNames.join(', ') || null)
                 const { error: uErr } = await supabase.from('staged_movies').update({
