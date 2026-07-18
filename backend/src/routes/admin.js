@@ -2583,4 +2583,130 @@ router.post('/maintenance/enrich-tv-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/enrich-from-description?dryRun=true&limit=50&minConfidence=70
+// Body: { channelId }
+// For movie channels (e.g. FilmRise) whose enrichment is weak because the title
+// carries junk ("- Full Movie", "- Starring X") and the real signal — cast + year —
+// lives in the YouTube title/description. Cleans the title, pulls the year from the
+// title, extracts cast names from the description, searches TMDB, and scores each
+// candidate by cast overlap + title + year to pick the right film. dryRun previews.
+router.post('/maintenance/enrich-from-description', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { channelId } = req.body || {}
+        if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
+        const minConfidence = parseInt(req.query.minConfidence) || 70
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200)
+
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+        // Weakly-enriched movie rows for this channel (source null OR below the bar).
+        const { data: movies, error } = await supabase
+            .from('staged_movies')
+            .select('id, title, youtube_video_title, description, enrichment_source, enrichment_confidence, manually_verified')
+            .eq('channel_id', channelId)
+            .not('is_tv_series', 'is', true)
+            .not('approval_status', 'in', '("published","publishing")')
+            .or(`enrichment_source.is.null,enrichment_confidence.lt.${minConfidence}`)
+            .limit(limit)
+        if (error) throw error
+
+        const results = []
+        let applied = 0
+        for (const m of movies) {
+            if (m.manually_verified) continue
+            const raw = m.youtube_video_title || m.title || ''
+
+            // Clean the title down to the film name.
+            let title = raw
+                .replace(/[|\-–—]\s*(full|complete)\s*(movie|film).*$/i, '')
+                .replace(/[|\-–—]\s*starring.*$/i, '')
+                .replace(/[|\-–—]\s*(free\s*movie|hd|4k|official).*$/i, '')
+                .replace(/\((?:19|20)\d{2}\)/g, '')
+                .replace(/[|\-–—\s]+$/, '')
+                .trim()
+
+            // Year from the raw title first, then the description.
+            const ym = raw.match(/\((19|20)(\d{2})\)/) || (m.description || '').match(/\b(19|20)\d{2}\b/)
+            const year = ym ? parseInt(ym[0].replace(/[()]/g, ''), 10) : null
+
+            // Cast from the description: names in parentheses, and after "starring/stars".
+            const desc = m.description || ''
+            const castSet = new Set()
+            for (const mm of desc.matchAll(/\(([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})\)/g)) castSet.add(mm[1])
+            for (const mm of desc.matchAll(/\b(?:starring|stars?|featuring|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})/g)) castSet.add(mm[1])
+            const castNames = [...castSet].slice(0, 8)
+            const castNorm = castNames.map(norm)
+
+            let best = null
+            let bestScore = -1
+            if (title) {
+                const candidates = await tmdbService.searchMovies(title, year)
+                for (const c of candidates.slice(0, 4)) {
+                    const det = await tmdbService.getMovieDetails(c.id).catch(() => null)
+                    if (!det) continue
+                    const tmdbCast = new Set((det.credits?.cast || []).slice(0, 12).map(p => norm(p.name)))
+                    const overlap = castNorm.filter(n => tmdbCast.has(n)).length
+                    const titleMatch = norm(det.title) === norm(title) ? 1 : 0
+                    const yearMatch = (year && det.release_date && det.release_date.slice(0, 4) === String(year)) ? 1 : 0
+                    const score = overlap * 3 + titleMatch * 2 + yearMatch
+                    if (score > bestScore) { bestScore = score; best = { det, overlap, titleMatch, yearMatch } }
+                }
+            }
+
+            let confidence = 0
+            if (best) {
+                confidence = Math.min(50 + best.overlap * 15 + best.titleMatch * 20 + best.yearMatch * 10, 99)
+            }
+
+            const willApply = !dryRun && best && best.det.poster_path && confidence >= 60
+            if (willApply) {
+                const castStr = (best.det.credits?.cast || []).slice(0, 6).map(p => p.name).join(', ') || (castNames.join(', ') || null)
+                const { error: uErr } = await supabase.from('staged_movies').update({
+                    title: best.det.title,
+                    tmdb_id: best.det.id,
+                    imdb_id: best.det.imdb_id || null,
+                    poster_path: best.det.poster_path,
+                    backdrop_path: best.det.backdrop_path || null,
+                    description: best.det.overview || m.description,
+                    release_date: best.det.release_date || null,
+                    vote_average: best.det.vote_average ?? null,
+                    actors: castStr,
+                    enrichment_source: 'tmdb_desc',
+                    enrichment_confidence: confidence,
+                    enriched_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                }).eq('id', m.id)
+                if (uErr) throw uErr
+                applied++
+            }
+
+            results.push({
+                cleanTitle: title,
+                year,
+                cast: castNames,
+                matched: best ? `${best.det.title} (${(best.det.release_date || '').slice(0, 4)}) [tmdb:${best.det.id}]` : null,
+                castOverlap: best ? best.overlap : 0,
+                confidence,
+                applied: willApply
+            })
+        }
+
+        results.sort((a, b) => b.confidence - a.confidence)
+        res.json({
+            success: true,
+            data: {
+                dryRun,
+                candidates: movies.length,
+                applied,
+                confident: results.filter(r => r.confidence >= 60).length,
+                weak: results.filter(r => r.confidence < 60).length,
+                results
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 export default router
