@@ -2855,15 +2855,22 @@ router.post('/maintenance/make-series', async (req, res, next) => {
             }
         }
 
-        // --- assign episode numbers ---
+        // --- assign episode numbers + names ---
         members.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+        const seriesRe = finalTitle ? finalTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : ''
         const assign = members.map((m, i) => {
             let ep = i + 1
             if (episodeMode === 'part') {
                 const mm = (m.title || m.youtube_video_title || '').match(/part\s*(\d+)/i)
                 if (mm) ep = parseInt(mm[1], 10)
             }
-            const epName = (m.youtube_video_title || m.title || '').replace(/\s*\|.*$/, '').trim() || null
+            // Episode name: take the distinctive part of the YouTube title — drop the
+            // trailing "| Warner Classics" tag and the leading series-name segment,
+            // then join the rest ("Mega Compilation | Vol. 7" -> "Mega Compilation — Vol. 7").
+            let epName = (m.youtube_video_title || m.title || '')
+                .replace(/\s*\|\s*warner\s*(bros\.?)?\s*classics.*$/i, '')
+            if (seriesRe) epName = epName.replace(new RegExp('^\\s*' + seriesRe + '\\s*\\|?\\s*', 'i'), '')
+            epName = epName.replace(/\s*\|\s*/g, ' — ').trim() || (m.title || null)
             return { id: m.id, title: m.title, episode: ep, episode_name: epName }
         })
 
