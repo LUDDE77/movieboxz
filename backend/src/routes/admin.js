@@ -2619,9 +2619,10 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
 
             // Clean the title down to the film name.
             let title = raw
-                .replace(/[|\-–—]\s*(full|complete)\s*(movie|film).*$/i, '')
+                .replace(/\s*\/\/.*$/, '')                                  // "Title // promo tag"
+                .replace(/[|\-–—]\s*(full|complete)\s*(tv\s*)?(movie|film).*$/i, '')
                 .replace(/[|\-–—]\s*starring.*$/i, '')
-                .replace(/[|\-–—]\s*(free\s*movie|hd|4k|official).*$/i, '')
+                .replace(/[|\-–—]\s*(free\s*movie|hd|4k|official|tv\s*movie).*$/i, '')
                 .replace(/\((?:19|20)\d{2}\)/g, '')
                 .replace(/[|\-–—\s]+$/, '')
                 .trim()
