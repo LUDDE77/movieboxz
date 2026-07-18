@@ -2596,25 +2596,38 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
         const { channelId } = req.body || {}
         if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
         const minConfidence = parseInt(req.query.minConfidence) || 70
-        const limit = Math.min(parseInt(req.query.limit) || 50, 200)
+        // Each row can fire several rate-limited TMDB calls, so keep batches small
+        // and page with offset — a whole-channel pass in one request times out (502).
+        const limit = Math.min(parseInt(req.query.limit) || 20, 40)
+        const offset = parseInt(req.query.offset) || 0
 
         const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 
-        // Weakly-enriched movie rows for this channel (source null OR below the bar).
+        // Stable, offset-paged set: all this channel's non-TV, unpublished rows.
+        const { count: total } = await supabase
+            .from('staged_movies')
+            .select('id', { count: 'exact', head: true })
+            .eq('channel_id', channelId)
+            .not('is_tv_series', 'is', true)
+            .not('approval_status', 'in', '("published","publishing")')
+
         const { data: movies, error } = await supabase
             .from('staged_movies')
             .select('id, title, youtube_video_title, description, enrichment_source, enrichment_confidence, manually_verified')
             .eq('channel_id', channelId)
             .not('is_tv_series', 'is', true)
             .not('approval_status', 'in', '("published","publishing")')
-            .or(`enrichment_source.is.null,enrichment_confidence.lt.${minConfidence}`)
-            .limit(limit)
+            .order('id', { ascending: true })
+            .range(offset, offset + limit - 1)
         if (error) throw error
 
         const results = []
         let applied = 0
         for (const m of movies) {
+            // Skip rows already handled or human-vetted.
             if (m.manually_verified) continue
+            if (m.enrichment_source === 'tmdb_desc') continue
+            if (m.enrichment_confidence != null && m.enrichment_confidence >= minConfidence) continue
             const raw = m.youtube_video_title || m.title || ''
 
             // Clean the title down to the film name.
@@ -2698,7 +2711,13 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             success: true,
             data: {
                 dryRun,
-                candidates: movies.length,
+                total,
+                offset,
+                limit,
+                batchSize: movies.length,
+                nextOffset: offset + movies.length,
+                done: offset + movies.length >= (total || 0),
+                processed: results.length,
                 applied,
                 confident: results.filter(r => r.confidence >= 60).length,
                 weak: results.filter(r => r.confidence < 60).length,
