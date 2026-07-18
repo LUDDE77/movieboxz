@@ -2639,17 +2639,29 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             // ("NICOLAS CAGE | Grand Isle | FULL MOVIE").
             const desc = m.description || ''
             const castSet = new Set()
+            const isName = (n) => /^[A-Z][a-z]+(\s+[A-Z][a-z.'’-]+){1,2}$/.test(n)
             for (const mm of desc.matchAll(/\(([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})\)/g)) castSet.add(mm[1])
             for (const mm of desc.matchAll(/\b(?:starring|stars?|featuring|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})/g)) castSet.add(mm[1])
+            // Parse the comma-separated cast list after "Starring:"/"Stars:" (Popcornflix
+            // descriptions read "... | 1992 | Starring Brigitte Nielsen (Red Sonja), Jeff Wincott").
+            const starList = desc.match(/\b(?:starring|stars?)\s*:?\s*([^.|\n]+)/i)
+            if (starList) {
+                for (const raw2 of starList[1].split(/,|\band\b|&/)) {
+                    const n = raw2.replace(/\([^)]*\)/g, '').trim()
+                    if (isName(n)) castSet.add(n)
+                }
+            }
 
             const GENRE = /^(crime|thriller|horror|drama|comedy|action|sci-?fi|science fiction|romance|romantic|mystery|documentary|western|fantasy|adventure|psychological|historical|zombie|slasher|cult(\s+horror)?|inspiring.*|creature feature|unexplained ufos|.*adaptation|ghost story|murder mystery|all-new.*|based on.*|a heartwarming.*|sweet second.*|new movie|q&a.*|update of a classic)$/i
             const stripJunk = (s) => s
                 .replace(/\s*\/\/.*$/, '')
+                .replace(/\((?:free\s+)?(?:full|complete)[^)]*\)/ig, '')     // "(Full Movie)" / "(Free Full Movie)" tag
                 .replace(/\b(free\s+)?(full|complete)\s+(\w+\s+)?(movie|film|episode|documentary|special)\b.*$/i, '')
                 .replace(/\bstarring\b.*$/i, '')
                 .replace(/\((?:19|20)\d{2}\)/g, '')
                 .replace(/\b(hd|4k|official|uncut|filmrise(\s+movies)?)\b/ig, '')
                 .replace(/\ba\.k\.a\.?.*$/i, '')
+                .replace(/\s+(g|pg|pg-13|r|nc-17|nr|unrated|tv-(?:y7?|g|pg|14|ma))\s*$/i, '') // trailing rating
                 .replace(/[|\-–—:]+\s*$/, '')
                 .trim()
 
@@ -2658,12 +2670,18 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             // 2–3 word ALL-CAPS segments are person names → cast signal, not title.
             const cand = []
             for (const seg0 of (raw.includes('|') ? raw.split('|') : [raw])) {
-                const seg = seg0.trim()
+                const seg = seg0.trim().replace(/,\s*$/, '')
                 const words = seg.split(/\s+/)
+                // ALL-CAPS person name segment -> cast ("NICOLAS CAGE")
                 if (/^[A-Z][A-Z .'’-]+$/.test(seg) && words.length >= 2 && words.length <= 3) {
                     castSet.add(words.map(w => w[0] + w.slice(1).toLowerCase()).join(' '))
                     continue
                 }
+                // comma-separated list of proper names -> cast ("David Carradine, Wes Studi")
+                const parts = seg.split(',').map(s => s.trim()).filter(Boolean)
+                if (parts.length >= 2 && parts.every(isName)) { parts.forEach(p => castSet.add(p)); continue }
+                // pure genre descriptor segment ("Western, Family")
+                if (parts.length >= 1 && parts.every(p => GENRE.test(p))) continue
                 const c = stripJunk(seg)
                 if (c && !GENRE.test(c)) cand.push(c)
             }
