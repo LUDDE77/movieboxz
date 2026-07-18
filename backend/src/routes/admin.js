@@ -2655,8 +2655,10 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             const GENRE = /^(crime|thriller|horror|drama|comedy|action|sci-?fi|science fiction|romance|romantic|mystery|documentary|western|fantasy|adventure|psychological|historical|zombie|slasher|cult(\s+horror)?|inspiring.*|creature feature|unexplained ufos|.*adaptation|ghost story|murder mystery|all-new.*|based on.*|a heartwarming.*|sweet second.*|new movie|q&a.*|update of a classic)$/i
             const stripJunk = (s) => s
                 .replace(/\s*\/\/.*$/, '')
+                .replace(/^[A-Z][A-Z0-9 '’.]*[!?]\s+/, '')                    // leading shout "EPIC TRUE CRIME DOC! ", "AMAZING CAST! "
                 .replace(/\((?:free\s+)?(?:full|complete)[^)]*\)/ig, '')     // "(Full Movie)" / "(Free Full Movie)" tag
                 .replace(/\b(free\s+)?(full|complete)\s+(\w+\s+)?(movie|film|episode|documentary|special)\b.*$/i, '')
+                .replace(/\s{2,}.*$/, '')                                    // cut trailing genres/cast after the gap the tag left
                 .replace(/\bstarring\b.*$/i, '')
                 .replace(/\((?:19|20)\d{2}\)/g, '')
                 .replace(/\b(hd|4k|official|uncut|filmrise(\s+movies)?)\b/ig, '')
