@@ -2772,4 +2772,134 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/make-series?dryRun=true
+// Convert a set of PRODUCTION movies into a TV series: create/find the tv_series
+// (art from TMDB TV search, else the first member's art) and set is_tv_series +
+// tv_series_id + season/episode on each member so they group under one series
+// instead of cluttering Browse as separate movies.
+// Body: {
+//   seriesTitle, tmdbTvQuery?, tmdbTvId?,
+//   select: { imdbId?, titleExact?, titleContains?: [..], channelId? },
+//   episodeMode?: 'sequence' | 'part'   // 'part' reads "Part N" from the title
+// }
+router.post('/maintenance/make-series', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { seriesTitle, tmdbTvQuery, tmdbTvId, select = {}, episodeMode = 'sequence' } = req.body || {}
+        if (!seriesTitle && !tmdbTvQuery) {
+            return res.status(400).json({ success: false, error: 'seriesTitle or tmdbTvQuery is required' })
+        }
+
+        // --- select member movies ---
+        let q = supabase.from('movies')
+            .select('id, title, youtube_video_title, imdb_id, channel_id, created_at, poster_path, backdrop_path, description, is_tv_series, tv_series_id')
+        if (select.imdbId) q = q.eq('imdb_id', select.imdbId)
+        if (select.titleExact) q = q.eq('title', select.titleExact)
+        if (select.channelId) q = q.eq('channel_id', select.channelId)
+        if (Array.isArray(select.titleContains) && select.titleContains.length) {
+            q = q.or(select.titleContains.map(t => `title.ilike.%${t}%`).join(','))
+        }
+        const { data: members, error } = await q
+        if (error) throw error
+        if (!members || members.length === 0) {
+            return res.json({ success: true, data: { dryRun, members: 0, note: 'no members matched selection' } })
+        }
+
+        // --- artwork: TMDB TV, else first member with a poster ---
+        let art = null
+        if (tmdbTvId) {
+            const d = await tmdbService.getTVSeriesDetails(tmdbTvId).catch(() => null)
+            if (d) art = { tmdb_id: d.id, name: d.name, poster: d.poster_path, backdrop: d.backdrop_path, overview: d.overview, first_air_date: d.first_air_date }
+        } else if (tmdbTvQuery) {
+            const r = await tmdbService.searchTVSeries(tmdbTvQuery)
+            const b = r[0]
+            if (b) art = { tmdb_id: b.id, name: b.name, poster: b.posterPath, backdrop: b.backdropPath, overview: b.overview, first_air_date: b.firstAirDate }
+        }
+        const memberWithArt = members.find(m => m.poster_path)
+        if (!art || !art.poster) {
+            art = {
+                tmdb_id: art?.tmdb_id || null,
+                name: art?.name || seriesTitle,
+                poster: art?.poster || memberWithArt?.poster_path || null,
+                backdrop: art?.backdrop || memberWithArt?.backdrop_path || null,
+                overview: art?.overview || memberWithArt?.description || null,
+                first_air_date: art?.first_air_date || null
+            }
+        }
+        const finalTitle = seriesTitle || art.name
+
+        // --- find / create tv_series ---
+        let seriesId = null
+        let seriesCreated = false
+        const { data: existing } = art.tmdb_id
+            ? await supabase.from('tv_series').select('id').eq('tmdb_id', art.tmdb_id).maybeSingle()
+            : await supabase.from('tv_series').select('id').eq('title', finalTitle).maybeSingle()
+        if (!dryRun) {
+            if (existing) {
+                seriesId = existing.id
+            } else {
+                const yr = art.first_air_date ? parseInt(art.first_air_date.slice(0, 4), 10) : null
+                const { data: created, error: cErr } = await supabase.from('tv_series').insert({
+                    title: finalTitle,
+                    tmdb_id: art.tmdb_id,
+                    description: art.overview || null,
+                    poster_path: art.poster || null,
+                    backdrop_path: art.backdrop || null,
+                    first_air_date: art.first_air_date || null,
+                    year_start: yr,
+                    updated_at: new Date().toISOString()
+                }).select('id').single()
+                if (cErr) throw cErr
+                seriesId = created.id
+                seriesCreated = true
+            }
+        }
+
+        // --- assign episode numbers ---
+        members.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+        const assign = members.map((m, i) => {
+            let ep = i + 1
+            if (episodeMode === 'part') {
+                const mm = (m.title || m.youtube_video_title || '').match(/part\s*(\d+)/i)
+                if (mm) ep = parseInt(mm[1], 10)
+            }
+            const epName = (m.youtube_video_title || m.title || '').replace(/\s*\|.*$/, '').trim() || null
+            return { id: m.id, title: m.title, episode: ep, episode_name: epName }
+        })
+
+        let updated = 0
+        if (!dryRun && seriesId) {
+            for (const a of assign) {
+                const { error: uErr } = await supabase.from('movies').update({
+                    is_tv_series: true,
+                    is_tv_show: true,
+                    tv_series_id: seriesId,
+                    season_number: 1,
+                    episode_number: a.episode,
+                    episode_name: a.episode_name,
+                    updated_at: new Date().toISOString()
+                }).eq('id', a.id)
+                if (uErr) throw uErr
+                updated++
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun,
+                seriesTitle: finalTitle,
+                tmdbMatch: art.tmdb_id ? `${art.name} [tv:${art.tmdb_id}]` : '(no TMDB TV match — using member art)',
+                hasPoster: !!art.poster,
+                members: members.length,
+                seriesCreated,
+                updated,
+                sampleEpisodes: assign.slice(0, 8).map(a => `E${a.episode}: ${(a.episode_name || '').slice(0, 45)}`)
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 export default router
