@@ -3202,6 +3202,48 @@ router.post('/maintenance/fix-alt-episodes', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/unpublish-to-review  Body: { seriesId? , movieIds? }
+// Remove wrongly-matched episodes from production and send their staged rows back
+// to the review queue: delete the production movies and reset staged_movies to
+// 'pending', clearing the bad series link + enrichment so they can be re-matched.
+router.post('/maintenance/unpublish-to-review', async (req, res, next) => {
+    try {
+        const { seriesId, movieIds } = req.body || {}
+        let movies = []
+        if (seriesId) {
+            const { data } = await supabase.from('movies').select('id, youtube_video_id').eq('tv_series_id', seriesId)
+            movies = data || []
+        } else if (Array.isArray(movieIds) && movieIds.length) {
+            const { data } = await supabase.from('movies').select('id, youtube_video_id').in('id', movieIds)
+            movies = data || []
+        } else {
+            return res.status(400).json({ success: false, error: 'seriesId or movieIds required' })
+        }
+
+        let reset = 0, deleted = 0
+        for (const m of movies) {
+            const { data: st } = await supabase.from('staged_movies').update({
+                approval_status: 'pending',
+                published_movie_id: null,
+                is_tv_series: false, tv_series_id: null,
+                season_number: null, episode_number: null, episode_name: null,
+                tmdb_id: null, imdb_id: null, poster_path: null, backdrop_path: null,
+                enrichment_source: null, enrichment_confidence: 0, manually_verified: false,
+                updated_at: new Date().toISOString()
+            }).eq('youtube_video_id', m.youtube_video_id).select('id')
+            reset += st?.length || 0
+            await supabase.from('movie_genres').delete().eq('movie_id', m.id)
+            await supabase.from('movies').delete().eq('id', m.id)
+            deleted++
+        }
+        if (seriesId) await supabase.from('tv_series').delete().eq('id', seriesId)
+
+        res.json({ success: true, data: { deletedFromProduction: deleted, stagedResetToReview: reset, seriesDeleted: !!seriesId } })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/set-region
 // Body: { channelId?, seriesId?, titleContains?: [..], regionAllowed?: [..], regionBlocked?: [..] }
 // Tag PRODUCTION movies (selected by channel, series, and/or title) with a manual
