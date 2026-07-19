@@ -2924,7 +2924,7 @@ router.post('/maintenance/make-series', async (req, res, next) => {
 router.post('/maintenance/match-episode-guide', async (req, res, next) => {
     try {
         const dryRun = req.query.dryRun !== 'false'
-        const { seriesId, tmdbTvId, minScore = 0.7, unpublishCompilations = false, unpublishNoMatch = false } = req.body || {}
+        const { seriesId, tmdbTvId, minScore = 0.7, useSynopsis = false, minSynopsisTokens = 2, unpublishCompilations = false, unpublishNoMatch = false } = req.body || {}
         if (!seriesId) return res.status(400).json({ success: false, error: 'seriesId is required' })
 
         let tvId = tmdbTvId
@@ -2969,6 +2969,23 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
             .eq('tv_series_id', seriesId)
         if (error) throw error
 
+        // Words too common in this universe / English to be distinctive for synopsis matching.
+        const COMMON = new Set(('he man heman she ra shera skeletor eternia teela masters universe official full episode episodes cartoon cartoons the and for with from that this into out get gets his her him them they what how why when who all new adventures of prince adam orko cringer battle cat power grayskull evil good save saves stop stops help fight defeat').split(' '))
+        const overviewMatch = (title) => {
+            const dt = [...tokens(title)].filter(w => !COMMON.has(w))
+            if (dt.length === 0) return null
+            let best = null, bestN = 0
+            for (const g of guide.episodes) {
+                if (!g.overview) continue
+                const ov = tokens(g.overview)
+                const n = dt.filter(w => ov.has(w)).length
+                if (n > bestN) { bestN = n; best = g }
+            }
+            if (!best) return null
+            const ov = tokens(best.overview)
+            return { g: best, matched: bestN, words: dt.filter(w => ov.has(w)) }
+        }
+
         const plan = []
         for (const m of members) {
             const raw = m.youtube_video_title || m.title || ''
@@ -2980,7 +2997,14 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
                 if (!best || r.score > best.score) best = { ...r, seg }
             }
             if (best && best.score >= minScore) {
-                plan.push({ id: m.id, action: 'match', season: best.g.season, episode: best.g.episode, epName: best.g.name, score: +best.score.toFixed(2), title: raw, views: m.view_count || 0 })
+                plan.push({ id: m.id, action: 'match', via: 'name', conf: 2, season: best.g.season, episode: best.g.episode, epName: best.g.name, score: +best.score.toFixed(2), title: raw, views: m.view_count || 0 })
+            } else if (useSynopsis) {
+                const sm = overviewMatch(raw)
+                if (sm && sm.matched >= minSynopsisTokens) {
+                    plan.push({ id: m.id, action: 'match', via: 'synopsis', conf: 1, season: sm.g.season, episode: sm.g.episode, epName: sm.g.name, score: sm.matched, words: sm.words, title: raw, views: m.view_count || 0 })
+                } else {
+                    plan.push({ id: m.id, action: 'no-match', title: raw, best: best ? `${best.g?.name} (${best.score.toFixed(2)})` : null })
+                }
             } else {
                 plan.push({ id: m.id, action: 'no-match', title: raw, best: best ? `${best.g?.name} (${best.score.toFixed(2)})` : null })
             }
@@ -2992,7 +3016,7 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
         let deduped = 0
         for (const arr of Object.values(slots)) {
             if (arr.length < 2) continue
-            arr.sort((a, b) => (b.views || 0) - (a.views || 0))
+            arr.sort((a, b) => (b.conf || 0) - (a.conf || 0) || (b.views || 0) - (a.views || 0))
             for (const loser of arr.slice(1)) { loser.action = 'dup'; deduped++ }
         }
 
@@ -3018,8 +3042,11 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
             data: {
                 dryRun, guideName: guide.name, guideEpisodes: guide.episodes.length,
                 members: members.length,
-                matched, dedupedDuplicates: dups, compilations, noMatch,
+                matched, matchedByName: plan.filter(p => p.action === 'match' && p.via === 'name').length,
+                matchedBySynopsis: plan.filter(p => p.action === 'match' && p.via === 'synopsis').length,
+                dedupedDuplicates: dups, compilations, noMatch,
                 unpublishCompilations, unpublishNoMatch,
+                synopsisSamples: plan.filter(p => p.action === 'match' && p.via === 'synopsis').slice(0, 15).map(p => `S${p.season}E${p.episode} "${p.epName}" <- "${p.title.split('|')[0].trim().slice(0, 34)}" [words: ${(p.words || []).join(',')}]`),
                 matchSamples: plan.filter(p => p.action === 'match').slice(0, 10).map(p => `S${p.season}E${p.episode} <- "${p.title.split('|')[0].trim().slice(0, 30)}" (${p.score})`),
                 compilationSamples: plan.filter(p => p.action === 'compilation').slice(0, 8).map(p => p.title.slice(0, 50)),
                 noMatchSamples: plan.filter(p => p.action === 'no-match').slice(0, 10).map(p => `${p.title.slice(0, 40)} [best: ${p.best}]`)

@@ -518,6 +518,7 @@ class TMDBService {
                     season: ep.season_number,
                     episode: ep.episode_number,
                     name: ep.name,
+                    overview: ep.overview || null,
                     air_date: ep.air_date || null
                 })
             }
