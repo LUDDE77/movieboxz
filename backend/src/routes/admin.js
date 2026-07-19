@@ -3141,6 +3141,24 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/merge-series  Body: { fromSeriesId, toSeriesId }
+// Move every episode from one tv_series into another, then delete the empty source.
+router.post('/maintenance/merge-series', async (req, res, next) => {
+    try {
+        const { fromSeriesId, toSeriesId } = req.body || {}
+        if (!fromSeriesId || !toSeriesId) return res.status(400).json({ success: false, error: 'fromSeriesId and toSeriesId required' })
+        const { data: moved, error } = await supabase.from('movies')
+            .update({ tv_series_id: toSeriesId, updated_at: new Date().toISOString() })
+            .eq('tv_series_id', fromSeriesId)
+            .select('id')
+        if (error) throw error
+        await supabase.from('tv_series').delete().eq('id', fromSeriesId)
+        res.json({ success: true, data: { moved: moved?.length || 0, deletedSeries: fromSeriesId } })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/reset-publishing  Body: { channelId? }
 // Reset rows stuck in 'publishing' back to 'approved' so they can be re-published.
 router.post('/maintenance/reset-publishing', async (req, res, next) => {
