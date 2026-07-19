@@ -2924,7 +2924,7 @@ router.post('/maintenance/make-series', async (req, res, next) => {
 router.post('/maintenance/match-episode-guide', async (req, res, next) => {
     try {
         const dryRun = req.query.dryRun !== 'false'
-        const { seriesId, tmdbTvId, minScore = 0.7, unpublishNonEpisodes = false } = req.body || {}
+        const { seriesId, tmdbTvId, minScore = 0.7, unpublishCompilations = false, unpublishNoMatch = false } = req.body || {}
         if (!seriesId) return res.status(400).json({ success: false, error: 'seriesId is required' })
 
         let tvId = tmdbTvId
@@ -3005,10 +3005,10 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
                 if (!dryRun) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
                 dups++
             } else if (p.action === 'compilation') {
-                if (!dryRun && unpublishNonEpisodes) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                if (!dryRun && unpublishCompilations) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
                 compilations++
             } else {
-                if (!dryRun && unpublishNonEpisodes) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                if (!dryRun && unpublishNoMatch) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
                 noMatch++
             }
         }
@@ -3019,7 +3019,7 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
                 dryRun, guideName: guide.name, guideEpisodes: guide.episodes.length,
                 members: members.length,
                 matched, dedupedDuplicates: dups, compilations, noMatch,
-                unpublishNonEpisodes,
+                unpublishCompilations, unpublishNoMatch,
                 matchSamples: plan.filter(p => p.action === 'match').slice(0, 10).map(p => `S${p.season}E${p.episode} <- "${p.title.split('|')[0].trim().slice(0, 30)}" (${p.score})`),
                 compilationSamples: plan.filter(p => p.action === 'compilation').slice(0, 8).map(p => p.title.slice(0, 50)),
                 noMatchSamples: plan.filter(p => p.action === 'no-match').slice(0, 10).map(p => `${p.title.slice(0, 40)} [best: ${p.best}]`)
