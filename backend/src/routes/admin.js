@@ -2933,43 +2933,44 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
         }
 
         const { data: members, error } = await supabase.from('movies')
-            .select('id, title, youtube_video_title, season_number, episode_number, is_available')
+            .select('id, title, youtube_video_title, season_number, episode_number, is_available, view_count')
             .eq('tv_series_id', seriesId)
         if (error) throw error
 
         const plan = []
         for (const m of members) {
             const yt = m.youtube_video_title || m.title || ''
-            if (re && re.test(yt)) { plan.push({ id: m.id, action: 'unpublish', title: yt }); continue }
+            if (re && re.test(yt)) { plan.push({ id: m.id, action: 'unpublish', reason: 'dub', title: yt }); continue }
             const mm = yt.match(/s\s*(\d+)\s*[ex]\s*(\d+)/i)
-            if (mm) plan.push({ id: m.id, action: 'renumber', season: parseInt(mm[1], 10), episode: parseInt(mm[2], 10), title: yt })
+            if (mm) plan.push({ id: m.id, action: 'renumber', season: parseInt(mm[1], 10), episode: parseInt(mm[2], 10), title: yt, views: m.view_count || 0 })
             else plan.push({ id: m.id, action: 'no-match', title: yt })
         }
 
-        // collisions among the episodes we keep + renumber
+        // De-dupe collisions: within each (season,episode) slot keep the most-watched
+        // and unpublish the rest (director's cuts / double-uploads of the same episode).
         const slots = {}
         for (const p of plan) {
             if (p.action !== 'renumber') continue
             const k = `S${p.season}E${p.episode}`
-            ;(slots[k] = slots[k] || []).push(p.title)
+            ;(slots[k] = slots[k] || []).push(p)
         }
-        const collisions = Object.entries(slots).filter(([, v]) => v.length > 1)
+        const collisions = []
+        for (const [k, arr] of Object.entries(slots)) {
+            if (arr.length < 2) continue
+            arr.sort((a, b) => (b.views || 0) - (a.views || 0))
+            collisions.push(`${k}: keep "${arr[0].title.slice(0, 32)}", drop ${arr.length - 1}`)
+            for (const loser of arr.slice(1)) { loser.action = 'unpublish'; loser.reason = 'dup' }
+        }
 
-        let renumbered = 0, unpublished = 0, noMatch = 0
-        if (!dryRun) {
-            for (const p of plan) {
-                if (p.action === 'unpublish') {
-                    await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
-                    unpublished++
-                } else if (p.action === 'renumber') {
-                    await supabase.from('movies').update({ season_number: p.season, episode_number: p.episode, is_available: true, updated_at: new Date().toISOString() }).eq('id', p.id)
-                    renumbered++
-                } else noMatch++
-            }
-        } else {
-            renumbered = plan.filter(p => p.action === 'renumber').length
-            unpublished = plan.filter(p => p.action === 'unpublish').length
-            noMatch = plan.filter(p => p.action === 'no-match').length
+        let renumbered = 0, unpublishedDub = 0, unpublishedDup = 0, noMatch = 0
+        for (const p of plan) {
+            if (p.action === 'unpublish') {
+                if (!dryRun) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                if (p.reason === 'dup') unpublishedDup++; else unpublishedDub++
+            } else if (p.action === 'renumber') {
+                if (!dryRun) await supabase.from('movies').update({ season_number: p.season, episode_number: p.episode, is_available: true, updated_at: new Date().toISOString() }).eq('id', p.id)
+                renumbered++
+            } else noMatch++
         }
 
         res.json({
@@ -2978,10 +2979,12 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
                 dryRun,
                 members: members.length,
                 renumbered,
-                unpublished,
+                unpublishedDubs: unpublishedDub,
+                unpublishedDuplicates: unpublishedDup,
                 noMatch,
-                collisionCount: collisions.length,
-                collisions: collisions.slice(0, 15).map(([k, v]) => `${k}: ${v.length}× (${v.map(t => t.slice(0, 30)).join(' | ')})`),
+                keptEpisodes: renumbered,
+                dedupedSlots: collisions.length,
+                collisions: collisions.slice(0, 20),
                 noMatchSamples: plan.filter(p => p.action === 'no-match').slice(0, 15).map(p => p.title.slice(0, 55))
             }
         })
