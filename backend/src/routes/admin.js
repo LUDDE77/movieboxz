@@ -3141,6 +3141,67 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/fix-alt-episodes?dryRun=true
+// Body: { seriesId, channelId, tmdbTvQuery?, posterPath?, backdropPath?, tmdbId? }
+// Repair an alternate-source batch of episodes (e.g. Crusher's Sharpe/Hornblower):
+// renumber from the "- NN -" in the YouTube title, clean the episode name, and set
+// the correct series artwork (from tmdbTvQuery's TMDB TV match, or explicit paths).
+router.post('/maintenance/fix-alt-episodes', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { seriesId, channelId, tmdbTvQuery } = req.body || {}
+        let { posterPath = null, backdropPath = null, tmdbId = null } = req.body || {}
+        if (!seriesId || !channelId) return res.status(400).json({ success: false, error: 'seriesId and channelId required' })
+
+        if (tmdbTvQuery && !posterPath) {
+            const r = await tmdbService.searchTVSeries(tmdbTvQuery)
+            const b = r[0]
+            if (b) { posterPath = b.posterPath || posterPath; backdropPath = b.backdropPath || backdropPath; tmdbId = b.id || tmdbId }
+        }
+
+        const { data: eps, error } = await supabase.from('movies')
+            .select('id, title, youtube_video_title')
+            .eq('tv_series_id', seriesId).eq('channel_id', channelId)
+        if (error) throw error
+
+        const plan = eps.map(e => {
+            const yt = e.youtube_video_title || e.title || ''
+            const nm = yt.match(/-\s*0*(\d+)\s*-/)
+            const episode = nm ? parseInt(nm[1], 10) : null
+            const name = yt
+                .replace(/^.*?-\s*\d+\s*-\s*/, '')          // drop "Series - NN - "
+                .replace(/\s*[\[|].*$/, '')                  // drop "[..]" / "| .."
+                .replace(/\s*-\s*(tv\s*serie.*|sub.*|full.*)$/i, '')
+                .trim()
+            return { id: e.id, episode, name }
+        })
+
+        let updated = 0
+        if (!dryRun) {
+            for (const p of plan) {
+                const upd = { updated_at: new Date().toISOString() }
+                if (p.episode) { upd.season_number = 1; upd.episode_number = p.episode }
+                if (p.name) upd.title = p.name
+                if (posterPath) upd.poster_path = posterPath
+                if (backdropPath) upd.backdrop_path = backdropPath
+                if (tmdbId) upd.tmdb_id = tmdbId
+                await supabase.from('movies').update(upd).eq('id', p.id)
+                updated++
+            }
+        }
+        res.json({
+            success: true,
+            data: {
+                dryRun, episodes: eps.length, updated,
+                artwork: { posterPath, backdropPath, tmdbId },
+                sample: plan.sort((a, b) => (a.episode || 0) - (b.episode || 0)).slice(0, 10).map(p => `E${p.episode}: ${p.name}`)
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/set-region
 // Body: { channelId?, seriesId?, titleContains?: [..], regionAllowed?: [..], regionBlocked?: [..] }
 // Tag PRODUCTION movies (selected by channel, series, and/or title) with a manual
