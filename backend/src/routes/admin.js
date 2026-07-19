@@ -2915,6 +2915,81 @@ router.post('/maintenance/make-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/renumber-series?dryRun=true
+// Body: { seriesId, unpublishRegex? }
+// Fix episode numbering for a series whose titles carry "SxxExx": parse it from
+// each member's YouTube title and set the correct season/episode. Members whose
+// title matches unpublishRegex are unpublished instead (is_available=false) — used
+// to drop foreign-language dubs. Reports unmatched titles and any collisions that
+// remain among the kept episodes.
+router.post('/maintenance/renumber-series', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { seriesId, unpublishRegex } = req.body || {}
+        if (!seriesId) return res.status(400).json({ success: false, error: 'seriesId is required' })
+        let re = null
+        if (unpublishRegex) {
+            try { re = new RegExp(unpublishRegex, 'i') } catch (e) { return res.status(400).json({ success: false, error: `bad unpublishRegex: ${e.message}` }) }
+        }
+
+        const { data: members, error } = await supabase.from('movies')
+            .select('id, title, youtube_video_title, season_number, episode_number, is_available')
+            .eq('tv_series_id', seriesId)
+        if (error) throw error
+
+        const plan = []
+        for (const m of members) {
+            const yt = m.youtube_video_title || m.title || ''
+            if (re && re.test(yt)) { plan.push({ id: m.id, action: 'unpublish', title: yt }); continue }
+            const mm = yt.match(/s\s*(\d+)\s*[ex]\s*(\d+)/i)
+            if (mm) plan.push({ id: m.id, action: 'renumber', season: parseInt(mm[1], 10), episode: parseInt(mm[2], 10), title: yt })
+            else plan.push({ id: m.id, action: 'no-match', title: yt })
+        }
+
+        // collisions among the episodes we keep + renumber
+        const slots = {}
+        for (const p of plan) {
+            if (p.action !== 'renumber') continue
+            const k = `S${p.season}E${p.episode}`
+            ;(slots[k] = slots[k] || []).push(p.title)
+        }
+        const collisions = Object.entries(slots).filter(([, v]) => v.length > 1)
+
+        let renumbered = 0, unpublished = 0, noMatch = 0
+        if (!dryRun) {
+            for (const p of plan) {
+                if (p.action === 'unpublish') {
+                    await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                    unpublished++
+                } else if (p.action === 'renumber') {
+                    await supabase.from('movies').update({ season_number: p.season, episode_number: p.episode, is_available: true, updated_at: new Date().toISOString() }).eq('id', p.id)
+                    renumbered++
+                } else noMatch++
+            }
+        } else {
+            renumbered = plan.filter(p => p.action === 'renumber').length
+            unpublished = plan.filter(p => p.action === 'unpublish').length
+            noMatch = plan.filter(p => p.action === 'no-match').length
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun,
+                members: members.length,
+                renumbered,
+                unpublished,
+                noMatch,
+                collisionCount: collisions.length,
+                collisions: collisions.slice(0, 15).map(([k, v]) => `${k}: ${v.length}× (${v.map(t => t.slice(0, 30)).join(' | ')})`),
+                noMatchSamples: plan.filter(p => p.action === 'no-match').slice(0, 15).map(p => p.title.slice(0, 55))
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/delete-empty-series
 // Remove tv_series rows that have no linked movies (orphans from failed conversions).
 router.post('/maintenance/delete-empty-series', async (req, res, next) => {
