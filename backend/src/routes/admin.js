@@ -3141,6 +3141,30 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/set-series-region  Body: { seriesId, regionAllowed?: [..], regionBlocked?: [..] }
+// Manually tag every episode of a series with a region restriction the YouTube API
+// doesn't expose (content-owner/licensing geo-blocks). Sets region_allowed/blocked
+// + region_checked_at so the app's region filter hides them where they can't play.
+router.post('/maintenance/set-series-region', async (req, res, next) => {
+    try {
+        const { seriesId, regionAllowed = null, regionBlocked = null } = req.body || {}
+        if (!seriesId) return res.status(400).json({ success: false, error: 'seriesId is required' })
+        const { data, error } = await supabase.from('movies')
+            .update({
+                region_allowed: regionAllowed,
+                region_blocked: regionBlocked,
+                region_checked_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .eq('tv_series_id', seriesId)
+            .select('id')
+        if (error) throw error
+        res.json({ success: true, data: { updated: data?.length || 0, regionAllowed, regionBlocked } })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/merge-series  Body: { fromSeriesId, toSeriesId }
 // Move every episode from one tv_series into another, then delete the empty source.
 router.post('/maintenance/merge-series', async (req, res, next) => {
