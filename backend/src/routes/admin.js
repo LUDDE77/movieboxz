@@ -2915,6 +2915,121 @@ router.post('/maintenance/make-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/match-episode-guide?dryRun=true
+// Body: { seriesId, tmdbTvId?, minScore?, unpublishNonEpisodes? }
+// For a series whose titles carry episode NAMES (not SxxExx): fetch the canonical
+// TMDB episode guide and fuzzy-match each member's title segments against it to
+// assign the correct season/episode. Compilations / unmatched are reported (and
+// optionally unpublished). Collisions are de-duped keeping the most-watched.
+router.post('/maintenance/match-episode-guide', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { seriesId, tmdbTvId, minScore = 0.7, unpublishNonEpisodes = false } = req.body || {}
+        if (!seriesId) return res.status(400).json({ success: false, error: 'seriesId is required' })
+
+        let tvId = tmdbTvId
+        if (!tvId) {
+            const { data: s } = await supabase.from('tv_series').select('tmdb_id').eq('id', seriesId).maybeSingle()
+            tvId = s?.tmdb_id
+        }
+        if (!tvId) return res.status(400).json({ success: false, error: 'no tmdb_id for series; pass tmdbTvId' })
+
+        const guide = await tmdbService.getTVEpisodeGuide(tvId)
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const tokens = (s) => new Set((s || '').toLowerCase().split(/\W+/).filter(w => w.length > 2))
+        const guideByNorm = new Map()
+        for (const g of guide.episodes) if (!guideByNorm.has(norm(g.name))) guideByNorm.set(norm(g.name), g)
+
+        const JUNK = /^(he-?man|she-?ra|masters of the universe|new adventures( of he-?man)?|full episodes?|cartoons?|official|hd|warner( bros\.?)?|classics?|remastered|the (complete )?series)$/i
+        const COMPILATION = /compilation|1\s*hour|mega|full episodes\b|marathon|all episodes|best of/i
+
+        const scoreAgainst = (cand) => {
+            const nc = norm(cand)
+            if (guideByNorm.has(nc)) return { g: guideByNorm.get(nc), score: 1 }
+            let best = null, bestScore = 0
+            const tc = tokens(cand)
+            for (const g of guide.episodes) {
+                const ng = norm(g.name)
+                let sc = 0
+                if (nc && ng && (nc.includes(ng) || ng.includes(nc))) sc = 0.9
+                else {
+                    const tg = tokens(g.name)
+                    if (tc.size && tg.size) {
+                        const inter = [...tc].filter(w => tg.has(w)).length
+                        sc = inter / new Set([...tc, ...tg]).size
+                    }
+                }
+                if (sc > bestScore) { bestScore = sc; best = g }
+            }
+            return { g: best, score: bestScore }
+        }
+
+        const { data: members, error } = await supabase.from('movies')
+            .select('id, title, youtube_video_title, view_count, season_number, episode_number')
+            .eq('tv_series_id', seriesId)
+        if (error) throw error
+
+        const plan = []
+        for (const m of members) {
+            const raw = m.youtube_video_title || m.title || ''
+            if (COMPILATION.test(raw)) { plan.push({ id: m.id, action: 'compilation', title: raw }); continue }
+            const segs = raw.split('|').map(s => s.trim()).filter(s => s && !JUNK.test(s))
+            let best = null
+            for (const seg of segs) {
+                const r = scoreAgainst(seg)
+                if (!best || r.score > best.score) best = { ...r, seg }
+            }
+            if (best && best.score >= minScore) {
+                plan.push({ id: m.id, action: 'match', season: best.g.season, episode: best.g.episode, epName: best.g.name, score: +best.score.toFixed(2), title: raw, views: m.view_count || 0 })
+            } else {
+                plan.push({ id: m.id, action: 'no-match', title: raw, best: best ? `${best.g?.name} (${best.score.toFixed(2)})` : null })
+            }
+        }
+
+        // de-dupe collisions among matches (keep most-watched)
+        const slots = {}
+        for (const p of plan) if (p.action === 'match') { const k = `S${p.season}E${p.episode}`; (slots[k] = slots[k] || []).push(p) }
+        let deduped = 0
+        for (const arr of Object.values(slots)) {
+            if (arr.length < 2) continue
+            arr.sort((a, b) => (b.views || 0) - (a.views || 0))
+            for (const loser of arr.slice(1)) { loser.action = 'dup'; deduped++ }
+        }
+
+        let matched = 0, compilations = 0, noMatch = 0, dups = 0
+        for (const p of plan) {
+            if (p.action === 'match') {
+                if (!dryRun) await supabase.from('movies').update({ season_number: p.season, episode_number: p.episode, is_available: true, updated_at: new Date().toISOString() }).eq('id', p.id)
+                matched++
+            } else if (p.action === 'dup') {
+                if (!dryRun) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                dups++
+            } else if (p.action === 'compilation') {
+                if (!dryRun && unpublishNonEpisodes) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                compilations++
+            } else {
+                if (!dryRun && unpublishNonEpisodes) await supabase.from('movies').update({ is_available: false, updated_at: new Date().toISOString() }).eq('id', p.id)
+                noMatch++
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun, guideName: guide.name, guideEpisodes: guide.episodes.length,
+                members: members.length,
+                matched, dedupedDuplicates: dups, compilations, noMatch,
+                unpublishNonEpisodes,
+                matchSamples: plan.filter(p => p.action === 'match').slice(0, 10).map(p => `S${p.season}E${p.episode} <- "${p.title.split('|')[0].trim().slice(0, 30)}" (${p.score})`),
+                compilationSamples: plan.filter(p => p.action === 'compilation').slice(0, 8).map(p => p.title.slice(0, 50)),
+                noMatchSamples: plan.filter(p => p.action === 'no-match').slice(0, 10).map(p => `${p.title.slice(0, 40)} [best: ${p.best}]`)
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/renumber-series?dryRun=true
 // Body: { seriesId, unpublishRegex? }
 // Fix episode numbering for a series whose titles carry "SxxExx": parse it from
