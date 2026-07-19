@@ -2924,7 +2924,7 @@ router.post('/maintenance/make-series', async (req, res, next) => {
 router.post('/maintenance/match-episode-guide', async (req, res, next) => {
     try {
         const dryRun = req.query.dryRun !== 'false'
-        const { seriesId, tmdbTvId, minScore = 0.7, useSynopsis = false, minSynopsisTokens = 2, unpublishCompilations = false, unpublishNoMatch = false } = req.body || {}
+        const { seriesId, tmdbTvId, tmdbTvQuery, minScore = 0.7, useSynopsis = false, minSynopsisTokens = 2, unpublishCompilations = false, unpublishNoMatch = false } = req.body || {}
         if (!seriesId) return res.status(400).json({ success: false, error: 'seriesId is required' })
 
         let tvId = tmdbTvId
@@ -2932,7 +2932,13 @@ router.post('/maintenance/match-episode-guide', async (req, res, next) => {
             const { data: s } = await supabase.from('tv_series').select('tmdb_id').eq('id', seriesId).maybeSingle()
             tvId = s?.tmdb_id
         }
-        if (!tvId) return res.status(400).json({ success: false, error: 'no tmdb_id for series; pass tmdbTvId' })
+        if (!tvId && tmdbTvQuery) {
+            const r = await tmdbService.searchTVSeries(tmdbTvQuery)
+            if (r[0]) tvId = r[0].id
+        }
+        if (!tvId) return res.status(400).json({ success: false, error: 'no tmdb_id for series; pass tmdbTvId or tmdbTvQuery' })
+        // Persist the discovered tmdb_id on the series if it was missing.
+        if (!dryRun) await supabase.from('tv_series').update({ tmdb_id: tvId }).eq('id', seriesId).is('tmdb_id', null)
 
         const guide = await tmdbService.getTVEpisodeGuide(tvId)
         const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -3130,6 +3136,23 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
                 noMatchSamples: plan.filter(p => p.action === 'no-match').slice(0, 15).map(p => p.title.slice(0, 55))
             }
         })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// POST /api/admin/maintenance/reset-publishing  Body: { channelId? }
+// Reset rows stuck in 'publishing' back to 'approved' so they can be re-published.
+router.post('/maintenance/reset-publishing', async (req, res, next) => {
+    try {
+        const { channelId } = req.body || {}
+        let q = supabase.from('staged_movies')
+            .update({ approval_status: 'approved', updated_at: new Date().toISOString() })
+            .eq('approval_status', 'publishing')
+        if (channelId) q = q.eq('channel_id', channelId)
+        const { data, error } = await q.select('id')
+        if (error) throw error
+        res.json({ success: true, data: { reset: data?.length || 0 } })
     } catch (error) {
         next(error)
     }
