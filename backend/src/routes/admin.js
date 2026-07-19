@@ -3141,6 +3141,36 @@ router.post('/maintenance/renumber-series', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/set-region
+// Body: { channelId?, seriesId?, titleContains?: [..], regionAllowed?: [..], regionBlocked?: [..] }
+// Tag PRODUCTION movies (selected by channel, series, and/or title) with a manual
+// region restriction the YouTube API doesn't expose (licensing geo-blocks). At
+// least one selector is required. Combine channelId + titleContains to hit e.g.
+// "Crusher's Sharpe/Hornblower only".
+router.post('/maintenance/set-region', async (req, res, next) => {
+    try {
+        const { channelId, seriesId, titleContains, regionAllowed = null, regionBlocked = null } = req.body || {}
+        const hasTitle = Array.isArray(titleContains) && titleContains.length > 0
+        if (!channelId && !seriesId && !hasTitle) {
+            return res.status(400).json({ success: false, error: 'need channelId, seriesId, or titleContains' })
+        }
+        let q = supabase.from('movies').update({
+            region_allowed: regionAllowed,
+            region_blocked: regionBlocked,
+            region_checked_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        })
+        if (channelId) q = q.eq('channel_id', channelId)
+        if (seriesId) q = q.eq('tv_series_id', seriesId)
+        if (hasTitle) q = q.or(titleContains.map(t => `youtube_video_title.ilike.%${t}%`).join(','))
+        const { data, error } = await q.select('id')
+        if (error) throw error
+        res.json({ success: true, data: { updated: data?.length || 0, regionAllowed, regionBlocked } })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/set-series-region  Body: { seriesId, regionAllowed?: [..], regionBlocked?: [..] }
 // Manually tag every episode of a series with a region restriction the YouTube API
 // doesn't expose (content-owner/licensing geo-blocks). Sets region_allowed/blocked
