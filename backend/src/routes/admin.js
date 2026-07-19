@@ -3244,6 +3244,32 @@ router.post('/maintenance/unpublish-to-review', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/rename-series  Body: { seriesId, title, tmdbTvQuery? }
+// Rename a tv_series (fix a mislabeled series). If tmdbTvQuery is given, also
+// refresh tmdb_id/poster/backdrop/description from the correct TMDB TV match.
+router.post('/maintenance/rename-series', async (req, res, next) => {
+    try {
+        const { seriesId, title, tmdbTvQuery } = req.body || {}
+        if (!seriesId || !title) return res.status(400).json({ success: false, error: 'seriesId and title required' })
+        const upd = { title, updated_at: new Date().toISOString() }
+        if (tmdbTvQuery) {
+            const r = await tmdbService.searchTVSeries(tmdbTvQuery)
+            const b = r[0]
+            if (b) {
+                upd.tmdb_id = b.id
+                if (b.posterPath) upd.poster_path = b.posterPath
+                if (b.backdropPath) upd.backdrop_path = b.backdropPath
+                if (b.overview) upd.description = b.overview
+            }
+        }
+        const { data, error } = await supabase.from('tv_series').update(upd).eq('id', seriesId).select('id, title, tmdb_id')
+        if (error) throw error
+        res.json({ success: true, data: data?.[0] || null })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/set-region
 // Body: { channelId?, seriesId?, titleContains?: [..], regionAllowed?: [..], regionBlocked?: [..] }
 // Tag PRODUCTION movies (selected by channel, series, and/or title) with a manual
