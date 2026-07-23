@@ -92,3 +92,18 @@ This resubmission addresses the previous review:
   content in the provider's own app (YouTube). We do not claim to provide or own the
   content; the YouTube hand-off is stated up front. Please contact us at
   support@movieboxz.com with any concern and we will address it immediately.
+
+## Resolution Center reply (paste-ready) — for rejection 4.1(a) + prior 2.3.7/1.1.6
+Hello, and thank you for the review.
+
+We have made the following changes to address the feedback:
+
+1. Guideline 4.1(a) — third-party content in screenshots: We have replaced ALL App Store screenshots (iPhone, iPad and Apple TV). The new screenshots display only public-domain films (for example Night of the Living Dead, His Girl Friday, Charade, Carnival of Souls, Detour and House on Haunted Hill). No copyrighted movie posters, artwork or actor/actress likenesses appear in any screenshot.
+
+2. Guideline 2.3.7 — price references in metadata: We removed the word "free" and all price references from the App Name, Subtitle and Keywords.
+
+3. Guideline 1.1.6 — accurate, non-misleading presentation: We rewrote the app name, subtitle and description so they accurately describe MovieBoxZ as a discovery/curation guide. MovieBoxZ does not host, stream, upload or store any video. It surfaces titles that are already publicly available and opens playback in the provider's own app (currently the official YouTube app). This hand-off is now stated up front in the description, and the in-app experience makes it clear that the YouTube app is required to play a title.
+
+We do not claim to own, license or provide the underlying content, and we are happy to make any further adjustments you recommend. Please contact us at support@movieboxz.com with any questions.
+
+Thank you.
