@@ -6,6 +6,9 @@ import XCTest
 /// from the .xcresult afterwards.
 final class ScreenshotTests: MovieBoxZUITestCase {
 
+    // Show ONLY curated public-domain films during capture (Apple 4.1(a)).
+    override var extraLaunchArguments: [String] { ["UI_SCREENSHOT_DEMO"] }
+
     func testCaptureAppStoreScreens() {
         XCTAssertTrue(app.buttons["Browse"].waitForExistence(timeout: 30),
                       "Browse tab should appear after launch")
@@ -20,12 +23,27 @@ final class ScreenshotTests: MovieBoxZUITestCase {
         app.swipeUp()
         sleep(2)
         snapshot("02_BrowseRails")
+        app.swipeUp()
+        sleep(2)
+        snapshot("03_MoreRails")
+        app.swipeDown()
         app.swipeDown()
         app.swipeDown()
         sleep(1)
 
-        tapTab("TV Series"); sleep(6); snapshot("03_TVSeries")
-        tapTab("Kids");      sleep(6); snapshot("04_Kids")
+        // Open a public-domain movie's detail page (first card in the top rail).
+        let firstCard = app.scrollViews.otherElements.buttons.firstMatch
+        if firstCard.waitForExistence(timeout: 5) {
+            firstCard.tap(); sleep(4); snapshot("04_MovieDetail")
+            // Close detail (back / swipe down).
+            app.swipeDown(); sleep(1)
+            if app.buttons["Close"].exists { app.buttons["Close"].tap() }
+            else if app.navigationBars.buttons.firstMatch.exists { app.navigationBars.buttons.firstMatch.tap() }
+            sleep(1)
+        }
+
+        // NOTE: TV Series and Kids tabs show copyrighted cartoon artwork
+        // (Tom & Jerry, He-Man, etc.), so they are intentionally NOT captured.
         tapTab("Search");    sleep(2); snapshot("05_Search")
         tapTab("Library");   sleep(3); snapshot("06_Library")
     }

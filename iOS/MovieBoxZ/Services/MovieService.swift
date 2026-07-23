@@ -117,7 +117,13 @@ class MovieService: ObservableObject {
         // One request for the entire Browse tab (featured, popular, trending,
         // recent, all, uncategorized, High Score IMDb, every genre carousel and
         // the decade rails) instead of ~20 — much friendlier to the rate limit.
-        let response = try await performRequest(endpoint: "/browse/home", type: BrowseHomeResponse.self)
+        var endpoint = "/browse/home"
+        #if DEBUG
+        // Screenshot automation: show only curated public-domain films so App Store
+        // captures never display copyrighted posters/stars (Apple 4.1(a)).
+        if CommandLine.arguments.contains("UI_SCREENSHOT_DEMO") { endpoint += "?demo=pd" }
+        #endif
+        let response = try await performRequest(endpoint: endpoint, type: BrowseHomeResponse.self)
         let d = response.data
 
         self.featuredMovies = d.featured.isEmpty ? Array(d.recent.prefix(3)) : d.featured

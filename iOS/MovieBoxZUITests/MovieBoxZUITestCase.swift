@@ -5,10 +5,13 @@ import XCTest
 class MovieBoxZUITestCase: XCTestCase {
     var app: XCUIApplication!
 
+    /// Subclasses can add launch arguments (e.g. the screenshot demo flag).
+    var extraLaunchArguments: [String] { [] }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["UI_TESTING_SKIP_WELCOME"]
+        app.launchArguments = ["UI_TESTING_SKIP_WELCOME"] + extraLaunchArguments
         app.launch()
     }
 
