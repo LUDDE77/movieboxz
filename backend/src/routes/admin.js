@@ -1524,7 +1524,10 @@ router.patch('/movies/:id', async (req, res, next) => {
             'title', 'description', 'release_date', 'director', 'actors',
             'is_tv_series', 'is_kids_content', 'is_available', 'needs_verification',
             'runtime_minutes', 'imdb_rating', 'imdb_votes',
+            'poster_path', // card/list poster (TMDB path or full URL)
             'backdrop_path', // detail-page hero/background image (TMDB path or full URL)
+            'tmdb_id', // correct a wrong TMDB match (e.g. remake vs original)
+            'season_number', 'episode_number', 'tv_series_id', // fix episode grouping
             'hero_image_url' // Hero Builder: admin-curated carousel image (nullable)
         ]
 
