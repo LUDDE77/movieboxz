@@ -3244,16 +3244,34 @@ router.post('/maintenance/unpublish-to-review', async (req, res, next) => {
     }
 })
 
-// POST /api/admin/maintenance/rename-series  Body: { seriesId, title, tmdbTvQuery? }
-// Rename a tv_series (fix a mislabeled series). If tmdbTvQuery is given, also
-// refresh tmdb_id/poster/backdrop/description from the correct TMDB TV match.
+// POST /api/admin/maintenance/rename-series
+// Body: { seriesId, title, tmdbTvQuery?, tmdbYear?, tmdbTvId?, preview? }
+// Rename a tv_series (fix a mislabeled series). Art source, in priority order:
+//   - tmdbTvId: fetch that exact TMDB TV id's details (poster/backdrop/overview).
+//   - tmdbTvQuery (+ optional tmdbYear to disambiguate remakes): search TMDB TV,
+//     use the top match. preview:true returns the candidate list WITHOUT updating.
 router.post('/maintenance/rename-series', async (req, res, next) => {
     try {
-        const { seriesId, title, tmdbTvQuery } = req.body || {}
+        const { seriesId, title, tmdbTvQuery, tmdbYear = null, tmdbTvId = null, preview = false } = req.body || {}
+
+        // Preview: just return TMDB TV search candidates so the caller can pick.
+        if (preview) {
+            const r = await tmdbService.searchTVSeries(tmdbTvQuery, tmdbYear)
+            return res.json({ success: true, data: { candidates: r.slice(0, 8).map(x => ({ id: x.id, name: x.name, firstAirDate: x.firstAirDate, posterPath: x.posterPath })) } })
+        }
+
         if (!seriesId || !title) return res.status(400).json({ success: false, error: 'seriesId and title required' })
         const upd = { title, updated_at: new Date().toISOString() }
-        if (tmdbTvQuery) {
-            const r = await tmdbService.searchTVSeries(tmdbTvQuery)
+        if (tmdbTvId) {
+            const d = await tmdbService.getTVSeriesDetails(tmdbTvId)
+            if (d) {
+                upd.tmdb_id = d.id
+                if (d.poster_path) upd.poster_path = d.poster_path
+                if (d.backdrop_path) upd.backdrop_path = d.backdrop_path
+                if (d.overview) upd.description = d.overview
+            }
+        } else if (tmdbTvQuery) {
+            const r = await tmdbService.searchTVSeries(tmdbTvQuery, tmdbYear)
             const b = r[0]
             if (b) {
                 upd.tmdb_id = b.id
