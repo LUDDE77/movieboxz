@@ -107,3 +107,22 @@ We have made the following changes to address the feedback:
 We do not claim to own, license or provide the underlying content, and we are happy to make any further adjustments you recommend. Please contact us at support@movieboxz.com with any questions.
 
 Thank you.
+
+## Resolution Center reply (paste-ready) — for rejection 4.2.3(i) Minimum Functionality
+Hello, and thank you for the review.
+
+We have revised the app so that it is fully usable on launch and never requires any other app to be installed.
+
+What we changed:
+
+1. Removed the install requirement. Previously, on first launch the "Get Started" button checked whether the YouTube app was installed and could steer the user toward installing it. We removed that check entirely. Users can now launch the app and immediately browse the full catalog, search, open detailed title pages (synopsis, cast, rating, year, runtime), explore TV series and episodes, browse a Kids section, and save titles to their library — all with no other app installed and no account.
+
+2. iPhone/iPad playback is self-contained. When a user chooses to watch a title, the app opens it on YouTube. If the YouTube app is installed it deep-links to it; if it is not, the app opens the video in the device's web browser (Safari). Playback therefore never depends on installing another app.
+
+3. Apple TV playback fallback. tvOS has no web browser, so when the YouTube app is not installed we present an on-screen QR code the user can scan with their phone to watch the title there. The Apple TV app is fully usable for discovery on its own and never dead-ends or requires the YouTube app.
+
+4. Wording. We removed all "YouTube App Required" language from the app; the app now simply notes that titles play on YouTube.
+
+MovieBoxZ is a content-discovery and catalog app (similar in model to streaming-guide apps): its core value — browsing, searching, organizing and saving publicly-available titles — works entirely on its own, and handing a title off to YouTube is an optional convenience rather than a requirement.
+
+Please let us know if any further changes would help. Thank you.
