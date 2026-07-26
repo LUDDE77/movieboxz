@@ -22,7 +22,7 @@ Steps 1–3 need doing first (they produce things later steps attach/submit).
 ## Step 1 — Deploy the website  _(fixes 5.2.3 evidence)_
 
 - [ ] Deploy the `website/` folder to movieboxz.com (same host as privacy.html).
-- [ ] Confirm **https://movieboxz.com/content-policy** loads and looks right.
+- [ ] Confirm **https://movieboxz.com/content-policy.html** loads and looks right.
 - [ ] Spot-check the nav "Content" link on privacy.html / terms.html.
 
 _Why: gives Apple a public, clickable rights/policy page to cite in the reply._
@@ -99,7 +99,7 @@ In App Store Connect → the version → **App Review Information → Notes**:
   - YouTube API Services ToS URL
   - TMDB API terms URL + the in-app attribution line
   - OMDb terms URL
-  - Content Sourcing Policy (PDF or https://movieboxz.com/content-policy link)
+  - Content Sourcing Policy (PDF or https://movieboxz.com/content-policy.html link)
 - [ ] Provide a demo note: browsing/search/library/detail all work with **no** other
       app installed; playback opens on YouTube (app, or Safari on iOS, or phone QR on
       Apple TV).

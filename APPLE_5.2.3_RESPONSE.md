@@ -29,7 +29,7 @@ Attach or link the following (PDF/screenshots where noted):
 
 4. **MovieBoxZ Content Sourcing & Copyright Policy**
    - Attach `CONTENT_SOURCING_POLICY.md` (export to PDF) and/or host it at
-     `https://movieboxz.com/content-policy` and link it.
+     `https://movieboxz.com/content-policy.html` and link it.
 
 5. **Architecture statement — "we host nothing"**
    - One paragraph (below in the reply) stating MovieBoxZ stores only video IDs +
