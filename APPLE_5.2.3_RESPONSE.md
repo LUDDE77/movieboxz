@@ -14,6 +14,8 @@ Attach or link the following (PDF/screenshots where noted):
      enabled** (Console → APIs & Services → Enabled APIs).
    - The **YouTube API Services Terms of Service** URL you operate under:
      https://developers.google.com/youtube/terms/api-services-terms-of-service
+   - The **YouTube API Services Developer Policies** we follow:
+     https://developers.google.com/youtube/terms/developer-policies
    - One line: "MovieBoxZ accesses YouTube content solely through the official
      YouTube Data API under these terms; all playback is performed by YouTube's own
      player."
@@ -38,6 +40,42 @@ Attach or link the following (PDF/screenshots where noted):
 6. **In-app copyright reporting** — note that the app now includes a "Report a
    copyright concern" link (Settings) pointing to YouTube's copyright complaint
    process and MovieBoxZ's contact.
+
+---
+
+## A2. Platform compliance summary (paste into App Review notes)
+
+MovieBoxZ complies with the terms of every third-party service it uses. Reference
+documents and how we follow them:
+
+YouTube — YouTube API Services Terms of Service
+(https://developers.google.com/youtube/terms/api-services-terms-of-service) and
+YouTube API Services Developer Policies
+(https://developers.google.com/youtube/terms/developer-policies):
+- We access YouTube only through the official YouTube Data API as a registered API
+  client (Google Cloud project "MovieBoxZ YouTube Integration", YouTube Data API v3
+  enabled).
+- We do not host, stream, download, cache, or store any video ourselves. Every
+  "watch" hands the video off to YouTube — its own application, or youtube.com in the
+  system browser — so all playback is performed by YouTube's official player under
+  YouTube's terms.
+- We display source attribution: the originating YouTube channel is shown on each
+  title, and the app states that content is hosted on YouTube and subject to
+  YouTube's Terms of Service.
+- We do not circumvent any access control or rights-management measure, and we honor
+  removals: because we store only a video ID, a video removed by the uploader,
+  Content ID, or a DMCA action disappears from MovieBoxZ automatically.
+
+TMDB — TMDB API Terms of Use (https://www.themoviedb.org/api-terms-of-use):
+- Metadata and artwork are retrieved via the TMDB API and used only for display.
+- We show TMDB's required attribution in-app: "This product uses the TMDB API but is
+  not endorsed or certified by TMDB." We do not use the API to build or offer a
+  competing database.
+
+OMDb / IMDb — OMDb API (https://www.omdbapi.com/):
+- Ratings are retrieved via the OMDb API under its terms using a registered API key.
+  Where IMDb ratings are shown, they are sourced through OMDb; MovieBoxZ does not
+  claim any direct license from IMDb.
 
 ---
 
