@@ -176,6 +176,70 @@ we are glad to make any additional changes you recommend. Thank you.
 
 ---
 
+## D. Rebuttal — use ONLY if rejected again (Resolution Center, formal register)
+
+Dear App Review,
+
+Thank you for your continued review of MovieBoxZ (submission 1d730900). We have
+carefully reviewed Guidelines 5.2.1, 5.2.2, and 5.2.3, and we respectfully submit
+that MovieBoxZ complies with each. We set out our analysis below and remain glad to
+provide any further documentation or to discuss this directly with App Review.
+
+1. Nature of the app. MovieBoxZ is a content discovery and catalog application. It
+does not host, store, stream, transcode, record, download, or serve any audio or
+video. It stores only public YouTube video identifiers and licensed metadata. When a
+user selects a title, playback is performed entirely by YouTube's own application or
+player; MovieBoxZ is never in the media path. This is the same model as established
+App Store applications such as JustWatch, Reelgood, and TV Time, which catalog
+third-party titles and link users to the service that serves them.
+
+2. Guideline 5.2.3 (Audio/Video Downloading). This guideline provides that apps
+"should not facilitate illegal file sharing or include the ability to save, convert,
+or download media from third-party sources… Streaming of audio/video content may
+also violate Terms of Use…" MovieBoxZ includes no capability to save, convert,
+download, or file-share media, and does not facilitate file sharing; it contains no
+downloading or ripping functionality of any kind. MovieBoxZ also does not itself
+stream audio or video — all streaming is performed by YouTube. The app's access to
+YouTube is expressly authorized: MovieBoxZ is a registered YouTube Data API client
+operating under the YouTube API Services Terms of Service and Developer Policies, and
+that authorization is attached and available on request. The conduct 5.2.3 addresses
+is therefore not present in this app.
+
+3. Guideline 5.2.2 (Third-Party Sites/Services). This guideline requires that an app
+displaying content from a third-party service be "specifically permitted to do so
+under the service's terms of use," with authorization available on request. The
+relevant third-party service here is YouTube, and MovieBoxZ is specifically permitted
+under YouTube's terms as a compliant YouTube Data API client: it uses only the
+official API, performs no downloading, hands all playback to YouTube's own player,
+displays source-channel attribution, and does not circumvent any measure. The
+governing authorization is our YouTube API license, which is attached.
+
+4. Guideline 5.2.1 (Generally). The only third-party material MovieBoxZ reproduces is
+poster artwork and descriptive text, which are licensed from TMDB (displayed with the
+required attribution) and OMDb. MovieBoxZ reproduces no film or television video, and
+includes no misleading, false, or copycat names or metadata.
+
+5. Regarding "unauthorized access." MovieBoxZ provides no access that a user could not
+already obtain directly on YouTube. It surfaces only content that YouTube itself makes
+publicly available and serves under YouTube's own rights framework (Content ID and
+DMCA). Because MovieBoxZ stores only a video identifier, any item removed at the
+source — by the uploader, by Content ID, or through a DMCA action — becomes
+immediately unavailable in the app. MovieBoxZ does not, and as a discovery layer
+cannot, adjudicate the rights of individual uploads; that determination rests with
+YouTube. As a good-faith measure, MovieBoxZ sources only from established channels and
+automatically excludes any channel less than one year old (verified by an automated
+audit we can provide), and it offers an in-app path to report a copyright concern.
+
+We respectfully submit that MovieBoxZ complies with Guidelines 5.2.1 through 5.2.3 and
+ask that the app be approved. We would welcome the opportunity to discuss this with
+App Review directly, or before the App Review Board, if that would assist. Thank you
+for your time and consideration.
+
+Sincerely,
+The MovieBoxZ Team
+
+---
+
 ## C. Notes / honest caveats (for us, not for Apple)
 
 - 5.2.3 on YouTube-catalog apps is Apple's most stubborn category; this is a strong,
