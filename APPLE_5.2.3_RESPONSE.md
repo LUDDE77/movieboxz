@@ -81,7 +81,10 @@ operating legitimately within YouTube's own system — favoring established chan
 whose videos remain live and monetized on YouTube (YouTube monetization requires
 passing YouTube's own policy and Content ID review), and excluding brand-new
 reupload accounts and manipulated uploads. This relies on YouTube's determinations,
-not our own.
+not our own. This is enforced automatically: our import pipeline rejects any channel
+under one year old, and we run an automated audit against the YouTube API confirming
+that 100% of the channels currently surfacing content in the app are at least one
+year old.
 
 6. Reporting. The app includes a "Report a copyright concern" link that directs to
 YouTube's copyright complaint process (the complete remedy, since removal at the
