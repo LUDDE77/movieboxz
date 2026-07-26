@@ -79,6 +79,44 @@ OMDb / IMDb — OMDb API (https://www.omdbapi.com/):
 
 ---
 
+## A3. Metadata & artwork licensing statement — posters and descriptions (paste into App Review notes)
+
+MovieBoxZ displays movie/TV posters, artwork, and descriptions under a valid license
+from their source, with the required attribution, and consistent with applicable law.
+
+Source and license — TMDB (The Movie Database):
+- All poster and backdrop images and the descriptive text (overviews) shown in
+  MovieBoxZ are obtained from TMDB through the official TMDB API.
+- TMDB grants API users a "worldwide, non-exclusive" license to use TMDB's content
+  and metadata (images and text) under the TMDB API Terms of Use:
+  https://www.themoviedb.org/api-terms-of-use
+- MovieBoxZ operates within that license: it is a free application (no fees, no
+  purchases), and it displays the required TMDB attribution in-app — "This product
+  uses the TMDB API but is not endorsed or certified by TMDB."
+- TMDB API documentation: https://developer.themoviedb.org/docs
+
+Ratings — OMDb:
+- Ratings are retrieved via the OMDb API under its terms (https://www.omdbapi.com/).
+  Where IMDb ratings are shown, they are sourced through OMDb.
+
+Legal basis in addition to the license:
+Even independent of the TMDB license, the specific way MovieBoxZ uses this material is
+consistent with established U.S. law:
+- Posters appear only as small identifying thumbnails that help a user recognize a
+  title — an informational, transformative use that courts have treated as fair use
+  (e.g., Perfect 10, Inc. v. Amazon.com, Inc.:
+  https://en.wikipedia.org/wiki/Perfect_10,_Inc._v._Amazon.com,_Inc.).
+- Descriptions are short factual summaries that describe a title rather than reproduce
+  its expression. Copyright protects specific expression, not facts or plot ideas, so
+  a brief synopsis is not an infringing use.
+
+In summary: the posters and descriptions in MovieBoxZ are used (1) under an express
+license from TMDB, with attribution, and (2) in a manner consistent with fair use for
+the underlying works. MovieBoxZ does not redistribute these assets as a standalone
+product; they appear only as identifiers within the app's discovery experience.
+
+---
+
 ## B. Resolution Center reply (paste-ready)
 
 Hello, and thank you for the review.
