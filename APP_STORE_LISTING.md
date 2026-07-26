@@ -126,3 +126,13 @@ What we changed:
 MovieBoxZ is a content-discovery and catalog app (similar in model to streaming-guide apps): its core value — browsing, searching, organizing and saving publicly-available titles — works entirely on its own, and handing a title off to YouTube is an optional convenience rather than a requirement.
 
 Please let us know if any further changes would help. Thank you.
+
+## What's New — build 1.0 (3)  (consumer-facing release notes)
+Welcome to MovieBoxZ — a beautifully curated way to discover classic film and TV.
+
+• Browse and search the whole catalog on launch — no account, nothing else to install
+• Hand-matched titles across genres and eras, with properly organized TV series
+• Browse by decade, High Score IMDb picks, and a dedicated Kids section
+• Region-aware, so you only see what plays where you are
+• Titles open on YouTube — in the YouTube app if you have it, otherwise your browser on iPhone and iPad, or on your phone via a quick QR code on Apple TV
+• Fast, cinematic experience across iPhone, iPad and Apple TV
