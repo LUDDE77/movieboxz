@@ -11,6 +11,7 @@ import { logger } from '../utils/logger.js'
 import manualEnrichmentQueue from '../services/manualEnrichmentQueue.js'
 import { adminAuth } from '../middleware/adminAuth.js'
 import { sumQuotaUnits, YOUTUBE_DAILY_BUDGET } from '../utils/importHelpers.js'
+import { evaluateChannelSourcing, SOURCING_MIN_AGE_DAYS } from '../utils/channelPolicy.js'
 
 const router = express.Router()
 
@@ -89,7 +90,7 @@ router.get('/stats', async (req, res, next) => {
 // =============================================================================
 router.post('/channels/import', async (req, res, next) => {
     try {
-        const { channel, forceReenrich = false } = req.body
+        const { channel, forceReenrich = false, force = false } = req.body
 
         if (!channel) {
             return res.status(400).json({
@@ -125,6 +126,19 @@ router.post('/channels/import', async (req, res, next) => {
                 error: 'Channel Info Failed',
                 message: 'Failed to fetch channel information',
                 details: error.message
+            })
+        }
+
+        // Content Sourcing Policy: reject channels younger than the minimum age
+        // (a brand-new account is the classic reupload/piracy signature). Pass
+        // force:true to override deliberately.
+        const sourcing = evaluateChannelSourcing(channelInfo)
+        if (!sourcing.eligible && !force) {
+            return res.status(422).json({
+                success: false,
+                error: 'Sourcing Policy',
+                message: `Channel excluded by content sourcing policy: ${sourcing.reasons.join('; ')}. Established channels only (min ${SOURCING_MIN_AGE_DAYS} days old). Pass force:true to override.`,
+                data: sourcing
             })
         }
 
@@ -242,7 +256,7 @@ router.post('/channels/import', async (req, res, next) => {
 // =============================================================================
 router.post('/channels/import-all', async (req, res, next) => {
     try {
-        const { channel } = req.body
+        const { channel, force = false } = req.body
 
         if (!channel) {
             return res.status(400).json({
@@ -278,6 +292,19 @@ router.post('/channels/import-all', async (req, res, next) => {
                 error: 'Channel Info Failed',
                 message: 'Failed to fetch channel information',
                 details: error.message
+            })
+        }
+
+        // Content Sourcing Policy: reject channels younger than the minimum age
+        // (a brand-new account is the classic reupload/piracy signature). Pass
+        // force:true to override deliberately.
+        const sourcing = evaluateChannelSourcing(channelInfo)
+        if (!sourcing.eligible && !force) {
+            return res.status(422).json({
+                success: false,
+                error: 'Sourcing Policy',
+                message: `Channel excluded by content sourcing policy: ${sourcing.reasons.join('; ')}. Established channels only (min ${SOURCING_MIN_AGE_DAYS} days old). Pass force:true to override.`,
+                data: sourcing
             })
         }
 
@@ -3286,6 +3313,45 @@ router.post('/maintenance/rename-series', async (req, res, next) => {
         const { data, error } = await supabase.from('tv_series').update(upd).eq('id', seriesId).select('id, title, tmdb_id')
         if (error) throw error
         res.json({ success: true, data: data?.[0] || null })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// GET /api/admin/maintenance/channel-sourcing-audit
+// Verify every source channel complies with the Content Sourcing Policy (min age).
+// Fetches each channel's live info from YouTube (1 quota unit per channel), so the
+// compliance report reflects current reality — this is the automated audit we can
+// show to demonstrate the policy is enforced, not merely stated.
+router.get('/maintenance/channel-sourcing-audit', async (req, res, next) => {
+    try {
+        const { data: channels } = await supabase.from('channels').select('id, title')
+        const results = []
+        for (const ch of channels || []) {
+            try {
+                const info = await youtubeService.getChannelInfo(ch.id)
+                const s = evaluateChannelSourcing(info)
+                results.push({
+                    id: ch.id, title: ch.title,
+                    ageDays: s.ageDays, ageYears: s.ageYears, eligible: s.eligible,
+                    subscriberCount: s.subscriberCount, videoCount: s.videoCount,
+                    reasons: s.reasons
+                })
+            } catch (e) {
+                results.push({ id: ch.id, title: ch.title, error: e.message })
+            }
+        }
+        res.json({
+            success: true,
+            data: {
+                minAgeDays: SOURCING_MIN_AGE_DAYS,
+                total: results.length,
+                compliant: results.filter(r => r.eligible === true).length,
+                violations: results.filter(r => r.eligible === false),
+                errors: results.filter(r => r.error),
+                channels: results.sort((a, b) => (a.ageDays ?? Infinity) - (b.ageDays ?? Infinity))
+            }
+        })
     } catch (error) {
         next(error)
     }
