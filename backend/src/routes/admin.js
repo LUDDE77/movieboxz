@@ -3326,28 +3326,39 @@ router.post('/maintenance/rename-series', async (req, res, next) => {
 router.get('/maintenance/channel-sourcing-audit', async (req, res, next) => {
     try {
         const { data: channels } = await supabase.from('channels').select('id, title')
+        // Count LIVE (published + available) movies per channel — a channel whose
+        // content is hidden/unpublished surfaces nothing, so it is not a live source.
+        const { data: liveRows } = await supabase.from('movies').select('channel_id').or('is_available.is.null,is_available.eq.true')
+        const liveByChannel = {}
+        for (const r of liveRows || []) liveByChannel[r.channel_id] = (liveByChannel[r.channel_id] || 0) + 1
+
         const results = []
         for (const ch of channels || []) {
+            const liveMovieCount = liveByChannel[ch.id] || 0
             try {
                 const info = await youtubeService.getChannelInfo(ch.id)
                 const s = evaluateChannelSourcing(info)
                 results.push({
-                    id: ch.id, title: ch.title,
+                    id: ch.id, title: ch.title, liveMovieCount,
                     ageDays: s.ageDays, ageYears: s.ageYears, eligible: s.eligible,
                     subscriberCount: s.subscriberCount, videoCount: s.videoCount,
                     reasons: s.reasons
                 })
             } catch (e) {
-                results.push({ id: ch.id, title: ch.title, error: e.message })
+                results.push({ id: ch.id, title: ch.title, liveMovieCount, error: e.message })
             }
         }
+        // A *live* violation is a channel that is both under-age AND surfacing content.
+        const liveViolations = results.filter(r => r.eligible === false && r.liveMovieCount > 0)
         res.json({
             success: true,
             data: {
                 minAgeDays: SOURCING_MIN_AGE_DAYS,
                 total: results.length,
-                compliant: results.filter(r => r.eligible === true).length,
-                violations: results.filter(r => r.eligible === false),
+                liveSourceChannels: results.filter(r => r.liveMovieCount > 0).length,
+                compliantLiveSources: results.filter(r => r.eligible === true && r.liveMovieCount > 0).length,
+                liveViolations,
+                underAgeButNotLive: results.filter(r => r.eligible === false && r.liveMovieCount === 0),
                 errors: results.filter(r => r.error),
                 channels: results.sort((a, b) => (a.ageDays ?? Infinity) - (b.ageDays ?? Infinity))
             }
