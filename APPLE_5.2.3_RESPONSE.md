@@ -90,10 +90,13 @@ Source and license — TMDB (The Movie Database):
 - TMDB grants API users a "worldwide, non-exclusive" license to use TMDB's content
   and metadata (images and text) under the TMDB API Terms of Use:
   https://www.themoviedb.org/api-terms-of-use
+- TMDB confirms this on its developer FAQ: "The TMDB API is free to use for
+  non-commercial purposes as long as you attribute TMDB as the source of the data
+  and/or images." (https://developer.themoviedb.org/docs/faq)
 - MovieBoxZ operates within that license: it is a free application (no fees, no
   purchases), and it displays the required TMDB attribution in-app — "This product
   uses the TMDB API but is not endorsed or certified by TMDB."
-- TMDB API documentation: https://developer.themoviedb.org/docs
+- TMDB API documentation: https://developer.themoviedb.org/docs/getting-started
 
 Ratings — OMDb:
 - Ratings are retrieved via the OMDb API under its terms (https://www.omdbapi.com/).
