@@ -3355,6 +3355,8 @@ router.get('/usage', async (req, res, next) => {
             data: {
                 days, since,
                 totalAppOpens: opens.reduce((a, r) => a + n(r.cnt), 0),
+                totalMovieOpens: rows.filter(r => r.event === 'movie_view').reduce((a, r) => a + n(r.cnt), 0),
+                totalSeriesOpens: rows.filter(r => r.event === 'series_view').reduce((a, r) => a + n(r.cnt), 0),
                 appOpensByDay,
                 byPlatform,
                 byCountry: Object.fromEntries(Object.entries(byCountry).sort((a, b) => b[1] - a[1])),
