@@ -3318,6 +3318,57 @@ router.post('/maintenance/rename-series', async (req, res, next) => {
     }
 })
 
+// GET /api/admin/usage?days=7
+// Read the privacy-safe aggregate usage counters: app opens (by day/platform/country),
+// top viewed movies and series (with titles), and top searches.
+router.get('/usage', async (req, res, next) => {
+    try {
+        const days = Math.min(parseInt(req.query.days) || 7, 90)
+        const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+        const { data, error } = await supabase.from('usage_daily').select('*').gte('day', since)
+        if (error) throw error
+        const rows = data || []
+        const n = (x) => Number(x) || 0
+
+        const opens = rows.filter(r => r.event === 'app_open')
+        const appOpensByDay = {}, byPlatform = {}, byCountry = {}
+        for (const r of opens) {
+            appOpensByDay[r.day] = (appOpensByDay[r.day] || 0) + n(r.cnt)
+            byPlatform[r.platform] = (byPlatform[r.platform] || 0) + n(r.cnt)
+            if (r.country) byCountry[r.country] = (byCountry[r.country] || 0) + n(r.cnt)
+        }
+        const topByEvent = (event) => {
+            const m = {}
+            for (const r of rows.filter(r => r.event === event && r.ref_id)) m[r.ref_id] = (m[r.ref_id] || 0) + n(r.cnt)
+            return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 20)
+        }
+        const topMovies = topByEvent('movie_view'), topSeries = topByEvent('series_view'), topSearch = topByEvent('search')
+
+        const mids = topMovies.map(x => x[0]), sids = topSeries.map(x => x[0])
+        const { data: mv } = mids.length ? await supabase.from('movies').select('id, title').in('id', mids) : { data: [] }
+        const { data: sv } = sids.length ? await supabase.from('tv_series').select('id, title').in('id', sids) : { data: [] }
+        const mt = Object.fromEntries((mv || []).map(m => [m.id, m.title]))
+        const st = Object.fromEntries((sv || []).map(s => [s.id, s.title]))
+
+        res.json({
+            success: true,
+            data: {
+                days, since,
+                totalAppOpens: opens.reduce((a, r) => a + n(r.cnt), 0),
+                appOpensByDay,
+                byPlatform,
+                byCountry: Object.fromEntries(Object.entries(byCountry).sort((a, b) => b[1] - a[1])),
+                totalSearches: rows.filter(r => r.event === 'search').reduce((a, r) => a + n(r.cnt), 0),
+                topMovies: topMovies.map(([id, c]) => ({ id, title: mt[id] || id, views: c })),
+                topSeries: topSeries.map(([id, c]) => ({ id, title: st[id] || id, views: c })),
+                topSearches: topSearch.map(([term, c]) => ({ term, count: c }))
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // GET /api/admin/maintenance/channel-sourcing-audit
 // Verify every source channel complies with the Content Sourcing Policy (min age).
 // Fetches each channel's live info from YouTube (1 quota unit per channel), so the

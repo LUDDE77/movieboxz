@@ -31,6 +31,7 @@ import genresAdminRouter from './routes/genresAdmin.js'
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js'
 import { requestLogger } from './middleware/requestLogger.js'
+import { usageTracker, startUsageFlusher } from './middleware/usageTracker.js'
 import { corsConfig } from './config/cors.js'
 
 // Import services
@@ -63,6 +64,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 // Logging (single structured request logger — morgan removed to avoid duplicate log lines)
 app.use(requestLogger)
+app.use(usageTracker) // privacy-safe aggregate usage counts (no personal data)
 
 // Rate limiting.
 // Requests carrying the CORRECT admin key are exempt — admin automation (bulk
@@ -203,6 +205,9 @@ const server = app.listen(port, () => {
     } catch (error) {
         logger.error('Zombie import sweep failed at boot:', error)
     }
+
+    // Flush aggregate usage counters to the DB every 60s
+    startUsageFlusher()
 
     // Initialize cron jobs in production
     if (process.env.NODE_ENV === 'production') {
