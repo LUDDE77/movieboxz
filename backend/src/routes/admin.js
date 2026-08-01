@@ -3376,7 +3376,10 @@ router.get('/usage', async (req, res, next) => {
 router.get('/live-probe', async (req, res, next) => {
     try {
         const channel = req.query.channel || '@warnerbrosentertainment'
-        const d = await youtubeService.getChannelLiveStreams(channel)
+        const events = req.query.events
+            ? req.query.events.split(',').map(s => s.trim()).filter(Boolean)
+            : ['live', 'upcoming', 'completed']
+        const d = await youtubeService.getChannelLiveStreams(channel, events)
         res.json({
             success: true,
             data: {
