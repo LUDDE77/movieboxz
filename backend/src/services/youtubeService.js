@@ -298,26 +298,29 @@ class YouTubeService {
      * @returns {Promise<Array>} Array of video objects. A boolean `.truncated` property is attached to the array indicating the fetch stopped at the safety cap while more videos remained.
      */
     // Probe a channel's live/upcoming/recently-completed streams (works for ANY
-    // channel, unlike liveBroadcasts.list which is owner-only). ~3 quota units:
-    // channels.list + playlistItems.list + videos.list(liveStreamingDetails).
-    async getChannelLiveStreams(channelIdOrHandle, maxScan = 50) {
+    // channel, unlike liveBroadcasts.list which is owner-only). Streams live on the
+    // channel's /streams tab, which is only reachable via search.list + eventType
+    // (100 units EACH). We fetch the requested event types then hydrate details with
+    // one cheap videos.list(liveStreamingDetails) call.
+    async getChannelLiveStreams(channelIdOrHandle, eventTypes = ['live', 'upcoming', 'completed']) {
         const channelId = await this.resolveChannelIdentifier(channelIdOrHandle)
-        this.ensureQuota(1)
-        const ch = await this.youtube.channels.list({ part: ['contentDetails', 'snippet'], id: [channelId] })
-        this.updateQuotaUsage(1)
-        if (!ch.data.items?.length) throw new Error(`Channel not found: ${channelIdOrHandle}`)
-        const title = ch.data.items[0].snippet.title
-        const uploads = ch.data.items[0].contentDetails.relatedPlaylists.uploads
-
-        this.ensureQuota(1)
-        const pl = await this.youtube.playlistItems.list({ part: ['contentDetails'], playlistId: uploads, maxResults: Math.min(maxScan, 50) })
-        this.updateQuotaUsage(1)
-        const ids = (pl.data.items || []).map(i => i.contentDetails.videoId)
-        if (!ids.length) return { channelId, title, scanned: 0, streams: [] }
+        let quota = 0
+        const idSet = new Set()
+        for (const eventType of eventTypes) {
+            this.ensureQuota(100)
+            const s = await this.youtube.search.list({
+                part: ['id'], channelId, type: ['video'], eventType,
+                order: eventType === 'completed' ? 'date' : undefined, maxResults: 20
+            })
+            this.updateQuotaUsage(100); quota += 100
+            for (const it of s.data.items || []) if (it.id?.videoId) idSet.add(it.id.videoId)
+        }
+        const ids = [...idSet]
+        if (!ids.length) return { channelId, quota, streams: [] }
 
         this.ensureQuota(1)
         const vids = await this.youtube.videos.list({ part: ['snippet', 'liveStreamingDetails', 'contentDetails', 'statistics'], id: ids })
-        this.updateQuotaUsage(1)
+        this.updateQuotaUsage(1); quota += 1
 
         const streams = []
         for (const v of vids.data.items || []) {
@@ -336,7 +339,8 @@ class YouTubeService {
                 watchUrl: `https://www.youtube.com/watch?v=${v.id}`
             })
         }
-        return { channelId, title, scanned: ids.length, streams }
+        const title = vids.data.items?.[0]?.snippet?.channelTitle || null
+        return { channelId, title, quota, streams }
     }
 
     async getChannelVideos(channelId, options = {}) {

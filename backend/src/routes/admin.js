@@ -3376,11 +3376,11 @@ router.get('/usage', async (req, res, next) => {
 router.get('/live-probe', async (req, res, next) => {
     try {
         const channel = req.query.channel || '@warnerbrosentertainment'
-        const d = await youtubeService.getChannelLiveStreams(channel, 50)
+        const d = await youtubeService.getChannelLiveStreams(channel)
         res.json({
             success: true,
             data: {
-                channel: d.title, channelId: d.channelId, scanned: d.scanned,
+                channel: d.title, channelId: d.channelId, quotaUsed: d.quota,
                 liveNow: d.streams.filter(s => s.state === 'live'),
                 upcoming: d.streams.filter(s => s.state === 'upcoming'),
                 recentCompleted: d.streams.filter(s => s.actualEnd).slice(0, 15),
