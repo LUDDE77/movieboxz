@@ -3371,6 +3371,27 @@ router.get('/usage', async (req, res, next) => {
     }
 })
 
+// GET /api/admin/live-probe?channel=@warnerbrosentertainment
+// Research: inspect a channel's live / upcoming / recently-completed streams.
+router.get('/live-probe', async (req, res, next) => {
+    try {
+        const channel = req.query.channel || '@warnerbrosentertainment'
+        const d = await youtubeService.getChannelLiveStreams(channel, 50)
+        res.json({
+            success: true,
+            data: {
+                channel: d.title, channelId: d.channelId, scanned: d.scanned,
+                liveNow: d.streams.filter(s => s.state === 'live'),
+                upcoming: d.streams.filter(s => s.state === 'upcoming'),
+                recentCompleted: d.streams.filter(s => s.actualEnd).slice(0, 15),
+                totalStreamsFound: d.streams.length
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // GET /api/admin/usage/hourly?days=2
 // App opens by hour-of-day (UTC), overall and per country — shows when each market
 // is active, for timing ad spend.

@@ -297,6 +297,48 @@ class YouTubeService {
      * @param {string|null} [options.publishedBefore=null]
      * @returns {Promise<Array>} Array of video objects. A boolean `.truncated` property is attached to the array indicating the fetch stopped at the safety cap while more videos remained.
      */
+    // Probe a channel's live/upcoming/recently-completed streams (works for ANY
+    // channel, unlike liveBroadcasts.list which is owner-only). ~3 quota units:
+    // channels.list + playlistItems.list + videos.list(liveStreamingDetails).
+    async getChannelLiveStreams(channelIdOrHandle, maxScan = 50) {
+        const channelId = await this.resolveChannelIdentifier(channelIdOrHandle)
+        this.ensureQuota(1)
+        const ch = await this.youtube.channels.list({ part: ['contentDetails', 'snippet'], id: [channelId] })
+        this.updateQuotaUsage(1)
+        if (!ch.data.items?.length) throw new Error(`Channel not found: ${channelIdOrHandle}`)
+        const title = ch.data.items[0].snippet.title
+        const uploads = ch.data.items[0].contentDetails.relatedPlaylists.uploads
+
+        this.ensureQuota(1)
+        const pl = await this.youtube.playlistItems.list({ part: ['contentDetails'], playlistId: uploads, maxResults: Math.min(maxScan, 50) })
+        this.updateQuotaUsage(1)
+        const ids = (pl.data.items || []).map(i => i.contentDetails.videoId)
+        if (!ids.length) return { channelId, title, scanned: 0, streams: [] }
+
+        this.ensureQuota(1)
+        const vids = await this.youtube.videos.list({ part: ['snippet', 'liveStreamingDetails', 'contentDetails', 'statistics'], id: ids })
+        this.updateQuotaUsage(1)
+
+        const streams = []
+        for (const v of vids.data.items || []) {
+            const lsd = v.liveStreamingDetails
+            const bc = v.snippet.liveBroadcastContent // 'live' | 'upcoming' | 'none'
+            if (!lsd && bc === 'none') continue // regular VOD, not a stream
+            streams.push({
+                videoId: v.id,
+                title: v.snippet.title,
+                state: bc === 'none' && lsd?.actualEndTime ? 'completed' : bc,
+                scheduledStart: lsd?.scheduledStartTime || null,
+                actualStart: lsd?.actualStartTime || null,
+                actualEnd: lsd?.actualEndTime || null,
+                concurrentViewers: lsd?.concurrentViewers ? parseInt(lsd.concurrentViewers) : null,
+                duration: v.contentDetails?.duration || null,
+                watchUrl: `https://www.youtube.com/watch?v=${v.id}`
+            })
+        }
+        return { channelId, title, scanned: ids.length, streams }
+    }
+
     async getChannelVideos(channelId, options = {}) {
         const startTime = Date.now()
 
