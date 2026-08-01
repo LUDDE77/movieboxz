@@ -35,6 +35,10 @@ function platformOf(ua = '') {
 }
 
 export function usageTracker(req, res, next) {
+    // Never count admin-tool or internal traffic: the consumer apps never send an
+    // admin key, so any request carrying one is the macOS Admin app (or a maintenance
+    // script) and must be excluded from consumer usage analytics.
+    if (req.headers['x-admin-api-key']) return next()
     try {
         const c = classify(req)
         if (c && bufferDaily.size < MAX_BUFFER_KEYS + 200) {
