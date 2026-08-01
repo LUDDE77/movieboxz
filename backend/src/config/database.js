@@ -58,6 +58,19 @@ export const testDatabaseConnection = async () => {
 
 // Common database operations
 export const dbOperations = {
+    // Relevance-ranked, fuzzy, multi-field search via the search_movies RPC
+    // (migration 039). Throws if the RPC isn't present — callers fall back.
+    async searchMovies(query, country = null, limit = 20, offset = 0) {
+        const { data, error } = await supabase.rpc('search_movies', {
+            p_query: query,
+            p_country: country,
+            p_limit: limit,
+            p_offset: offset
+        })
+        if (error) throw error
+        return data || []
+    },
+
     // Movies
     async getMovies(filters = {}, limit = 20, offset = 0) {
         let query = supabase

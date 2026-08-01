@@ -454,36 +454,39 @@ router.get('/search', validateRequest(movieQuerySchema), async (req, res, next) 
 
         logger.info(`Searching movies: "${q}", category: ${category}, year: ${year}`)
 
-        const filters = {
-            search: q,
-            country: userCountry(req)
-        }
+        const country = userCountry(req)
 
-        if (category) {
-            filters.category = category
+        // Relevance-ranked, fuzzy, multi-field search (migration 039). If the RPC
+        // isn't present or errors, fall back to the legacy full-text search so
+        // search never breaks.
+        let movies
+        let usedSmart = true
+        try {
+            movies = await dbOperations.searchMovies(q, country, limit, offset)
+        } catch (rpcError) {
+            usedSmart = false
+            logger.warn(`smart search unavailable, falling back: ${rpcError.message}`)
+            const filters = { search: q, country }
+            if (category) filters.category = category
+            const result = await dbOperations.getMovies(filters, limit, offset)
+            movies = result.movies
         }
-
-        // For year filtering, we'd need to add this to the database query
-        // This is a simplified version
-        const result = await dbOperations.getMovies(filters, limit, offset)
 
         res.json({
             success: true,
             data: {
-                movies: result.movies,
+                movies,
                 pagination: {
                     page: parseInt(page),
                     limit: parseInt(limit),
-                    total: result.total,
-                    pages: Math.ceil(result.total / limit)
+                    // Ranked search returns a page at a time; report a running total
+                    // so "load more" works without a second count query.
+                    total: offset + movies.length + (movies.length === limit ? limit : 0),
+                    pages: Math.ceil((offset + movies.length) / limit) + (movies.length === limit ? 1 : 0)
                 },
-                query: {
-                    search: q,
-                    category,
-                    year
-                }
+                query: { search: q, category, year, mode: usedSmart ? 'smart' : 'legacy' }
             },
-            message: `Found ${result.movies.length} movies for "${q}"`
+            message: `Found ${movies.length} movies for "${q}"`
         })
     } catch (error) {
         next(error)
