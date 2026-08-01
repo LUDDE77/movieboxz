@@ -3371,6 +3371,29 @@ router.get('/usage', async (req, res, next) => {
     }
 })
 
+// GET /api/admin/usage/hourly?days=2
+// App opens by hour-of-day (UTC), overall and per country — shows when each market
+// is active, for timing ad spend.
+router.get('/usage/hourly', async (req, res, next) => {
+    try {
+        const days = Math.min(parseInt(req.query.days) || 2, 14)
+        const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+        const { data, error } = await supabase.from('usage_hourly').select('*').gte('day', since).eq('event', 'app_open')
+        if (error) throw error
+        const n = (x) => Number(x) || 0
+        const byHour = {}, byHourCountry = {}
+        for (const r of data || []) {
+            byHour[r.hour] = (byHour[r.hour] || 0) + n(r.cnt)
+            const cc = r.country || '??'
+            byHourCountry[cc] = byHourCountry[cc] || {}
+            byHourCountry[cc][r.hour] = (byHourCountry[cc][r.hour] || 0) + n(r.cnt)
+        }
+        res.json({ success: true, data: { note: 'hours are UTC (0-23)', days, since, byHour, byHourCountry } })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // GET /api/admin/maintenance/channel-sourcing-audit
 // Verify every source channel complies with the Content Sourcing Policy (min age).
 // Fetches each channel's live info from YouTube (1 quota unit per channel), so the
