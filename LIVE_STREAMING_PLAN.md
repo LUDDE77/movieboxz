@@ -6,6 +6,13 @@ MST3K, etc.), designed to pass App Review and deliver strong functionality.
 
 _Draft — August 2026._
 
+> **STATUS: SHELVED (Aug 2026).** On review, the live "movie" streams are mostly
+> **compilations / clip reels, not full films** (e.g. WB's LOTR & Harry Potter
+> "compilation" streams, MST3K's own show) — low value for users. The one worthwhile
+> category is **kids/animation full-episode 24/7 streams** (Marvel HQ: Ultimate
+> Spider-Man 472 viewers, etc.). **Revisit for the Kids experience only**, later. The
+> `live-probe` admin tool (`/api/admin/live-probe`) stays in place for future scans.
+
 ---
 
 ## 1. The concept
