@@ -8,7 +8,7 @@ import { logger } from '../utils/logger.js'
 
 const bufferDaily = new Map()  // "day|event|platform|country|ref" -> count
 const bufferHourly = new Map() // "day|hour|event|country" -> count   (coarser, for time-of-day)
-const SEP = ''
+const SEP = String.fromCharCode(31) // unit separator — safe delimiter, never in the data
 const MAX_BUFFER_KEYS = 5000
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
