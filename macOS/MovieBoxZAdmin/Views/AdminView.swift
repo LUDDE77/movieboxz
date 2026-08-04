@@ -8,9 +8,12 @@ struct AdminView: View {
     @State private var isLoadingStats = false
     @State private var statsError: String?
     @State private var selectedTab = 0
+    // Force the sidebar visible on every launch so a collapsed state can't get
+    // "stuck" (macOS otherwise persists a collapsed sidebar and only the detail shows).
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $selectedTab) {
                 Label("Dashboard", systemImage: "chart.bar.fill")
                     .tag(0)
