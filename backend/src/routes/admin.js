@@ -2698,6 +2698,11 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             // plus actor-name segments FilmRise embeds in the title
             // ("NICOLAS CAGE | Grand Isle | FULL MOVIE").
             const desc = m.description || ''
+            // Some channels re-title the video with clickbait but state the real
+            // title in the description ("Original Title : As Dreamers Do"). Trust
+            // that as the strongest title candidate.
+            const otm = desc.match(/original\s*title\s*[:\-]\s*([^\n|]+?)(?:\s{2,}|\s*(?:genre|cast|starring|director|year|runtime)\s*[:\-]|$)/i)
+            const originalTitle = otm ? otm[1].trim().replace(/[.,;]+$/, '') : null
             const castSet = new Set()
             const isName = (n) => /^[A-Z][a-z]+(\s+[A-Z][a-z.'’-]+){1,2}$/.test(n)
             for (const mm of desc.matchAll(/\(([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,2})\)/g)) castSet.add(mm[1])
@@ -2715,6 +2720,7 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
             const GENRE = /^(crime|thriller|horror|drama|comedy|action|sci-?fi|science fiction|romance|romantic|mystery|documentary|western|fantasy|adventure|psychological|historical|zombie|slasher|cult(\s+horror)?|inspiring.*|creature feature|unexplained ufos|.*adaptation|ghost story|murder mystery|all-new.*|based on.*|a heartwarming.*|sweet second.*|new movie|q&a.*|update of a classic)$/i
             const stripJunk = (s) => s
                 .replace(/\s*\/\/.*$/, '')
+                .replace(/^\s*(?:free\s+)?(?:full\s+)?movie\s*[-:]\s*/i, '')   // leading "free movie - " / "movie: " prefix (Drama/Crime Coded)
                 .replace(/^[A-Z][A-Z0-9 '’.]*[!?]\s+/, '')                    // leading shout "EPIC TRUE CRIME DOC! ", "AMAZING CAST! "
                 .replace(/\((?:free\s+)?(?:full|complete)[^)]*\)/ig, '')     // "(Full Movie)" / "(Free Full Movie)" tag
                 .replace(/\b(free\s+)?(full|complete)\s+(\w+\s+)?(movie|film|episode|documentary|special)\b.*$/i, '')
@@ -2747,7 +2753,8 @@ router.post('/maintenance/enrich-from-description', async (req, res, next) => {
                 const c = stripJunk(seg)
                 if (c && !GENRE.test(c)) cand.push(c)
             }
-            const candTitles = [...new Set(cand.filter(Boolean))].slice(0, 3)
+            // Original Title (from the description) is the strongest signal — try it first.
+            const candTitles = [...new Set([originalTitle, ...cand].filter(Boolean))].slice(0, 3)
             const castNames = [...castSet].slice(0, 8)
             const castNorm = castNames.map(norm)
 
