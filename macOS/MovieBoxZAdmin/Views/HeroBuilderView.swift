@@ -182,7 +182,7 @@ private struct HeroImagePickerSheet: View {
 
             if isLoading {
                 Spacer()
-                ProgressView("Loading images from TMDB…").frame(maxWidth: .infinity)
+                ProgressView("Loading images from TMDB & other channels…").frame(maxWidth: .infinity)
                 Spacer()
             } else if let errorMessage {
                 Spacer()
@@ -191,8 +191,9 @@ private struct HeroImagePickerSheet: View {
             } else if let data {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        section("Backdrops (recommended)", data.candidates.filter { $0.isLandscape })
-                        section("Posters", data.candidates.filter { !$0.isLandscape })
+                        section("From other channels", data.candidates.filter { $0.source == "channel" })
+                        section("Backdrops (recommended)", data.candidates.filter { $0.source != "channel" && $0.isLandscape })
+                        section("Posters", data.candidates.filter { $0.source != "channel" && !$0.isLandscape })
                     }
                     .padding()
                 }
@@ -259,6 +260,9 @@ private struct HeroImagePickerSheet: View {
     }
 
     private func sourceLabel(_ c: HeroCandidate) -> String {
+        if let ch = c.channel, !ch.isEmpty {
+            return "\(ch) · \(c.type)"
+        }
         switch c.source {
         case "tmdb": return "TMDB \(c.type)"
         case "current": return "Current \(c.type)"

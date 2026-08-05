@@ -313,8 +313,9 @@ struct HeroCandidatesData: Codable {
 
 struct HeroCandidate: Codable, Identifiable {
     let url: String
-    let type: String   // backdrop | poster | thumbnail
-    let source: String // tmdb | current | youtube
+    let type: String      // backdrop | poster | thumbnail
+    let source: String    // tmdb | current | youtube | channel
+    let channel: String?  // originating channel name (for source == "channel")
     var id: String { url }
     var imageURL: URL? { URL(string: url) }
     var isLandscape: Bool { type != "poster" }

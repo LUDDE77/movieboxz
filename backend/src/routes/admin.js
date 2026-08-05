@@ -2133,14 +2133,16 @@ router.get('/featured', async (req, res, next) => {
 })
 
 // GET /api/admin/movies/:id/hero-candidates — image options for the Hero Builder.
-// Returns TMDB alternates (multiple backdrops + posters) plus the movie's current
-// backdrop/poster and YouTube thumbnails, so an admin can pick the best hero image.
+// Returns TMDB alternates (multiple backdrops + posters), the movie's current
+// backdrop/poster and YouTube thumbnail, AND the poster/backdrop/thumbnail of every
+// duplicate copy of this movie on OTHER channels (matched by imdb_id/tmdb_id) — so an
+// admin can pick the best art, since different channels often have nicer custom images.
 router.get('/movies/:id/hero-candidates', async (req, res, next) => {
     try {
         const { id } = req.params
         const { data: movie, error } = await supabase
             .from('movies')
-            .select('id, title, tmdb_id, poster_path, backdrop_path, hero_image_url, youtube_video_id')
+            .select('id, title, tmdb_id, imdb_id, poster_path, backdrop_path, hero_image_url, youtube_video_id, channel_id, channels(title)')
             .eq('id', id)
             .single()
         if (error) throw error
@@ -2155,10 +2157,10 @@ router.get('/movies/:id/hero-candidates', async (req, res, next) => {
 
         const candidates = []
         const seen = new Set()
-        const add = (url, type, source) => {
+        const add = (url, type, source, channel = null) => {
             if (!url || seen.has(url)) return
             seen.add(url)
-            candidates.push({ url, type, source })
+            candidates.push({ url, type, source, channel })
         }
 
         // TMDB alternates first (usually several backdrops to choose from)
@@ -2170,10 +2172,38 @@ router.get('/movies/:id/hero-candidates', async (req, res, next) => {
         // The movie's current images
         add(toFull(movie.backdrop_path, 'w1280'), 'backdrop', 'current')
         add(toFull(movie.poster_path, 'w780'), 'poster', 'current')
-        // YouTube thumbnails (last resort)
+        // This movie's own YouTube thumbnails (last resort)
         if (movie.youtube_video_id) {
             add(`https://img.youtube.com/vi/${movie.youtube_video_id}/maxresdefault.jpg`, 'thumbnail', 'youtube')
             add(`https://img.youtube.com/vi/${movie.youtube_video_id}/hqdefault.jpg`, 'thumbnail', 'youtube')
+        }
+
+        // Duplicate copies on OTHER channels (same imdb_id or tmdb_id). Each channel's
+        // poster/backdrop/custom thumbnail becomes a candidate, labelled with the channel.
+        const orTerms = []
+        if (movie.imdb_id) orTerms.push(`imdb_id.eq.${movie.imdb_id}`)
+        if (movie.tmdb_id) orTerms.push(`tmdb_id.eq.${movie.tmdb_id}`)
+        let siblingCount = 0
+        if (orTerms.length > 0) {
+            const { data: siblings, error: sibErr } = await supabase
+                .from('movies')
+                .select('id, poster_path, backdrop_path, youtube_video_id, channels(title)')
+                .or(orTerms.join(','))
+                .neq('id', movie.id)
+                .limit(40)
+            if (sibErr) {
+                logger.warn(`[Hero Candidates] sibling lookup failed for ${id}: ${sibErr.message}`)
+            } else {
+                siblingCount = (siblings || []).length
+                for (const s of (siblings || [])) {
+                    const ch = s.channels?.title || 'Other channel'
+                    add(toFull(s.poster_path, 'w780'), 'poster', 'channel', ch)
+                    add(toFull(s.backdrop_path, 'w1280'), 'backdrop', 'channel', ch)
+                    if (s.youtube_video_id) {
+                        add(`https://img.youtube.com/vi/${s.youtube_video_id}/maxresdefault.jpg`, 'thumbnail', 'channel', ch)
+                    }
+                }
+            }
         }
 
         res.json({
@@ -2184,7 +2214,7 @@ router.get('/movies/:id/hero-candidates', async (req, res, next) => {
                 current: movie.hero_image_url || null,
                 candidates
             },
-            message: `${candidates.length} hero image candidates`
+            message: `${candidates.length} candidates (${siblingCount} copies on other channels)`
         })
     } catch (error) {
         next(error)
