@@ -3031,6 +3031,120 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/match-by-cast?dryRun=true&limit=30&offset=0
+// For UNMATCHED staged rows: search TMDB by the clean title, then REQUIRE a
+// Starring-cast overlap to accept the match. This finds films whose messy titles
+// broke normal enrichment (e.g. "Amanda and The Fox FULL MOVIE aka The Amazing
+// Fox") and rejects genre/channel tags ("Romance Movies") that have no real cast.
+router.post('/maintenance/match-by-cast', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { channelId } = req.body || {}
+        if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
+        const limit = Math.min(parseInt(req.query.limit) || 30, 40)
+        const offset = parseInt(req.query.offset) || 0
+
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const isName = (n) => /^[A-Z][a-z]+(\.?\s+[A-Z][a-z.'’-]+){1,2}$/.test(n)
+
+        const baseFilter = (q) => q
+            .eq('channel_id', channelId)
+            .not('is_tv_series', 'is', true)
+            .is('tmdb_id', null)
+            .eq('approval_status', 'pending')
+
+        const { count: total } = await baseFilter(
+            supabase.from('staged_movies').select('id', { count: 'exact', head: true }))
+        const { data: movies, error } = await baseFilter(
+            supabase.from('staged_movies')
+                .select('id, title, youtube_video_title, youtube_description, description'))
+            .order('id', { ascending: true })
+            .range(offset, offset + limit - 1)
+        if (error) throw error
+
+        // Clean title candidates from the video title: the film name sits before
+        // "FULL MOVIE(S)" / the first pipe; "aka <alt>" gives a second candidate.
+        const titleCandidates = (yt) => {
+            let t = (yt || '').split(/\bfull\s+movies?\b/i)[0].split('|')[0]
+            let primary = t, alt = null
+            const aka = t.match(/^(.*?)\s+aka\s+(.*)$/i)
+            if (aka) { primary = aka[1]; alt = aka[2] }
+            const clean = (s) => (s || '').replace(/["“”]/g, '').replace(/\((?:19|20)\d{2}\)/g, '').replace(/\s+/g, ' ').trim()
+            return [...new Set([clean(primary), clean(alt)].filter(Boolean))].slice(0, 2)
+        }
+        // Starring names from the description (+ parenthesised names).
+        const castOf = (desc, yt) => {
+            const set = new Set()
+            const sm = (desc || '').match(/\b(?:starring|stars?|cast)\b\s*[-:]?\s*([^\n]+)/i)
+            if (sm) {
+                let seg = sm[1].split(/\b(?:check out|watch|also known as|subscribe|directed|set in|\bas seen\b)/i)[0]
+                for (const raw of seg.split(/,|&|\band\b/)) {
+                    const nm = raw.replace(/\([^)]*\)/g, '').replace(/^[-–\s]+/, '').trim()
+                    if (isName(nm)) set.add(nm)
+                }
+            }
+            for (const mm of (desc || '').matchAll(/\(([A-Z][a-z]+\s+[A-Z][a-z.'’-]+)\)/g)) set.add(mm[1])
+            // name-only segments in the video title ("… | Teryl Rothery | …")
+            for (const seg of (yt || '').split('|')) { const s = seg.trim(); if (isName(s)) set.add(s) }
+            return [...set].slice(0, 10)
+        }
+
+        let matched = 0, approvedN = 0, noMatch = 0
+        const results = []
+        for (const m of movies) {
+            const cands = titleCandidates(m.youtube_video_title)
+            const cast = castOf(m.youtube_description || m.description, m.youtube_video_title)
+            const castNorm = cast.map(norm)
+            let best = null, bestOv = 0
+            if (castNorm.length) {
+                for (const ct of cands) {
+                    const hits = await tmdbService.searchMovies(ct).catch(() => [])
+                    for (const c of (hits || []).slice(0, 6)) {
+                        const det = await tmdbService.getMovieDetails(c.id).catch(() => null)
+                        if (!det) continue
+                        const tcast = new Set((det.credits?.cast || []).slice(0, 25).map(p => norm(p.name)))
+                        const ov = castNorm.filter(n => tcast.has(n)).length
+                        if (ov > bestOv) { bestOv = ov; best = { det, ov, ct } }
+                    }
+                }
+            }
+            if (best && bestOv >= 1 && best.det.poster_path) {
+                matched++
+                const conf = Math.min(60 + bestOv * 15, 99)
+                let didApprove = false
+                if (!dryRun) {
+                    const castStr = (best.det.credits?.cast || []).slice(0, 6).map(p => p.name).join(', ') || cast.join(', ')
+                    const { error: e } = await supabase.from('staged_movies').update({
+                        title: best.det.title, tmdb_id: best.det.id, imdb_id: best.det.imdb_id || null,
+                        poster_path: best.det.poster_path, backdrop_path: best.det.backdrop_path || null,
+                        description: best.det.overview || m.description, release_date: best.det.release_date || null,
+                        vote_average: best.det.vote_average ?? null, actors: castStr,
+                        enrichment_source: 'tmdb_cast', enrichment_confidence: conf,
+                        approval_status: 'approved', approved_at: new Date().toISOString(), approved_by: 'cast-match',
+                        enriched_at: new Date().toISOString(), updated_at: new Date().toISOString()
+                    }).eq('id', m.id)
+                    if (!e) { approvedN++; didApprove = true }
+                }
+                results.push({ title: cands[0], cast: cast.slice(0, 3), matched: `${best.det.title} (${(best.det.release_date || '').slice(0, 4)})`, castOverlap: bestOv, approved: didApprove })
+            } else {
+                noMatch++
+                results.push({ title: cands[0], cast: cast.slice(0, 3), matched: null })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun, total, offset, limit, batchSize: movies.length, nextOffset: offset + movies.length,
+                done: offset + movies.length >= (total || 0),
+                matched, approved: approvedN, noMatch, results
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/make-series?dryRun=true
 // Convert a set of PRODUCTION movies into a TV series: create/find the tv_series
 // (art from TMDB TV search, else the first member's art) and set is_tv_series +
