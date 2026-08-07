@@ -2951,14 +2951,18 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
                     }
                     results.push({ title: cleanTitle, verdict: 'corrected', fromYear: curYear, toYear: descYear, matched: `${best.det.title} (${(best.det.release_date || '').slice(0, 4)})`, castOverlap: best.overlap, approved: didApprove })
                 } else {
+                    // Year contradicts but no confident re-match. The current match may
+                    // still be right (the description year can be a mis-read/AKA/re-release),
+                    // so DON'T wipe it — just leave it in review (never auto-approved) and
+                    // flag it for a human. Non-destructive on purpose.
                     flagged++
                     if (!dryRun) {
                         await supabase.from('staged_movies').update({
-                            tmdb_id: null, imdb_id: null, poster_path: null, backdrop_path: null, release_date: null,
-                            enrichment_source: null, enrichment_confidence: null, updated_at: new Date().toISOString()
+                            notes: `desc-verify: match year ${curYear} vs description year ${descYear} — needs review`,
+                            updated_at: new Date().toISOString()
                         }).eq('id', m.id)
                     }
-                    results.push({ title: cleanTitle, verdict: 'flagged-wrong', curYear, descYear })
+                    results.push({ title: cleanTitle, verdict: 'flagged-review', curYear, descYear })
                 }
             } else {
                 unknown++
