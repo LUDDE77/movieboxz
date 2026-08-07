@@ -2888,6 +2888,13 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
             const py = desc.match(/\((19\d{2}|20[0-2]\d)\)/)
             if (rd) descYear = parseInt(rd[1], 10)
             else if (py) descYear = parseInt(py[1], 10)
+            // Fall back to a year in the VIDEO TITLE ("… (1972) …") when the
+            // description has none — catches title-year vs match-year mismatches
+            // (e.g. "R.O.T.O.R. (1987)" wrongly matched to a 2013 film).
+            if (!descYear) {
+                const ty = (m.youtube_video_title || '').match(/\((19\d{2}|20[0-2]\d)\)/)
+                if (ty) descYear = parseInt(ty[1], 10)
+            }
 
             // Cast candidates from BOTH the title segments and the WHOLE description.
             // Because confirmation requires an overlap with the match's real TMDB cast,
