@@ -2876,7 +2876,7 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
             .range(offset, offset + limit - 1)
         if (error) throw error
 
-        let confirmed = 0, corrected = 0, flagged = 0, unknown = 0, approved = 0
+        let confirmed = 0, confirmedCast = 0, corrected = 0, flagged = 0, unknown = 0, approved = 0
         const results = []
         for (const m of movies) {
             if (m.manually_verified) { unknown++; continue }
@@ -2889,21 +2889,32 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
             if (rd) descYear = parseInt(rd[1], 10)
             else if (py) descYear = parseInt(py[1], 10)
 
-            // Description/title cast ("Stars: A, B, C" and name-only title segments).
+            // Cast from the description ("Stars: A, B, C") and the title segments
+            // ("… | Eric Roberts | …", "Ray Milland-Ginger Rogers"). One shared harvester
+            // that splits on |, commas, &, "and", and dash-joined name lists.
             const castSet = new Set()
+            const harvest = (text) => {
+                for (let chunk of (text || '').split(/[|,&\/]|\band\b/i)) {
+                    chunk = chunk.replace(/\([^)]*\)/g, '').trim()
+                    if (isName(chunk)) { castSet.add(chunk); continue }
+                    if (chunk.includes('-')) {
+                        const parts = chunk.split(/\s*-\s*/).map(p => p.trim())
+                        if (parts.length >= 2 && parts.every(p => isName(p))) parts.forEach(p => castSet.add(p))
+                    }
+                }
+            }
             const stars = desc.match(/\b(?:stars?|starring|cast)\s*[:\-]?\s*([^\n|]+)/i)
-            if (stars) for (const raw of stars[1].split(/,|\band\b|&/)) { const n = raw.replace(/\([^)]*\)/g, '').trim(); if (isName(n)) castSet.add(n) }
-            for (const seg of (m.youtube_video_title || '').split('|')) { const s = seg.trim(); if (isName(s)) castSet.add(s) }
-            const descCast = [...castSet].slice(0, 8)
+            if (stars) harvest(stars[1])
+            harvest(m.youtube_video_title || '')
+            const descCast = [...castSet].slice(0, 10)
             const descCastNorm = descCast.map(norm)
 
             const curYear = m.release_date ? parseInt(String(m.release_date).slice(0, 4), 10) : null
             const cleanTitle = m.title || ''
 
-            if (!descYear || !curYear) { unknown++; results.push({ title: cleanTitle, verdict: 'unknown', descYear, curYear }); continue }
-            const gap = Math.abs(descYear - curYear)
+            const gap = (descYear && curYear) ? Math.abs(descYear - curYear) : null
 
-            if (gap <= 1) {
+            if (gap !== null && gap <= 1) {
                 confirmed++
                 let didApprove = false
                 if (!dryRun) {
@@ -2916,7 +2927,7 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
                     if (!e) { approved++; didApprove = true }
                 }
                 results.push({ title: cleanTitle, verdict: 'confirmed', descYear, curYear, approved: didApprove })
-            } else if (gap >= 3) {
+            } else if (gap !== null && gap >= 3) {
                 // Re-search TMDB with the description's real year, score by cast + year + title.
                 let best = null, bestScore = -1
                 const cands = await tmdbService.searchMovies(cleanTitle, descYear).catch(() => [])
@@ -2965,8 +2976,34 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
                     results.push({ title: cleanTitle, verdict: 'flagged-review', curYear, descYear })
                 }
             } else {
-                unknown++
-                results.push({ title: cleanTitle, verdict: 'uncertain', gap, descYear, curYear })
+                // No decisive year (description had no year, or it's off by exactly 2).
+                // Fall back to CAST: fetch the current match's TMDB cast and, if at least
+                // one description/title actor is in it, treat the title match as confirmed.
+                let overlap = 0
+                if (descCast.length) {
+                    const det = await tmdbService.getMovieDetails(m.tmdb_id).catch(() => null)
+                    if (det) {
+                        const tcast = new Set((det.credits?.cast || []).slice(0, 20).map(p => norm(p.name)))
+                        overlap = descCastNorm.filter(n => tcast.has(n)).length
+                    }
+                }
+                if (overlap >= 1) {
+                    confirmedCast++
+                    let didApprove = false
+                    if (!dryRun) {
+                        const upd = {
+                            approval_status: 'approved', approved_at: new Date().toISOString(), approved_by: 'desc-verify-cast',
+                            enrichment_confidence: Math.max(m.enrichment_confidence || 0, 75), updated_at: new Date().toISOString()
+                        }
+                        if (!m.actors && descCast.length) upd.actors = descCast.join(', ')
+                        const { error: e } = await supabase.from('staged_movies').update(upd).eq('id', m.id)
+                        if (!e) { approved++; didApprove = true }
+                    }
+                    results.push({ title: cleanTitle, verdict: 'confirmed-cast', castOverlap: overlap, cast: descCast.slice(0, 3), approved: didApprove })
+                } else {
+                    unknown++
+                    results.push({ title: cleanTitle, verdict: 'unknown', descYear, curYear, hadCast: descCast.length })
+                }
             }
         }
 
@@ -2975,7 +3012,7 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
             data: {
                 dryRun, total, offset, limit, batchSize: movies.length, nextOffset: offset + movies.length,
                 done: offset + movies.length >= (total || 0),
-                confirmed, corrected, flagged, unknown, approved, results
+                confirmed, confirmedCast, corrected, flagged, unknown, approved, results
             }
         })
     } catch (error) {
