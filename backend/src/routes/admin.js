@@ -3187,7 +3187,9 @@ router.post('/maintenance/cast-recheck', async (req, res, next) => {
 
         const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
         const TAG = /\b(movies?|thriller|drama|comedy|romance|romantic|horror|action|christmas|hallmark|lifetime|family|adventure|mystery|fantasy|western|sci-?fi|holiday|faith|film)\b/i
-        const isName = (n) => /^[A-Z][a-z]+(\.?\s+[A-Z][a-z.'’-]+){1,2}$/.test(n) && !TAG.test(n)
+        // Distributor / studio / channel words that pass the name shape but aren't actors.
+        const DISTRIB = /\b(vault|films?|productions?|communications?|pictures?|company|entertainment|media|studios?|releasing|video|presents|channel|network|cinema|classics|collection|republic|roach|parker)\b/i
+        const isName = (n) => /^[A-Z][a-z]+(\.?\s+[A-Z][a-z.'’-]+){1,2}$/.test(n) && !TAG.test(n) && !DISTRIB.test(n)
 
         const baseFilter = (q) => q
             .eq('channel_id', channelId)
@@ -3207,15 +3209,18 @@ router.post('/maintenance/cast-recheck', async (req, res, next) => {
         const results = []
         for (const m of movies) {
             const desc = m.youtube_description || m.description || ''
+            // Only trust an explicit "Starring/Stars:" line — free-text scraping picks
+            // up character names, locations and distributors and causes false suspects.
             const set = new Set()
-            for (let chunk of (m.youtube_video_title || '').split(/[|,&\/]|\band\b/i)) {
-                chunk = chunk.replace(/\([^)]*\)/g, '').trim()
-                if (isName(chunk)) set.add(chunk)
+            const sm = desc.match(/\b(?:starring|stars)\b\s*[-:]?\s*([^\n]+)/i)
+            if (sm) {
+                const seg = sm[1].split(/\b(?:check out|watch|also known as|subscribe|directed|presented|distributed|courtesy|as seen)\b/i)[0]
+                for (const raw of seg.split(/,|&|\band\b/)) {
+                    const nm = raw.replace(/\([^)]*\)/g, '').replace(/^[-–\s]+/, '').trim()
+                    if (isName(nm)) set.add(nm)
+                }
             }
-            for (const mm of desc.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z.'’-]+){1,2}\b/g)) {
-                const n = mm[0].trim(); if (isName(n)) set.add(n)
-            }
-            const descCast = [...set].slice(0, 15)
+            const descCast = [...set].slice(0, 10)
             if (descCast.length < 2) { skipped++; continue }
             const det = await tmdbService.getMovieDetails(m.tmdb_id).catch(() => null)
             if (!det) { skipped++; continue }
