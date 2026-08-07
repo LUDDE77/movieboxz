@@ -2889,24 +2889,28 @@ router.post('/maintenance/verify-from-description', async (req, res, next) => {
             if (rd) descYear = parseInt(rd[1], 10)
             else if (py) descYear = parseInt(py[1], 10)
 
-            // Cast from the description ("Stars: A, B, C") and the title segments
-            // ("… | Eric Roberts | …", "Ray Milland-Ginger Rogers"). One shared harvester
-            // that splits on |, commas, &, "and", and dash-joined name lists.
+            // Cast candidates from BOTH the title segments and the WHOLE description.
+            // Because confirmation requires an overlap with the match's real TMDB cast,
+            // over-collecting names is safe (junk like "Comedy Movies" can't match an
+            // actor) — so we scan the entire description for "First Last[ Last]" name
+            // sequences, not just a "Starring:" line (which also fixes the old quirk
+            // where "Starring" was half-eaten by the stars? pattern).
             const castSet = new Set()
-            const harvest = (text) => {
-                for (let chunk of (text || '').split(/[|,&\/]|\band\b/i)) {
-                    chunk = chunk.replace(/\([^)]*\)/g, '').trim()
-                    if (isName(chunk)) { castSet.add(chunk); continue }
-                    if (chunk.includes('-')) {
-                        const parts = chunk.split(/\s*-\s*/).map(p => p.trim())
-                        if (parts.length >= 2 && parts.every(p => isName(p))) parts.forEach(p => castSet.add(p))
-                    }
+            // Title: split on strong delimiters (| , & "and", dash-joined name lists).
+            for (let chunk of (m.youtube_video_title || '').split(/[|,&\/]|\band\b/i)) {
+                chunk = chunk.replace(/\([^)]*\)/g, '').trim()
+                if (isName(chunk)) { castSet.add(chunk); continue }
+                if (chunk.includes('-')) {
+                    const parts = chunk.split(/\s*-\s*/).map(p => p.trim())
+                    if (parts.length >= 2 && parts.every(p => isName(p))) parts.forEach(p => castSet.add(p))
                 }
             }
-            const stars = desc.match(/\b(?:stars?|starring|cast)\s*[:\-]?\s*([^\n|]+)/i)
-            if (stars) harvest(stars[1])
-            harvest(m.youtube_video_title || '')
-            const descCast = [...castSet].slice(0, 10)
+            // Whole description: harvest every capitalized name-like sequence.
+            for (const mm of desc.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z.'’-]+){1,2}\b/g)) {
+                const n = mm[0].trim()
+                if (isName(n)) castSet.add(n)
+            }
+            const descCast = [...castSet].slice(0, 20)
             const descCastNorm = descCast.map(norm)
 
             const curYear = m.release_date ? parseInt(String(m.release_date).slice(0, 4), 10) : null
