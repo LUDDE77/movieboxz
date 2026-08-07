@@ -3099,13 +3099,38 @@ router.post('/maintenance/match-by-cast', async (req, res, next) => {
             if (castNorm.length) {
                 for (const ct of cands) {
                     const hits = await tmdbService.searchMovies(ct).catch(() => [])
-                    for (const c of (hits || []).slice(0, 6)) {
+                    for (const c of (hits || []).slice(0, 8)) {
                         const det = await tmdbService.getMovieDetails(c.id).catch(() => null)
                         if (!det) continue
-                        const tcast = new Set((det.credits?.cast || []).slice(0, 25).map(p => norm(p.name)))
+                        const tcast = new Set((det.credits?.cast || []).slice(0, 30).map(p => norm(p.name)))
                         const ov = castNorm.filter(n => tcast.has(n)).length
                         if (ov > bestOv) { bestOv = ov; best = { det, ov, ct } }
                     }
+                }
+            }
+            // Fallback: search by ACTOR. Look up each Starring actor's TMDB
+            // filmography and find a film whose title matches the clean title —
+            // catches niche/recent films that title search doesn't surface.
+            if (!best && cast.length) {
+                for (const nm of cast.slice(0, 3)) {
+                    const ps = await tmdbService.makeRequest('/search/person', { query: nm }).catch(() => null)
+                    const pid = ps?.results?.[0]?.id
+                    if (!pid) continue
+                    const cr = await tmdbService.makeRequest(`/person/${pid}/movie_credits`, {}).catch(() => null)
+                    const films = cr?.cast || []
+                    for (const ct of cands) {
+                        const ctn = norm(ct)
+                        if (ctn.length < 4) continue
+                        const hit = films.find(f => {
+                            const tn = norm(f.title || f.original_title)
+                            return tn === ctn || (ctn.length > 6 && (tn.includes(ctn) || ctn.includes(tn)))
+                        })
+                        if (hit) {
+                            const det = await tmdbService.getMovieDetails(hit.id).catch(() => null)
+                            if (det && det.poster_path) { best = { det, ov: 1, ct, viaActor: nm }; bestOv = 1; break }
+                        }
+                    }
+                    if (best) break
                 }
             }
             if (best && bestOv >= 1 && best.det.poster_path) {
@@ -3125,7 +3150,7 @@ router.post('/maintenance/match-by-cast', async (req, res, next) => {
                     }).eq('id', m.id)
                     if (!e) { approvedN++; didApprove = true }
                 }
-                results.push({ title: cands[0], cast: cast.slice(0, 3), matched: `${best.det.title} (${(best.det.release_date || '').slice(0, 4)})`, castOverlap: bestOv, approved: didApprove })
+                results.push({ title: cands[0], cast: cast.slice(0, 3), matched: `${best.det.title} (${(best.det.release_date || '').slice(0, 4)})`, castOverlap: bestOv, via: best.viaActor ? `actor:${best.viaActor}` : 'title', approved: didApprove })
             } else {
                 noMatch++
                 results.push({ title: cands[0], cast: cast.slice(0, 3), matched: null })
