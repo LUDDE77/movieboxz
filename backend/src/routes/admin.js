@@ -3170,6 +3170,87 @@ router.post('/maintenance/match-by-cast', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/cast-recheck?dryRun=true&limit=40&offset=0
+// Audits already-PUBLISHED matches: harvests the Starring cast from the
+// description/title and checks it against the matched film's TMDB cast. When the
+// description names >=2 real actors and NONE are in the matched film, the match is
+// almost certainly wrong — unpublish it (delete the production movie, reset the
+// staged row to review) so it can be re-matched. Genre/channel tags ("Romance
+// Movies") are filtered out so they can't inflate the signal.
+router.post('/maintenance/cast-recheck', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { channelId } = req.body || {}
+        if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
+        const limit = Math.min(parseInt(req.query.limit) || 40, 60)
+        const offset = parseInt(req.query.offset) || 0
+
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const TAG = /\b(movies?|thriller|drama|comedy|romance|romantic|horror|action|christmas|hallmark|lifetime|family|adventure|mystery|fantasy|western|sci-?fi|holiday|faith|film)\b/i
+        const isName = (n) => /^[A-Z][a-z]+(\.?\s+[A-Z][a-z.'’-]+){1,2}$/.test(n) && !TAG.test(n)
+
+        const baseFilter = (q) => q
+            .eq('channel_id', channelId)
+            .eq('approval_status', 'published')
+            .not('tmdb_id', 'is', null)
+
+        const { count: total } = await baseFilter(
+            supabase.from('staged_movies').select('id', { count: 'exact', head: true }))
+        const { data: movies, error } = await baseFilter(
+            supabase.from('staged_movies')
+                .select('id, title, youtube_video_title, youtube_description, description, tmdb_id, published_movie_id'))
+            .order('id', { ascending: true })
+            .range(offset, offset + limit - 1)
+        if (error) throw error
+
+        let confirmed = 0, suspect = 0, unpublished = 0, skipped = 0
+        const results = []
+        for (const m of movies) {
+            const desc = m.youtube_description || m.description || ''
+            const set = new Set()
+            for (let chunk of (m.youtube_video_title || '').split(/[|,&\/]|\band\b/i)) {
+                chunk = chunk.replace(/\([^)]*\)/g, '').trim()
+                if (isName(chunk)) set.add(chunk)
+            }
+            for (const mm of desc.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z.'’-]+){1,2}\b/g)) {
+                const n = mm[0].trim(); if (isName(n)) set.add(n)
+            }
+            const descCast = [...set].slice(0, 15)
+            if (descCast.length < 2) { skipped++; continue }
+            const det = await tmdbService.getMovieDetails(m.tmdb_id).catch(() => null)
+            if (!det) { skipped++; continue }
+            const tcast = new Set((det.credits?.cast || []).slice(0, 30).map(p => norm(p.name)))
+            const overlap = descCast.map(norm).filter(n => tcast.has(n)).length
+            if (overlap >= 1) { confirmed++; continue }
+            // >=2 real actors named, none in the matched film -> wrong match.
+            suspect++
+            if (!dryRun && m.published_movie_id) {
+                await supabase.from('movie_genres').delete().eq('movie_id', m.published_movie_id)
+                await supabase.from('movies').delete().eq('id', m.published_movie_id)
+                await supabase.from('staged_movies').update({
+                    approval_status: 'pending', published_movie_id: null,
+                    tmdb_id: null, imdb_id: null, poster_path: null, backdrop_path: null,
+                    enrichment_source: null, enrichment_confidence: 0, manually_verified: false,
+                    updated_at: new Date().toISOString()
+                }).eq('id', m.id)
+                unpublished++
+            }
+            results.push({ match: m.title, ytTitle: (m.youtube_video_title || '').slice(0, 46), descCast: descCast.slice(0, 4) })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun, total, offset, limit, batchSize: movies.length, nextOffset: offset + movies.length,
+                done: offset + movies.length >= (total || 0),
+                confirmed, suspect, unpublished, skipped, results
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/make-series?dryRun=true
 // Convert a set of PRODUCTION movies into a TV series: create/find the tv_series
 // (art from TMDB TV search, else the first member's art) and set is_tv_series +
