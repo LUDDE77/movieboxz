@@ -58,15 +58,19 @@ async function scanMovieKeys(select, applyFilters) {
 /**
  * GET /api/admin/duplicates
  * Groups of production duplicates:
- *   - type 'imdb':    movies sharing the same non-null imdb_id
+ *   - type 'imdb':    MOVIES (not episodes) sharing the same non-null imdb_id
  *   - type 'episode': movies sharing the same (tv_series_id, season_number, episode_number)
+ *
+ * TV episodes are excluded from the imdb grouping — every episode of a series
+ * shares the series' imdb_id, so including them would surface a whole series as
+ * one giant false "duplicate group". Episodes are deduped by the episode key.
  */
 router.get('/', async (req, res, next) => {
     try {
         // --- Pass 1: find duplicate keys from narrow column scans -----------------
         const imdbRows = await scanMovieKeys(
             'id, imdb_id',
-            q => q.not('imdb_id', 'is', null)
+            q => q.not('imdb_id', 'is', null).is('tv_series_id', null)
         )
         const duplicateImdbIds = findDuplicateKeys(imdbRows, imdbKey)
 
@@ -89,6 +93,7 @@ router.get('/', async (req, res, next) => {
                     .from('movies')
                     .select(GROUP_MOVIE_SELECT)
                     .in('imdb_id', ids)
+                    .is('tv_series_id', null)
                     .order('created_at', { ascending: true })
                 if (error) throw error
                 for (const movie of data || []) {
