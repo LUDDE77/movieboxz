@@ -3363,6 +3363,51 @@ router.post('/maintenance/match-cast-intersection', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/maintenance/unpublish-source-to-review?dryRun=true
+// Body: { channelId, source }
+// Move auto-matched rows (by enrichment_source, e.g. 'tmdb_cast_intersect') from
+// LIVE back to the review queue for manual vetting — deletes the production movie
+// but KEEPS the staged row's match (tmdb_id/title/poster) so it's approve-or-fix,
+// not re-match-from-scratch. Only touches rows with the given source.
+router.post('/maintenance/unpublish-source-to-review', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const { channelId, source } = req.body || {}
+        if (!channelId || !source) return res.status(400).json({ success: false, error: 'channelId and source are required' })
+
+        const { data: rows, error } = await supabase
+            .from('staged_movies')
+            .select('id, title, published_movie_id')
+            .eq('channel_id', channelId)
+            .eq('approval_status', 'published')
+            .eq('enrichment_source', source)
+        if (error) throw error
+
+        let moved = 0, deletedProd = 0
+        if (!dryRun) {
+            for (const r of rows || []) {
+                if (r.published_movie_id) {
+                    await supabase.from('movie_genres').delete().eq('movie_id', r.published_movie_id)
+                    const { error: dErr } = await supabase.from('movies').delete().eq('id', r.published_movie_id)
+                    if (!dErr) deletedProd++
+                }
+                // Back to review, keep the match for manual approval.
+                await supabase.from('staged_movies').update({
+                    approval_status: 'pending', published_movie_id: null, updated_at: new Date().toISOString()
+                }).eq('id', r.id)
+                moved++
+            }
+        }
+
+        res.json({
+            success: true,
+            data: { dryRun, source, candidates: (rows || []).length, moved, deletedFromProduction: deletedProd }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/make-series?dryRun=true
 // Convert a set of PRODUCTION movies into a TV series: create/find the tv_series
 // (art from TMDB TV search, else the first member's art) and set is_tv_series +
