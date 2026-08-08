@@ -3265,6 +3265,9 @@ router.post('/maintenance/cast-recheck', async (req, res, next) => {
 router.post('/maintenance/match-cast-intersection', async (req, res, next) => {
     try {
         const dryRun = req.query.dryRun !== 'false'
+        // approve=false -> apply the match but leave the row in review (pending) for
+        // manual approval instead of auto-approving.
+        const doApprove = req.query.approve !== 'false'
         const { channelId } = req.body || {}
         if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
         const limit = Math.min(parseInt(req.query.limit) || 30, 40)
@@ -3336,16 +3339,17 @@ router.post('/maintenance/match-cast-intersection', async (req, res, next) => {
             let didApprove = false
             if (!dryRun) {
                 const castStr = (det.credits?.cast || []).slice(0, 6).map(p => p.name).join(', ') || cast.join(', ')
-                const { error: e } = await supabase.from('staged_movies').update({
+                const upd = {
                     title: det.title, tmdb_id: det.id, imdb_id: det.imdb_id || null,
                     poster_path: det.poster_path, backdrop_path: det.backdrop_path || null,
                     description: det.overview || m.description, release_date: det.release_date || null,
                     vote_average: det.vote_average ?? null, actors: castStr,
                     enrichment_source: 'tmdb_cast_intersect', enrichment_confidence: Math.min(70 + pick.c * 10, 99),
-                    approval_status: 'approved', approved_at: new Date().toISOString(), approved_by: 'cast-intersect',
                     enriched_at: new Date().toISOString(), updated_at: new Date().toISOString()
-                }).eq('id', m.id)
-                if (!e) { approvedN++; didApprove = true }
+                }
+                if (doApprove) { upd.approval_status = 'approved'; upd.approved_at = new Date().toISOString(); upd.approved_by = 'cast-intersect' }
+                const { error: e } = await supabase.from('staged_movies').update(upd).eq('id', m.id)
+                if (!e) { if (doApprove) approvedN++; didApprove = doApprove }
             }
             results.push({ ytTitle: (m.youtube_video_title || '').slice(0, 40), cast: cast.slice(0, 3), matched: `${det.title} (${(det.release_date || '').slice(0, 4)})`, sharedByStars: pick.c, wasMatched: !!m.tmdb_id, approved: didApprove })
         }
