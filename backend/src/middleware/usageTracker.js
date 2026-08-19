@@ -57,26 +57,23 @@ export function usageTracker(req, res, next) {
     next()
 }
 
-// Flush one buffer through its RPC. On error, re-buffer the remainder (bounded) so
-// counts survive until the table/RPC exists, then retry next tick.
+// Flush one buffer through its RPC. Each row is independent: a row that errors is
+// SKIPPED (logged and dropped) so one bad row can never stall the whole pipeline.
+// Losing a single row's count is acceptable; a multi-day stall is not.
 async function flushBuffer(buf, rpcName, argsFor) {
     if (buf.size === 0) return
     const entries = [...buf.entries()]
     buf.clear()
-    for (let i = 0; i < entries.length; i++) {
-        const [key, delta] = entries[i]
-        const { error } = await supabase.rpc(rpcName, argsFor(key, delta))
-        if (error) {
-            if (buf.size < MAX_BUFFER_KEYS) {
-                for (let j = i; j < entries.length; j++) {
-                    const [k, d] = entries[j]
-                    buf.set(k, (buf.get(k) || 0) + d)
-                }
-            }
-            logger.warn(`${rpcName} flush deferred: ${error.message}`)
-            return
+    let skipped = 0
+    for (const [key, delta] of entries) {
+        try {
+            const { error } = await supabase.rpc(rpcName, argsFor(key, delta))
+            if (error) { skipped++; continue }
+        } catch (e) {
+            skipped++
         }
     }
+    if (skipped) logger.warn(`${rpcName}: skipped ${skipped}/${entries.length} bad rows this flush`)
 }
 
 let flushing = false
