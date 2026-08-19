@@ -3928,6 +3928,29 @@ router.post('/maintenance/rename-series', async (req, res, next) => {
     }
 })
 
+// Supabase caps a single SELECT at 1000 rows. The usage tables exceed that over a
+// multi-week window (one row per distinct movie/term/country/day), which silently
+// TRUNCATED the report — dropping whole days and undercounting every total. Page
+// through all rows, ordered by the full primary key so range pagination is exact
+// (no skipped or duplicated rows at page boundaries), so aggregates are complete.
+async function fetchAllUsageRows(table, sinceDay, orderCols, refine) {
+    const PAGE = 1000
+    let from = 0
+    const all = []
+    for (let guard = 0; guard < 200; guard++) {
+        let q = supabase.from(table).select('*').gte('day', sinceDay)
+        for (const c of orderCols) q = q.order(c, { ascending: true, nullsFirst: true })
+        if (refine) q = refine(q)
+        const { data, error } = await q.range(from, from + PAGE - 1)
+        if (error) throw error
+        const batch = data || []
+        all.push(...batch)
+        if (batch.length < PAGE) break
+        from += PAGE
+    }
+    return all
+}
+
 // GET /api/admin/usage?days=7
 // Read the privacy-safe aggregate usage counters: app opens (by day/platform/country),
 // top viewed movies and series (with titles), and top searches.
@@ -3935,9 +3958,7 @@ router.get('/usage', async (req, res, next) => {
     try {
         const days = Math.min(parseInt(req.query.days) || 7, 90)
         const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
-        const { data, error } = await supabase.from('usage_daily').select('*').gte('day', since)
-        if (error) throw error
-        const rows = data || []
+        const rows = await fetchAllUsageRows('usage_daily', since, ['day', 'event', 'platform', 'country', 'ref_id'])
         const n = (x) => Number(x) || 0
 
         const opens = rows.filter(r => r.event === 'app_open')
@@ -4012,11 +4033,10 @@ router.get('/usage/hourly', async (req, res, next) => {
     try {
         const days = Math.min(parseInt(req.query.days) || 2, 14)
         const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
-        const { data, error } = await supabase.from('usage_hourly').select('*').gte('day', since).eq('event', 'app_open')
-        if (error) throw error
+        const rows = await fetchAllUsageRows('usage_hourly', since, ['day', 'hour', 'event', 'country'], q => q.eq('event', 'app_open'))
         const n = (x) => Number(x) || 0
         const byHour = {}, byHourCountry = {}
-        for (const r of data || []) {
+        for (const r of rows) {
             byHour[r.hour] = (byHour[r.hour] || 0) + n(r.cnt)
             const cc = r.country || '??'
             byHourCountry[cc] = byHourCountry[cc] || {}
