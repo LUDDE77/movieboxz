@@ -1786,6 +1786,72 @@ router.post('/movies/:id/genres', async (req, res, next) => {
 })
 
 /**
+ * GET /api/admin/movies/:id/genre-suggestion
+ * READ-ONLY. Suggest genres for a production movie from TMDB. Our genres table
+ * uses TMDB genre ids, so TMDB genres map straight onto our genre ids.
+ *   - If the movie has a tmdb_id -> fetch that title's genres directly (high confidence).
+ *   - Otherwise -> search TMDB by title+year, take the best match (lower confidence),
+ *     and return the match details so the human can sanity-check before saving.
+ * Writes nothing; the tagger applies the suggestion via the existing genres POST.
+ */
+router.get('/movies/:id/genre-suggestion', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { data: movie, error } = await supabase
+            .from('movies')
+            .select('id, title, release_date, tmdb_id')
+            .eq('id', id)
+            .single()
+        if (error) throw error
+        if (!movie) return res.status(404).json({ success: false, error: 'Movie not found' })
+
+        const year = (movie.release_date || '').slice(0, 4) || null
+
+        if (movie.tmdb_id) {
+            const genres = await tmdbService.getMovieGenres(movie.tmdb_id)
+            return res.json({
+                success: true,
+                data: {
+                    source: 'tmdb_id',
+                    confidence: 'high',
+                    genreIds: genres.map(g => g.id),
+                    genreNames: genres.map(g => g.name),
+                    match: { tmdbId: movie.tmdb_id, title: movie.title, year }
+                }
+            })
+        }
+
+        // No tmdb_id: search by title (+year). Prefer an exact-year hit.
+        const results = await tmdbService.searchMovies(movie.title, year)
+        if (!results.length) {
+            return res.json({ success: true, data: { source: 'search', confidence: 'none', genreIds: [], genreNames: [], match: null } })
+        }
+        const exact = year ? results.find(r => (r.releaseDate || '').slice(0, 4) === year) : null
+        const best = exact || results[0]
+        const confidence = exact ? 'medium' : 'low'
+
+        // Map TMDB genre ids to names using our genres table (source of truth).
+        const { data: genreRows } = await supabase.from('genres').select('id, name')
+        const nameById = Object.fromEntries((genreRows || []).map(g => [String(g.id), g.name]))
+        const genreIds = (best.genreIds || []).filter(gid => nameById[String(gid)] !== undefined)
+
+        res.json({
+            success: true,
+            data: {
+                source: 'search',
+                confidence,
+                genreIds,
+                genreNames: genreIds.map(gid => nameById[String(gid)]),
+                match: { tmdbId: best.id, title: best.title, year: (best.releaseDate || '').slice(0, 4) || null, posterPath: best.posterPath }
+            }
+        })
+    } catch (error) {
+        logger.error('[Production Movies] Genre suggestion error:', error)
+        next(error)
+    }
+})
+
+/**
  * POST /api/admin/movies/:id/enrich-manual-imdb
  * Manually enrich a production movie from a specific IMDB ID
  */
