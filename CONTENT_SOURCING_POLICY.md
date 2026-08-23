@@ -79,8 +79,15 @@ any party's rights:
 - **Established channels.** We favor channels that are generally **at least one year
   old**, with a substantial, consistent catalog and clear branding — i.e., genuine
   distributor or creator operations.
+- **Verified affiliates of an established channel family.** We also accept a **newer
+  channel (under one year old) when it is owned by, or affiliated with, an established
+  operator** — that is, the operator runs one or more **other channels older than two
+  years** that share the same ownership, branding, and catalog, and that operate
+  legitimately within YouTube's system. In that case we rely on the **family's
+  established, compliant track record** rather than the individual channel's age. We
+  record the affiliated older channel(s) as the basis for including the newer one.
 - **Exclusion of bad-faith accounts.** We exclude channels that show signs of
-  evading YouTube's systems — brand-new reupload accounts, mislabeled or
+  evading YouTube's systems — unaffiliated brand-new reupload accounts, mislabeled or
   manipulated uploads, and similar red flags.
 
 This is a good-faith effort. It **relies on YouTube's determinations** and does not
