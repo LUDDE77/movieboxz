@@ -3412,6 +3412,126 @@ router.post('/maintenance/unpublish-source-to-review', async (req, res, next) =>
     }
 })
 
+// POST /api/admin/maintenance/match-precise?dryRun=true&approve=false&limit=30&offset=0
+// The strongest matcher: searches TMDB by the clean title + the YEAR from the
+// YouTube title, and confirms/ranks with the CAST from the description. Requires
+// year AND cast (or an exact title) to agree, so it fixes wrong-decade matches
+// like "Odd Couple (1979)" -> the 1968 comedy. Defaults to approve=false: it
+// corrects the match but leaves the row in REVIEW for manual approval.
+router.post('/maintenance/match-precise', async (req, res, next) => {
+    try {
+        const dryRun = req.query.dryRun !== 'false'
+        const doApprove = req.query.approve === 'true'   // default: leave in review
+        const { channelId } = req.body || {}
+        if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
+        const limit = Math.min(parseInt(req.query.limit) || 30, 40)
+        const offset = parseInt(req.query.offset) || 0
+
+        const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const TAG = /\b(movies?|thriller|drama|comedy|romance|romantic|horror|action|christmas|hallmark|lifetime|family|adventure|mystery|fantasy|western|sci-?fi|holiday|faith|film|war|crime|dubbed|kung|fu|martial|arts|ninja|kickboxing|classic)\b/i
+        const isName = (n) => /^[A-Z][a-zé][A-Za-zé.'’-]*(\.?\s+[A-Z][A-Za-zé.'’-]+){1,2}$/.test(n) && !TAG.test(n)
+
+        const baseFilter = (q) => q
+            .eq('channel_id', channelId)
+            .not('is_tv_series', 'is', true)
+            .eq('approval_status', 'pending')
+
+        const { count: total } = await baseFilter(
+            supabase.from('staged_movies').select('id', { count: 'exact', head: true }))
+        const { data: movies, error } = await baseFilter(
+            supabase.from('staged_movies')
+                .select('id, title, youtube_video_title, youtube_description, description, tmdb_id'))
+            .order('id', { ascending: true })
+            .range(offset, offset + limit - 1)
+        if (error) throw error
+
+        let matched = 0, corrected = 0, approvedN = 0, noMatch = 0
+        const results = []
+        for (const m of movies) {
+            const yt = m.youtube_video_title || ''
+            // clean title = text before "(" (the year), else before the first "|"
+            let ct = yt
+            const p = ct.indexOf('(')
+            if (p > 0) ct = ct.slice(0, p)
+            else if (ct.includes('|')) ct = ct.split('|')[0]
+            ct = ct.replace(/["“”]/g, '').trim()
+            if (ct.length < 2) { noMatch++; continue }
+
+            const ym = yt.match(/\((19\d{2}|20[0-2]\d)\)/)
+            const year = ym ? parseInt(ym[1], 10) : null
+
+            // cast from the description (Stars/Starring line + parenthesised names)
+            const desc = m.youtube_description || m.description || ''
+            const castSet = new Set()
+            const sm = desc.match(/\b(?:stars|starring|cast)\b\s*[-:]?\s*([^\n]+)/i)
+            if (sm) {
+                const seg = sm[1].split(/\b(?:watch|this film|directed|genre|country|language|subscribe)\b/i)[0]
+                for (const raw of seg.split(/,|&|\band\b/)) {
+                    const n = raw.replace(/\([^)]*\)/g, '').replace(/^[-–\s]+/, '').trim()
+                    if (isName(n)) castSet.add(n)
+                }
+            }
+            for (const mm of desc.matchAll(/\(([A-Z][a-z]+\s+[A-Z][a-z.'’-]+)\)/g)) castSet.add(mm[1])
+            const castNorm = [...castSet].slice(0, 10).map(norm)
+
+            // search by title+year (then title-only as fallback)
+            let cands = await tmdbService.searchMovies(ct, year).catch(() => [])
+            if ((!cands || cands.length === 0) && year) cands = await tmdbService.searchMovies(ct).catch(() => [])
+            let best = null, bestScore = -1
+            for (const c of (cands || []).slice(0, 8)) {
+                const det = await tmdbService.getMovieDetails(c.id).catch(() => null)
+                if (!det) continue
+                const tcast = new Set((det.credits?.cast || []).slice(0, 30).map(p2 => norm(p2.name)))
+                const overlap = castNorm.filter(n => tcast.has(n)).length
+                const detYear = det.release_date ? parseInt(det.release_date.slice(0, 4), 10) : null
+                const yearMatch = (year && detYear && Math.abs(year - detYear) <= 1) ? 1 : 0
+                const titleExact = norm(det.title) === norm(ct) ? 1 : 0
+                const score = overlap * 3 + yearMatch * 3 + titleExact * 2
+                if (score > bestScore) { bestScore = score; best = { det, overlap, yearMatch, titleExact, detYear } }
+            }
+            // Confident when year+ (cast or exact title) agree, or cast is strong on its own.
+            const accept = best && best.det.poster_path &&
+                ((best.yearMatch === 1 && (best.overlap >= 1 || best.titleExact === 1)) || best.overlap >= 2)
+            if (!accept) { noMatch++; results.push({ yt: yt.slice(0, 44), title: ct, year, matched: null }); continue }
+
+            matched++
+            const changed = String(best.det.id) !== String(m.tmdb_id)
+            if (changed) corrected++
+            let didApprove = false
+            if (!dryRun) {
+                const castStr = (best.det.credits?.cast || []).slice(0, 6).map(p2 => p2.name).join(', ') || null
+                const upd = {
+                    title: best.det.title, tmdb_id: best.det.id, imdb_id: best.det.imdb_id || null,
+                    poster_path: best.det.poster_path, backdrop_path: best.det.backdrop_path || null,
+                    description: best.det.overview || m.description, release_date: best.det.release_date || null,
+                    vote_average: best.det.vote_average ?? null, actors: castStr,
+                    enrichment_source: 'tmdb_precise',
+                    enrichment_confidence: Math.min(60 + best.overlap * 12 + best.yearMatch * 20 + best.titleExact * 8, 99),
+                    enriched_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                }
+                if (doApprove) { upd.approval_status = 'approved'; upd.approved_at = new Date().toISOString(); upd.approved_by = 'precise' }
+                const { error: e } = await supabase.from('staged_movies').update(upd).eq('id', m.id)
+                if (!e && doApprove) { approvedN++; didApprove = true }
+            }
+            results.push({
+                yt: yt.slice(0, 44), matched: `${best.det.title} (${(best.det.release_date || '').slice(0, 4)})`,
+                titleYear: year, overlap: best.overlap, yearMatch: best.yearMatch === 1, changed, approved: didApprove,
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                dryRun, approve: doApprove, total, offset, limit, batchSize: movies.length,
+                nextOffset: offset + movies.length, done: offset + movies.length >= (total || 0),
+                matched, corrected, approved: approvedN, noMatch, results,
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
 // POST /api/admin/maintenance/make-series?dryRun=true
 // Convert a set of PRODUCTION movies into a TV series: create/find the tv_series
 // (art from TMDB TV search, else the first member's art) and set is_tv_series +
