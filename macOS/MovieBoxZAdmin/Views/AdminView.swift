@@ -43,7 +43,7 @@ struct AdminView: View {
                     .tag(6)
             }
             .navigationTitle("Admin")
-            .frame(minWidth: 200)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
         } detail: {
             Group {
                 switch selectedTab {
@@ -85,6 +85,22 @@ struct AdminView: View {
                 }
             }
         }
+        // Keep the window wide enough that macOS can't force the sidebar closed.
+        .frame(minWidth: 940, minHeight: 580)
+        // A manual toggle so the menu can always be brought back if it collapses.
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    withAnimation { columnVisibility = (columnVisibility == .all ? .detailOnly : .all) }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                }
+                .help("Show / hide the menu")
+            }
+        }
+        // Re-assert the sidebar on every appearance so a persisted collapsed
+        // state can't leave you stuck with only the detail pane.
+        .onAppear { columnVisibility = .all }
         .task {
             await loadDashboard()
         }
