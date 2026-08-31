@@ -370,7 +370,7 @@ router.post('/tag-genre', async (req, res, next) => {
         res.json({ success: true, data: { genre: { id: genre.id, name: genre.name }, tagged, alreadyHad, notFound, total: movieIds.length } })
     } catch (error) {
         logger.error('[Staging] tag-genre error:', error)
-        next(error)
+        res.status(500).json({ success: false, error: error.message, details: error.details || error.hint || error.code || null })
     }
 })
 
