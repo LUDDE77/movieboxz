@@ -317,6 +317,63 @@ router.post('/import', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/tag-genre  { movieIds:[staged ids], genreName, tmdbId? }
+// Tag staged movies with a (possibly custom, non-TMDB) genre by APPENDING it to
+// each row's genre_data JSONB. The genre is created in the genres table if it
+// doesn't exist. Because the publish loop maps genre_data -> movie_genres by
+// name (case-insensitive) or id, the tag carries through to production when the
+// movie is published — no need to publish now, and existing genres are preserved.
+router.post('/tag-genre', async (req, res, next) => {
+    try {
+        const { movieIds, genreName, tmdbId } = req.body
+        if (!Array.isArray(movieIds) || movieIds.length === 0 || !genreName) {
+            return res.status(400).json({ success: false, error: 'movieIds[] and genreName are required' })
+        }
+        const name = String(genreName).trim()
+
+        // 1) Ensure the genre exists (match case-insensitively by name)
+        const { data: existing } = await supabase.from('genres').select('id, name, tmdb_id')
+        let genre = (existing || []).find(g => (g.name || '').trim().toLowerCase() === name.toLowerCase())
+        if (!genre) {
+            // genres.id doubles as the TMDB id in this schema, so set both to a
+            // synthetic value well clear of the real TMDB genre range (< ~11000).
+            const maxId = (existing || []).reduce((m, g) => Math.max(m, Number(g.id) || 0), 0)
+            const newId = tmdbId && Number(tmdbId) > 0 ? Number(tmdbId) : Math.max(900001, maxId + 1)
+            const { data: created, error: cErr } = await supabase
+                .from('genres')
+                .insert({ id: newId, tmdb_id: newId, name })
+                .select('id, name, tmdb_id')
+                .single()
+            if (cErr) throw cErr
+            genre = created
+        }
+
+        // 2) Append the genre to each staged row's genre_data (dedup by name/id)
+        let tagged = 0, alreadyHad = 0, notFound = 0
+        for (const id of movieIds) {
+            const { data: row } = await supabase.from('staged_movies').select('id, genre_data').eq('id', id).single()
+            if (!row) { notFound++; continue }
+            const current = Array.isArray(row.genre_data) ? row.genre_data : []
+            const has = current.some(e =>
+                (e && typeof e === 'object' && (
+                    (e.tmdb_id != null && Number(e.tmdb_id) === Number(genre.tmdb_id ?? genre.id)) ||
+                    (typeof e.name === 'string' && e.name.trim().toLowerCase() === name.toLowerCase())
+                ))
+            )
+            if (has) { alreadyHad++; continue }
+            const next = [...current, { tmdb_id: genre.tmdb_id ?? genre.id, name: genre.name }]
+            const { error: uErr } = await supabase.from('staged_movies').update({ genre_data: next }).eq('id', id)
+            if (uErr) { notFound++; continue }
+            tagged++
+        }
+
+        res.json({ success: true, data: { genre: { id: genre.id, name: genre.name }, tagged, alreadyHad, notFound, total: movieIds.length } })
+    } catch (error) {
+        logger.error('[Staging] tag-genre error:', error)
+        next(error)
+    }
+})
+
 // POST /api/admin/staging/import-playlist - Import movies from playlist to staging
 router.post('/import-playlist', async (req, res, next) => {
     try {
