@@ -404,10 +404,17 @@ router.post('/reenrich-year-locked', async (req, res, next) => {
             const targetYear = parseInt(m.extracted_year, 10)
             if (!Number.isInteger(targetYear)) { noYear++; results.push({ title: m.title, outcome: 'no-year' }); continue }
 
-            // Search by title, then keep only results within the year tolerance.
+            // Clean leftover import artifacts from the title before searching TMDB:
+            // "ENG SUB - X", "ENG SUB! X", leading "| X" / "- X" all break the match.
+            const cleanTitle = (m.title || '')
+                .replace(/^\s*eng\s?sub!?\s*[-|｜:]?\s*/i, '')
+                .replace(/^\s*[-|｜]\s*/, '')
+                .trim() || m.title
+
+            // Search by cleaned title, then keep only results within the year tolerance.
             let candidates = []
             try {
-                const res1 = await tmdbService.searchMovies(m.title, null)
+                const res1 = await tmdbService.searchMovies(cleanTitle, null)
                 candidates = (res1 || [])
                     .map(r => ({ r, y: (r.releaseDate || '').slice(0, 4) }))
                     .filter(x => /^\d{4}$/.test(x.y) && Math.abs(parseInt(x.y, 10) - targetYear) <= tol)
@@ -415,7 +422,11 @@ router.post('/reenrich-year-locked', async (req, res, next) => {
                         || (b.r.voteCount || 0) - (a.r.voteCount || 0))
             } catch (e) { candidates = [] }
 
-            if (candidates.length === 0) { noYearMatch++; results.push({ title: m.title, targetYear, outcome: 'no-year-match' }); continue }
+            if (candidates.length === 0) {
+                // No trustworthy match — at least clean the stored title of artifacts.
+                if (cleanTitle !== m.title) await supabase.from('staged_movies').update({ title: cleanTitle }).eq('id', id)
+                noYearMatch++; results.push({ title: cleanTitle, targetYear, outcome: 'no-year-match' }); continue
+            }
 
             const best = candidates[0].r
             let details
