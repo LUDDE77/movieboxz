@@ -217,6 +217,7 @@ router.post('/import', async (req, res, next) => {
         let imported = 0
         let skipped = 0
         const importedMovies = []
+        const errorSamples = []
 
         for (const video of videos) {
             try {
@@ -293,6 +294,7 @@ router.post('/import', async (req, res, next) => {
                 imported++
             } catch (error) {
                 logger.error(`[Staging] Failed to import video ${video.id}:`, error)
+                if (errorSamples.length < 5) errorSamples.push(`${video.id}: ${error.message || error.code || String(error)}`)
                 skipped++
             }
         }
@@ -305,7 +307,8 @@ router.post('/import', async (req, res, next) => {
                 imported,
                 skipped,
                 batchId: batchId || null,
-                movies: importedMovies
+                movies: importedMovies,
+                errorSamples
             }
         })
     } catch (error) {
