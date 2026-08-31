@@ -376,6 +376,96 @@ router.post('/tag-genre', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/reenrich-year-locked  { movieIds, tolerance? }
+// Re-enrich staged movies with a HARD year gate: only accept a TMDB match whose
+// release year is within `tolerance` (default 1) of the pattern-extracted year.
+// This fixes the obscure-catalog failure where a same-titled MODERN film was
+// matched (e.g. "The Mermaid" 1964 -> a 2023 film). Preserves any existing
+// custom genre tags (e.g. "Shaw Brothers") in genre_data; leaves genuinely
+// unmatchable rows untouched (so they stay flagged, not wrongly enriched).
+router.post('/reenrich-year-locked', async (req, res, next) => {
+    try {
+        const { movieIds, tolerance = 1 } = req.body
+        if (!Array.isArray(movieIds) || movieIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'movieIds[] is required' })
+        }
+        const tol = Number.isInteger(tolerance) ? tolerance : 1
+
+        let matched = 0, noYearMatch = 0, noYear = 0, notFound = 0
+        const results = []
+
+        for (const id of movieIds) {
+            const { data: m } = await supabase
+                .from('staged_movies')
+                .select('id, title, extracted_year, genre_data')
+                .eq('id', id).single()
+            if (!m) { notFound++; continue }
+
+            const targetYear = parseInt(m.extracted_year, 10)
+            if (!Number.isInteger(targetYear)) { noYear++; results.push({ title: m.title, outcome: 'no-year' }); continue }
+
+            // Search by title, then keep only results within the year tolerance.
+            let candidates = []
+            try {
+                const res1 = await tmdbService.searchMovies(m.title, null)
+                candidates = (res1 || [])
+                    .map(r => ({ r, y: (r.releaseDate || '').slice(0, 4) }))
+                    .filter(x => /^\d{4}$/.test(x.y) && Math.abs(parseInt(x.y, 10) - targetYear) <= tol)
+                    .sort((a, b) => Math.abs(parseInt(a.y) - targetYear) - Math.abs(parseInt(b.y) - targetYear)
+                        || (b.r.voteCount || 0) - (a.r.voteCount || 0))
+            } catch (e) { candidates = [] }
+
+            if (candidates.length === 0) { noYearMatch++; results.push({ title: m.title, targetYear, outcome: 'no-year-match' }); continue }
+
+            const best = candidates[0].r
+            let details
+            try { details = await tmdbService.getMovieDetails(best.id) } catch (e) { noYearMatch++; continue }
+
+            const crew = details.credits?.crew || []
+            const cast = details.credits?.cast || []
+            const director = (crew.find(p => p.job === 'Director') || {}).name || null
+            const actors = cast.slice(0, 6).map(p => p.name).filter(Boolean).join(', ') || null
+
+            // Preserve custom genre tags (e.g. Shaw Brothers) already in genre_data,
+            // then add the correct TMDB genres.
+            const existingCustom = (Array.isArray(m.genre_data) ? m.genre_data : [])
+                .filter(g => g && Number(g.tmdb_id) >= 900000)
+            const tmdbGenres = (details.genres || []).map(g => ({ tmdb_id: g.id, name: g.name }))
+            const genre_data = [...tmdbGenres, ...existingCustom]
+
+            const update = {
+                tmdb_id: details.id,
+                imdb_id: details.imdb_id || null,
+                title: details.title || m.title,
+                original_title: details.original_title || null,
+                description: details.overview || null,
+                release_date: details.release_date || null,
+                runtime_minutes: details.runtime || null,
+                poster_path: details.poster_path || null,
+                backdrop_path: details.backdrop_path || null,
+                vote_average: details.vote_average || null,
+                vote_count: details.vote_count || null,
+                popularity: details.popularity || null,
+                director,
+                actors,
+                genre_data,
+                enrichment_source: 'tmdb-yearlocked',
+                enrichment_confidence: 90,
+                enriched_at: new Date().toISOString()
+            }
+            const { error: uErr } = await supabase.from('staged_movies').update(update).eq('id', id)
+            if (uErr) { notFound++; continue }
+            matched++
+            results.push({ title: update.title, targetYear, matchedYear: (details.release_date || '').slice(0, 4), poster: !!details.poster_path, outcome: 'matched' })
+        }
+
+        res.json({ success: true, data: { matched, noYearMatch, noYear, notFound, total: movieIds.length, results } })
+    } catch (error) {
+        logger.error('[Staging] reenrich-year-locked error:', error)
+        res.status(500).json({ success: false, error: error.message })
+    }
+})
+
 // POST /api/admin/staging/import-playlist - Import movies from playlist to staging
 router.post('/import-playlist', async (req, res, next) => {
     try {
