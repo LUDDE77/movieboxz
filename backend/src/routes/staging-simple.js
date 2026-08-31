@@ -331,24 +331,26 @@ router.post('/tag-genre', async (req, res, next) => {
         }
         const name = String(genreName).trim()
 
-        // 1) Ensure the genre exists (match case-insensitively by name)
-        const { data: existing } = await supabase.from('genres').select('id, name, tmdb_id')
+        // 1) Ensure the genre exists (match case-insensitively by name).
+        // The genres table has only { id, name } — id IS the TMDB genre id.
+        const { data: existing } = await supabase.from('genres').select('id, name')
         let genre = (existing || []).find(g => (g.name || '').trim().toLowerCase() === name.toLowerCase())
         if (!genre) {
-            // genres.id doubles as the TMDB id in this schema, so set both to a
-            // synthetic value well clear of the real TMDB genre range (< ~11000).
+            // Custom (non-TMDB) genre: pick a synthetic id clear of the real TMDB
+            // genre range (< ~11000) so it can never collide with a future import.
             const maxId = (existing || []).reduce((m, g) => Math.max(m, Number(g.id) || 0), 0)
             const newId = tmdbId && Number(tmdbId) > 0 ? Number(tmdbId) : Math.max(900001, maxId + 1)
             const { data: created, error: cErr } = await supabase
                 .from('genres')
-                .insert({ id: newId, tmdb_id: newId, name })
-                .select('id, name, tmdb_id')
+                .insert({ id: newId, name })
+                .select('id, name')
                 .single()
             if (cErr) throw cErr
             genre = created
         }
 
-        // 2) Append the genre to each staged row's genre_data (dedup by name/id)
+        // 2) Append the genre to each staged row's genre_data (dedup by id/name).
+        // genre_data uses `tmdb_id`, which the publish loop matches against genres.id.
         let tagged = 0, alreadyHad = 0, notFound = 0
         for (const id of movieIds) {
             const { data: row } = await supabase.from('staged_movies').select('id, genre_data').eq('id', id).single()
@@ -356,12 +358,12 @@ router.post('/tag-genre', async (req, res, next) => {
             const current = Array.isArray(row.genre_data) ? row.genre_data : []
             const has = current.some(e =>
                 (e && typeof e === 'object' && (
-                    (e.tmdb_id != null && Number(e.tmdb_id) === Number(genre.tmdb_id ?? genre.id)) ||
+                    (e.tmdb_id != null && Number(e.tmdb_id) === Number(genre.id)) ||
                     (typeof e.name === 'string' && e.name.trim().toLowerCase() === name.toLowerCase())
                 ))
             )
             if (has) { alreadyHad++; continue }
-            const next = [...current, { tmdb_id: genre.tmdb_id ?? genre.id, name: genre.name }]
+            const next = [...current, { tmdb_id: genre.id, name: genre.name }]
             const { error: uErr } = await supabase.from('staged_movies').update({ genre_data: next }).eq('id', id)
             if (uErr) { notFound++; continue }
             tagged++
