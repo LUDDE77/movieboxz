@@ -85,6 +85,48 @@ router.get('/stats', async (req, res, next) => {
 })
 
 // =============================================================================
+// POST /api/admin/channels/evaluate  { channel }
+// READ-ONLY. Resolve a YouTube channel identifier and return its info + the
+// content-sourcing-policy verdict (age gate) WITHOUT importing anything. For
+// vetting candidate channels before deciding to import. Costs ~2 quota units.
+// =============================================================================
+router.post('/channels/evaluate', async (req, res, next) => {
+    try {
+        const { channel } = req.body
+        if (!channel) return res.status(400).json({ success: false, error: 'channel identifier required' })
+
+        let channelId
+        try {
+            channelId = await youtubeService.resolveChannelIdentifier(channel)
+        } catch (e) {
+            return res.status(404).json({ success: false, error: `Could not resolve: ${channel}`, details: e.message })
+        }
+        const info = await youtubeService.getChannelInfo(channelId)
+        const sourcing = evaluateChannelSourcing(info)
+        const alreadyImported = await dbOperations.getChannelById(channelId).catch(() => null)
+
+        res.json({
+            success: true,
+            data: {
+                channelId: info.id,
+                title: info.title,
+                customUrl: info.customUrl,
+                country: info.country || null,
+                publishedAt: info.publishedAt,
+                subscriberCount: info.subscriberCount,
+                videoCount: info.videoCount,
+                viewCount: info.viewCount,
+                description: (info.description || '').slice(0, 400),
+                sourcing,              // { eligible, ageDays, ageYears, reasons, ... }
+                alreadyImported: !!alreadyImported
+            }
+        })
+    } catch (error) {
+        next(error)
+    }
+})
+
+// =============================================================================
 // POST /api/admin/channels/import
 // Import a YouTube channel by name, ID, or URL
 // =============================================================================
