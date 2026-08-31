@@ -376,6 +376,79 @@ router.post('/tag-genre', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/movies/:id/match-tmdb  { tmdbId }
+// Force a staged movie to a SPECIFIC TMDB id (for wrong-match corrections where
+// the right film has no year in TMDB search so auto-match can't find it, e.g.
+// "Fallen Petals" 落花時節). Pulls that title's real poster/metadata, preserves
+// custom genre tags (Shaw Brothers), and — if the row is already published —
+// updates the live production movie + its genres too.
+router.post('/movies/:id/match-tmdb', async (req, res, next) => {
+    try {
+        const { id } = req.params
+        const { tmdbId } = req.body
+        if (!tmdbId) return res.status(400).json({ success: false, error: 'tmdbId is required' })
+
+        const { data: m } = await supabase
+            .from('staged_movies')
+            .select('id, title, genre_data, published_movie_id, approval_status')
+            .eq('id', id).single()
+        if (!m) return res.status(404).json({ success: false, error: 'Staged movie not found' })
+
+        const details = await tmdbService.getMovieDetails(tmdbId)
+        const crew = details.credits?.crew || []
+        const cast = details.credits?.cast || []
+        const director = (crew.find(p => p.job === 'Director') || {}).name || null
+        const actors = cast.slice(0, 6).map(p => p.name).filter(Boolean).join(', ') || null
+
+        // Preserve custom genre tags (id>=900000, e.g. Shaw Brothers), add correct TMDB genres.
+        const existingCustom = (Array.isArray(m.genre_data) ? m.genre_data : []).filter(g => g && Number(g.tmdb_id) >= 900000)
+        const tmdbGenres = (details.genres || []).map(g => ({ tmdb_id: g.id, name: g.name }))
+        const genre_data = [...tmdbGenres, ...existingCustom]
+
+        const core = {
+            tmdb_id: details.id,
+            imdb_id: details.imdb_id || null,
+            title: details.title || m.title,
+            original_title: details.original_title || null,
+            description: details.overview || null,
+            release_date: details.release_date || null,
+            runtime_minutes: details.runtime || null,
+            poster_path: details.poster_path || null,
+            backdrop_path: details.backdrop_path || null,
+            vote_average: details.vote_average || null,
+            vote_count: details.vote_count || null,
+            popularity: details.popularity || null,
+            director, actors
+        }
+
+        await supabase.from('staged_movies').update({
+            ...core, genre_data,
+            enrichment_source: 'tmdb-manual', enrichment_confidence: 95, enriched_at: new Date().toISOString()
+        }).eq('id', id)
+
+        // If already live, correct the production movie + its genres too.
+        let productionUpdated = false
+        if (m.published_movie_id) {
+            const { id: _tid, ...prodCore } = core // movies table has same column names
+            await supabase.from('movies').update(prodCore).eq('id', m.published_movie_id)
+            // Re-map genres (TMDB + Shaw) onto the production movie.
+            const { data: genreRows } = await supabase.from('genres').select('id, name')
+            const rows = (genreRows || []).map(g => ({ ...g, tmdb_id: g.id }))
+            const { genreIds } = mapGenreEntriesToIds(genre_data, rows)
+            if (genreIds.length) await supabase.rpc('update_movie_genres', { p_movie_id: m.published_movie_id, p_genre_ids: genreIds })
+            productionUpdated = true
+        }
+
+        res.json({ success: true, data: {
+            matchedTo: { tmdbId: details.id, title: details.title, year: (details.release_date || '').slice(0, 4), poster: details.poster_path },
+            genres: genre_data.map(g => g.name), productionUpdated
+        } })
+    } catch (error) {
+        logger.error('[Staging] match-tmdb error:', error)
+        res.status(500).json({ success: false, error: error.message })
+    }
+})
+
 // POST /api/admin/staging/reenrich-year-locked  { movieIds, tolerance? }
 // Re-enrich staged movies with a HARD year gate: only accept a TMDB match whose
 // release year is within `tolerance` (default 1) of the pattern-extracted year.
