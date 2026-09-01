@@ -376,6 +376,38 @@ router.post('/tag-genre', async (req, res, next) => {
     }
 })
 
+// POST /api/admin/staging/tmdb-signals  { tmdbIds: [...] }
+// READ-ONLY. For the collision audit: return each TMDB id's original_title,
+// original_language, and production-country codes so wrong matches (a Shaw film
+// pointed at a non-HK / non-Chinese-language film) can be flagged. Writes nothing.
+router.post('/tmdb-signals', async (req, res, next) => {
+    try {
+        const { tmdbIds } = req.body
+        if (!Array.isArray(tmdbIds) || tmdbIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'tmdbIds[] is required' })
+        }
+        const out = []
+        for (const tid of tmdbIds) {
+            if (!tid) { out.push({ tmdbId: tid, error: 'no-tmdb-id' }); continue }
+            try {
+                const d = await tmdbService.makeRequest(`/movie/${tid}`)
+                out.push({
+                    tmdbId: tid,
+                    original_title: d.original_title || null,
+                    original_language: d.original_language || null,
+                    countries: (d.production_countries || []).map(c => c.iso_3166_1),
+                    year: (d.release_date || '').slice(0, 4) || null
+                })
+            } catch (e) {
+                out.push({ tmdbId: tid, error: e.message })
+            }
+        }
+        res.json({ success: true, data: out })
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message })
+    }
+})
+
 // POST /api/admin/staging/movies/:id/match-tmdb  { tmdbId }
 // Force a staged movie to a SPECIFIC TMDB id (for wrong-match corrections where
 // the right film has no year in TMDB search so auto-match can't find it, e.g.
