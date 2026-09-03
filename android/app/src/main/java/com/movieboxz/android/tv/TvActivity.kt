@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.movieboxz.android.ui.AppRoot
 import com.movieboxz.android.ui.theme.MbzInk
 import com.movieboxz.android.ui.theme.MovieBoxZTheme
 import com.movieboxz.android.ui.tv.TvNav
@@ -22,7 +23,7 @@ class TvActivity : ComponentActivity() {
         setContent {
             MovieBoxZTheme {
                 Surface(Modifier.fillMaxSize().background(MbzInk)) {
-                    TvNav()
+                    AppRoot { TvNav() }
                 }
             }
         }

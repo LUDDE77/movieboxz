@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.movieboxz.android.ui.AppRoot
 import com.movieboxz.android.ui.MovieBoxZNav
 import com.movieboxz.android.ui.theme.MbzInk
 import com.movieboxz.android.ui.theme.MovieBoxZTheme
@@ -19,7 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MovieBoxZTheme {
                 Surface(Modifier.fillMaxSize().background(MbzInk)) {
-                    MovieBoxZNav()
+                    AppRoot { MovieBoxZNav() }
                 }
             }
         }

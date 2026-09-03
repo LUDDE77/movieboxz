@@ -35,15 +35,24 @@ fun TvBrowseScreen(onMovieClick: (Movie) -> Unit, vm: BrowseViewModel = viewMode
             // poster, so they'd render blank as poster cards; they still appear in
             // Trending/Popular. A dedicated TV hero banner can come later.)
             val rails = state.rails
-            LazyColumn(contentPadding = PaddingValues(top = 40.dp, bottom = 40.dp)) {
+            LazyColumn(contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp)) {
                 item {
                     Text(
                         "MovieBoxZ",
-                        style = MaterialTheme.typography.displaySmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = MbzGold,
-                        modifier = Modifier.padding(start = 48.dp, bottom = 8.dp),
+                        modifier = Modifier.padding(start = 48.dp, bottom = 12.dp),
                     )
+                }
+                // Featured hero (first featured item, if any).
+                state.featured.firstOrNull()?.let { hero ->
+                    item {
+                        Column {
+                            TvHero(movie = hero, onClick = { onMovieClick(hero) })
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
                 }
                 items(rails, key = { it.title }) { rail ->
                     TvMovieRow(rail = rail, onMovieClick = onMovieClick)

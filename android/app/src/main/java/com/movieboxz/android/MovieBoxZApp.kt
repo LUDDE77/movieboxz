@@ -3,6 +3,7 @@ package com.movieboxz.android
 import android.app.Application
 import com.movieboxz.android.data.local.FavoritesStore
 import com.movieboxz.android.data.local.SettingsStore
+import com.movieboxz.android.data.local.WelcomeStore
 
 /**
  * Application entry point. Initializes the local stores (favorites + settings)
@@ -14,5 +15,6 @@ class MovieBoxZApp : Application() {
         super.onCreate()
         SettingsStore.init(this)
         FavoritesStore.init(this)
+        WelcomeStore.init(this)
     }
 }
