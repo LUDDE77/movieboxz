@@ -28,7 +28,10 @@ function classify(req) {
     return null
 }
 
-function platformOf(ua = '') {
+function platformOf(ua = '', xPlatform = '') {
+    // The Android app sends an explicit X-Platform header (it has no iOS UA).
+    const p = String(xPlatform || '').trim().toLowerCase()
+    if (p === 'android' || p === 'androidtv') return p
     if (/apple ?tv|tvos/i.test(ua)) return 'tvos'
     if (/iphone|ipad|ios/i.test(ua)) return 'ios'
     return 'app'
@@ -45,7 +48,7 @@ export function usageTracker(req, res, next) {
             const now = new Date()
             const day = now.toISOString().slice(0, 10)
             const hour = now.getUTCHours()
-            const platform = platformOf(req.get('User-Agent') || '')
+            const platform = platformOf(req.get('User-Agent') || '', req.headers['x-platform'])
             const cc = String(req.headers['x-country'] || '').trim().toUpperCase()
             const country = /^[A-Z]{2}$/.test(cc) ? cc : ''
             const dKey = [day, c.event, platform, country, c.ref || ''].join(SEP)
