@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.movieboxz.android.data.model.Movie
-import com.movieboxz.android.data.model.MovieRail
 import com.movieboxz.android.ui.browse.BrowseViewModel
 import com.movieboxz.android.ui.theme.MbzGold
 
@@ -32,11 +31,10 @@ fun TvBrowseScreen(onMovieClick: (Movie) -> Unit, vm: BrowseViewModel = viewMode
             Text(state.error!!, style = MaterialTheme.typography.titleMedium)
         }
         else -> {
-            // Build the full rail list (featured first) for the TV column.
-            val rails = buildList {
-                if (state.featured.isNotEmpty()) add(MovieRail("Featured", state.featured))
-                addAll(state.rails)
-            }
+            // TV shows the content rails. (Featured items carry a backdrop but no
+            // poster, so they'd render blank as poster cards; they still appear in
+            // Trending/Popular. A dedicated TV hero banner can come later.)
+            val rails = state.rails
             LazyColumn(contentPadding = PaddingValues(top = 40.dp, bottom = 40.dp)) {
                 item {
                     Text(
