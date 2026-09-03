@@ -125,15 +125,29 @@ fun TvSeriesCard(series: TVSeries, onClick: () -> Unit) {
 
 /** A titled row of TV cards (D-pad left/right within, up/down between rows). */
 @Composable
-fun TvMovieRow(rail: MovieRail, onMovieClick: (Movie) -> Unit) {
+fun TvMovieRow(rail: MovieRail, onMovieClick: (Movie) -> Unit, onSeeAll: (() -> Unit)? = null) {
     Column(Modifier.padding(vertical = 12.dp)) {
-        Text(
-            rail.title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MbzGold,
-            modifier = Modifier.padding(start = 48.dp, bottom = 10.dp),
-        )
+        Row(Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                rail.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MbzGold,
+                modifier = Modifier.weight(1f),
+            )
+            if (onSeeAll != null) {
+                var seeAllFocused by remember { mutableStateOf(false) }
+                Text(
+                    "See all ›",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (seeAllFocused) MbzGold else MbzMuted,
+                    modifier = Modifier
+                        .onFocusChanged { seeAllFocused = it.isFocused }
+                        .clickable { onSeeAll() },
+                )
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(20.dp),

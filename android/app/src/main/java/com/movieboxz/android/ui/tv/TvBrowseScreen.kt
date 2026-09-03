@@ -20,7 +20,11 @@ import com.movieboxz.android.ui.theme.MbzGold
 
 /** The 10-foot Browse screen for Android TV — big title + D-pad focusable rails. */
 @Composable
-fun TvBrowseScreen(onMovieClick: (Movie) -> Unit, vm: BrowseViewModel = viewModel()) {
+fun TvBrowseScreen(
+    onMovieClick: (Movie) -> Unit,
+    onSeeAll: (categoryId: String, title: String) -> Unit = { _, _ -> },
+    vm: BrowseViewModel = viewModel(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
 
     when {
@@ -55,7 +59,11 @@ fun TvBrowseScreen(onMovieClick: (Movie) -> Unit, vm: BrowseViewModel = viewMode
                     }
                 }
                 items(rails, key = { it.title }) { rail ->
-                    TvMovieRow(rail = rail, onMovieClick = onMovieClick)
+                    TvMovieRow(
+                        rail = rail,
+                        onMovieClick = onMovieClick,
+                        onSeeAll = rail.categoryId?.let { cid -> { onSeeAll(cid, rail.title) } },
+                    )
                 }
             }
         }

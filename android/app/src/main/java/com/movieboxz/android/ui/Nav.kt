@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import android.net.Uri
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -26,6 +27,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.movieboxz.android.ui.browse.BrowseScreen
+import com.movieboxz.android.ui.category.CategoryDetailScreen
 import com.movieboxz.android.ui.detail.MovieDetailScreen
 import com.movieboxz.android.ui.kids.KidsScreen
 import com.movieboxz.android.ui.library.LibraryScreen
@@ -43,8 +45,10 @@ object Routes {
     const val SETTINGS = "settings"
     const val DETAIL = "detail/{movieId}"
     const val SERIES_DETAIL = "series/{seriesId}"
+    const val CATEGORY = "category/{catId}/{catTitle}"
     fun detail(id: String) = "detail/$id"
     fun seriesDetail(id: String) = "series/$id"
+    fun category(catId: String, title: String) = "category/$catId/${Uri.encode(title)}"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
@@ -93,7 +97,10 @@ fun MovieBoxZNav() {
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             composable(Routes.BROWSE) {
-                BrowseScreen(onMovieClick = { nav.navigate(Routes.detail(it.id)) })
+                BrowseScreen(
+                    onMovieClick = { nav.navigate(Routes.detail(it.id)) },
+                    onSeeAll = { cid, title -> nav.navigate(Routes.category(cid, title)) },
+                )
             }
             composable(Routes.SEARCH) {
                 SearchScreen(onMovieClick = { nav.navigate(Routes.detail(it.id)) })
@@ -105,6 +112,7 @@ fun MovieBoxZNav() {
                 KidsScreen(
                     onMovieClick = { nav.navigate(Routes.detail(it.id)) },
                     onSeriesClick = { nav.navigate(Routes.seriesDetail(it.id)) },
+                    onSeeAll = { cid, title -> nav.navigate(Routes.category(cid, title)) },
                 )
             }
             composable(Routes.LIBRARY) {
@@ -123,6 +131,19 @@ fun MovieBoxZNav() {
                 arguments = listOf(navArgument("seriesId") { type = NavType.StringType }),
             ) { backStackEntry ->
                 SeriesDetailScreen(seriesId = backStackEntry.arguments?.getString("seriesId").orEmpty())
+            }
+            composable(
+                Routes.CATEGORY,
+                arguments = listOf(
+                    navArgument("catId") { type = NavType.StringType },
+                    navArgument("catTitle") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                CategoryDetailScreen(
+                    categoryId = backStackEntry.arguments?.getString("catId").orEmpty(),
+                    title = Uri.decode(backStackEntry.arguments?.getString("catTitle").orEmpty()),
+                    onMovieClick = { nav.navigate(Routes.detail(it.id)) },
+                )
             }
         }
     }

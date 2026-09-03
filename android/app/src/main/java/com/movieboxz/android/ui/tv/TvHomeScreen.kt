@@ -16,6 +16,7 @@ import com.movieboxz.android.data.model.TVSeries
 fun TvHomeScreen(
     onMovieClick: (Movie) -> Unit,
     onSeriesClick: (TVSeries) -> Unit,
+    onSeeAll: (categoryId: String, title: String) -> Unit = { _, _ -> },
 ) {
     var selected by rememberSaveable { mutableStateOf(0) }
 
@@ -23,10 +24,10 @@ fun TvHomeScreen(
         TvNavRail(selected = selected, onSelect = { selected = it })
         Box(Modifier.weight(1f).fillMaxHeight()) {
             when (selected) {
-                0 -> TvBrowseScreen(onMovieClick = onMovieClick)
+                0 -> TvBrowseScreen(onMovieClick = onMovieClick, onSeeAll = onSeeAll)
                 1 -> TvSearchScreen(onMovieClick = onMovieClick)
                 2 -> TvSeriesScreen(onSeriesClick = onSeriesClick)
-                3 -> TvKidsScreen(onMovieClick = onMovieClick, onSeriesClick = onSeriesClick)
+                3 -> TvKidsScreen(onMovieClick = onMovieClick, onSeriesClick = onSeriesClick, onSeeAll = onSeeAll)
                 4 -> TvLibraryScreen(onMovieClick = onMovieClick)
                 5 -> TvSettingsScreen()
             }

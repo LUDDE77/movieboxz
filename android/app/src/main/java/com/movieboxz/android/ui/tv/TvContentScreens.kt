@@ -18,10 +18,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.movieboxz.android.data.LegalContent
 import com.movieboxz.android.data.local.FavoritesStore
 import com.movieboxz.android.data.local.SettingsStore
+import com.movieboxz.android.ui.settings.LegalDocumentScreen
 import com.movieboxz.android.data.model.Movie
 import com.movieboxz.android.data.model.MovieRail
 import com.movieboxz.android.data.model.TVSeries
@@ -132,6 +137,7 @@ fun TvSearchScreen(onMovieClick: (Movie) -> Unit, vm: SearchViewModel = viewMode
 fun TvKidsScreen(
     onMovieClick: (Movie) -> Unit,
     onSeriesClick: (TVSeries) -> Unit,
+    onSeeAll: (categoryId: String, title: String) -> Unit = { _, _ -> },
     vm: KidsViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -156,10 +162,10 @@ fun TvKidsScreen(
                 }
             }
             if (state.family.isNotEmpty()) {
-                item { TvMovieRow(rail = MovieRail("Family", state.family), onMovieClick = onMovieClick) }
+                item { TvMovieRow(rail = MovieRail("Family", state.family, "g10751"), onMovieClick = onMovieClick, onSeeAll = { onSeeAll("g10751", "Family") }) }
             }
             if (state.animation.isNotEmpty()) {
-                item { TvMovieRow(rail = MovieRail("Animation", state.animation), onMovieClick = onMovieClick) }
+                item { TvMovieRow(rail = MovieRail("Animation", state.animation, "g16"), onMovieClick = onMovieClick, onSeeAll = { onSeeAll("g16", "Animation") }) }
             }
         }
     }
@@ -177,26 +183,28 @@ private val TV_REGIONS = listOf(
 
 @Composable
 fun TvSettingsScreen() {
+    val context = LocalContext.current
     var selected by remember { mutableStateOf(SettingsStore.regionOverride) }
+    var legal by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    if (legal != null) {
+        LegalDocumentScreen(title = legal!!.first, text = legal!!.second, onClose = { legal = null })
+        return
+    }
+
     LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
         item { TvHeader("Settings") }
-        item {
-            Text(
-                "Region — choose which country's catalog to browse.",
-                style = MaterialTheme.typography.titleMedium,
-                color = MbzMuted,
-                modifier = Modifier.padding(horizontal = TV_PAD, vertical = 8.dp),
-            )
-        }
+
+        item { TvSectionHeader("About") }
+        item { TvLinkRow("Privacy Policy") { legal = "Privacy Policy" to LegalContent.privacyPolicy } }
+        item { TvLinkRow("Terms of Service") { legal = "Terms of Service" to LegalContent.termsOfService } }
+
+        item { TvSectionHeader("Region") }
         items(TV_REGIONS) { r ->
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .selectable(selected = r.code == selected, onClick = {
-                        selected = r.code
-                        SettingsStore.regionOverride = r.code
-                    })
-                    .padding(horizontal = TV_PAD, vertical = 16.dp),
+                Modifier.fillMaxWidth()
+                    .selectable(selected = r.code == selected, onClick = { selected = r.code; SettingsStore.regionOverride = r.code })
+                    .padding(horizontal = TV_PAD, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = r.code == selected, onClick = null)
@@ -204,5 +212,35 @@ fun TvSettingsScreen() {
                 Text(r.label, style = MaterialTheme.typography.titleLarge)
             }
         }
+
+        item { TvSectionHeader("Copyright") }
+        item { TvLinkRow("Report a Copyright Concern") { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/copyright_complaint_form"))) } } }
+
+        item { TvSectionHeader("About the app") }
+        item {
+            Text(
+                "MovieBoxZ is a discovery guide — it hosts no video; every title plays in the YouTube app. No account, no personal data. Version 1.0.",
+                style = MaterialTheme.typography.titleMedium, color = MbzMuted,
+                modifier = Modifier.padding(horizontal = TV_PAD, vertical = 8.dp),
+            )
+        }
     }
+}
+
+@Composable
+private fun TvSectionHeader(text: String) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MbzGold,
+        modifier = Modifier.padding(start = TV_PAD, top = 24.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun TvLinkRow(title: String, onClick: () -> Unit) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = TV_PAD, vertical = 16.dp),
+    )
 }

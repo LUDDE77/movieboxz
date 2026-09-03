@@ -22,7 +22,11 @@ import com.movieboxz.android.ui.theme.MbzGold
  * Mirrors the iOS MainBrowseView.
  */
 @Composable
-fun BrowseScreen(onMovieClick: (Movie) -> Unit, vm: BrowseViewModel = viewModel()) {
+fun BrowseScreen(
+    onMovieClick: (Movie) -> Unit,
+    onSeeAll: (categoryId: String, title: String) -> Unit = { _, _ -> },
+    vm: BrowseViewModel = viewModel(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
 
     when {
@@ -54,7 +58,11 @@ fun BrowseScreen(onMovieClick: (Movie) -> Unit, vm: BrowseViewModel = viewModel(
                 }
             }
             items(state.rails, key = { it.title }) { rail ->
-                MovieRow(rail = rail, onMovieClick = onMovieClick)
+                MovieRow(
+                    rail = rail,
+                    onMovieClick = onMovieClick,
+                    onSeeAll = rail.categoryId?.let { cid -> { onSeeAll(cid, rail.title) } },
+                )
             }
         }
     }

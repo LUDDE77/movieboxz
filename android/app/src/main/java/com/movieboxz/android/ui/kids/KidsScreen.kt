@@ -28,6 +28,7 @@ import com.movieboxz.android.ui.theme.MbzMuted
 fun KidsScreen(
     onMovieClick: (Movie) -> Unit,
     onSeriesClick: (TVSeries) -> Unit,
+    onSeeAll: (categoryId: String, title: String) -> Unit = { _, _ -> },
     vm: KidsViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -78,10 +79,10 @@ fun KidsScreen(
                     }
                 }
                 if (state.family.isNotEmpty()) {
-                    item { MovieRow(rail = MovieRail("Family", state.family), onMovieClick = onMovieClick) }
+                    item { MovieRow(rail = MovieRail("Family", state.family, "g10751"), onMovieClick = onMovieClick, onSeeAll = { onSeeAll("g10751", "Family") }) }
                 }
                 if (state.animation.isNotEmpty()) {
-                    item { MovieRow(rail = MovieRail("Animation", state.animation), onMovieClick = onMovieClick) }
+                    item { MovieRow(rail = MovieRail("Animation", state.animation, "g16"), onMovieClick = onMovieClick, onSeeAll = { onSeeAll("g16", "Animation") }) }
                 }
             }
         }

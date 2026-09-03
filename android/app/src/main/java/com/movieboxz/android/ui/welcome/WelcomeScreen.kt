@@ -1,6 +1,7 @@
 package com.movieboxz.android.ui.welcome
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,7 +11,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.movieboxz.android.data.LegalContent
+import com.movieboxz.android.ui.settings.LegalDocumentScreen
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +37,12 @@ import com.movieboxz.android.ui.theme.MbzMuted
 fun WelcomeScreen(onAccept: () -> Unit) {
     val getStarted = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { getStarted.requestFocus() } }  // TV: focus the CTA
+
+    var legal by remember { mutableStateOf<Pair<String, String>?>(null) }
+    if (legal != null) {
+        LegalDocumentScreen(title = legal!!.first, text = legal!!.second, onClose = { legal = null })
+        return
+    }
 
     Box(Modifier.fillMaxSize().background(MbzInk), contentAlignment = Alignment.Center) {
         Column(
@@ -62,10 +74,24 @@ fun WelcomeScreen(onAccept: () -> Unit) {
 
             Spacer(Modifier.height(24.dp))
             Text(
-                "By continuing, you agree to our Terms of Use and Privacy Policy. Content is provided by YouTube and its creators.",
+                "By continuing, you agree to our Terms of Service and Privacy Policy. Content is provided by YouTube and its creators.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MbzMuted,
             )
+            Spacer(Modifier.height(8.dp))
+            Row {
+                Text(
+                    "Terms of Service",
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MbzGold,
+                    modifier = Modifier.clickable { legal = "Terms of Service" to LegalContent.termsOfService },
+                )
+                Spacer(Modifier.width(24.dp))
+                Text(
+                    "Privacy Policy",
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MbzGold,
+                    modifier = Modifier.clickable { legal = "Privacy Policy" to LegalContent.privacyPolicy },
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
             Button(

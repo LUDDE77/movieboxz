@@ -24,22 +24,37 @@ class MovieRepository(private val api: MovieApi = ApiClient.create()) {
     suspend fun browseRails(): List<MovieRail> {
         val h = api.browseHome().data
         val rails = mutableListOf<MovieRail>()
-        fun add(title: String, movies: List<Movie>) {
+        fun add(title: String, movies: List<Movie>, categoryId: String? = null) {
             val avail = movies.filter { it.isAvailable }
-            if (avail.isNotEmpty()) rails += MovieRail(title, avail)
+            if (avail.isNotEmpty()) rails += MovieRail(title, avail, categoryId)
         }
-        add("Trending", h.trending)
-        add("Popular", h.popular)
-        add("Recently Added", h.recent)
-        add("Top IMDb", h.topImdb)
+        add("Trending", h.trending, "trending")
+        add("Popular", h.popular, "popular")
+        add("Recently Added", h.recent, "recent")
+        add("Top IMDb", h.topImdb, "top-imdb")
         h.eras?.let {
+            // Eras have no dedicated endpoint → no See-all.
             add("Modern", it.modern)
             add("80s & 90s", it.eighties90s)
             add("60s & 70s", it.sixties70s)
             add("Classics", it.classic)
         }
-        h.genres.forEach { add(it.genre.name, it.movies) }
+        h.genres.forEach { add(it.genre.name, it.movies, "g${it.genre.id}") }
         return rails
+    }
+
+    /** Load the full list for a "See all" — [categoryId] is "g{genreId}" or a
+     *  category key ("trending"/"popular"/"recent"/"top-imdb"). */
+    suspend fun category(categoryId: String): List<Movie> {
+        val movies = when {
+            categoryId.startsWith("g") -> return moviesByGenre(categoryId.removePrefix("g").toInt())
+            categoryId == "trending" -> api.trending(limit = 60).data.movies
+            categoryId == "popular" -> api.popular(limit = 60).data.movies
+            categoryId == "recent" -> api.recent(limit = 60).data.movies
+            categoryId == "top-imdb" -> api.topRated(limit = 60).data.movies
+            else -> emptyList()
+        }
+        return movies.filter { it.isAvailable }
     }
 
     suspend fun search(query: String): List<Movie> =

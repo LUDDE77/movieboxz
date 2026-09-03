@@ -124,17 +124,30 @@ fun SeriesCard(series: TVSeries, onClick: () -> Unit, modifier: Modifier = Modif
     }
 }
 
-/** A titled horizontal rail of movie cards. */
+/** A titled horizontal rail of movie cards, with an optional "See all" link. */
 @Composable
-fun MovieRow(rail: MovieRail, onMovieClick: (Movie) -> Unit) {
+fun MovieRow(rail: MovieRail, onMovieClick: (Movie) -> Unit, onSeeAll: (() -> Unit)? = null) {
     Column(Modifier.padding(vertical = 10.dp)) {
-        Text(
-            text = rail.title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MbzGold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = rail.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MbzGold,
+                modifier = Modifier.weight(1f),
+            )
+            if (onSeeAll != null) {
+                Text(
+                    "See all",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MbzMuted,
+                    modifier = Modifier.clickable { onSeeAll() },
+                )
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

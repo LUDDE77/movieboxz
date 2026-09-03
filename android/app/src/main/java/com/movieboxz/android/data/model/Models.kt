@@ -128,5 +128,9 @@ data class Eras(
     val classic: List<Movie> = emptyList(),
 )
 
-/** A titled horizontal rail for the browse UI. */
-data class MovieRail(val title: String, val movies: List<Movie>)
+/**
+ * A titled horizontal rail for the browse UI. [categoryId] identifies the full
+ * source for a "See all" screen: "g{genreId}" for a genre rail, or a category
+ * key ("trending"/"popular"/"recent"/"top-imdb"). null = no See-all (e.g. eras).
+ */
+data class MovieRail(val title: String, val movies: List<Movie>, val categoryId: String? = null)

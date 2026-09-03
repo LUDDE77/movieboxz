@@ -13,7 +13,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
@@ -29,7 +31,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
 import com.movieboxz.android.data.local.FavoritesStore
+import com.movieboxz.android.ui.components.YouTubeLoadingOverlay
 import com.movieboxz.android.ui.detail.DetailViewModel
+import kotlinx.coroutines.delay
 import com.movieboxz.android.ui.theme.MbzGold
 import com.movieboxz.android.ui.theme.MbzInk
 import com.movieboxz.android.ui.theme.MbzMuted
@@ -54,7 +58,11 @@ fun TvDetailScreen(movieId: String, vm: DetailViewModel = viewModel()) {
         }
         else -> {
             val m = state.movie!!
+            var launching by remember { mutableStateOf(false) }
             LaunchedEffect(m.id) { runCatching { watchFocus.requestFocus() } }
+            LaunchedEffect(launching) {
+                if (launching) { delay(500); YouTubeLauncher.watch(context, m.youtubeVideoId); launching = false }
+            }
 
             Box(Modifier.fillMaxSize()) {
                 // Full-bleed backdrop with a left-to-right + bottom scrim for legibility.
@@ -106,7 +114,7 @@ fun TvDetailScreen(movieId: String, vm: DetailViewModel = viewModel()) {
                     val isFav = favorites.any { it.id == m.id }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
-                            onClick = { YouTubeLauncher.watch(context, m.youtubeVideoId) },
+                            onClick = { launching = true },
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.focusRequester(watchFocus),
                         ) {
@@ -127,7 +135,12 @@ fun TvDetailScreen(movieId: String, vm: DetailViewModel = viewModel()) {
                             Text(if (isFav) "In Library" else "Add to Library", fontWeight = FontWeight.Bold)
                         }
                     }
+                    m.channelTitle?.let {
+                        Spacer(Modifier.height(20.dp))
+                        Text("From $it on YouTube", color = MbzMuted, style = MaterialTheme.typography.titleMedium)
+                    }
                 }
+                if (launching) YouTubeLoadingOverlay()
             }
         }
     }
