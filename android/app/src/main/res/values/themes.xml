@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base platform theme; the real UI colors are driven by Compose (Theme.kt). -->
+    <style name="Theme.MovieBoxZ" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#141210</item>
+        <item name="android:navigationBarColor">#141210</item>
+        <item name="android:windowBackground">#141210</item>
+    </style>
+</resources>

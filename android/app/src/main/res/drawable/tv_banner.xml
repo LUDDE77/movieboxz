@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android TV home-screen banner (320x180). Ink background, gold play badge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <path
+        android:fillColor="#141210"
+        android:pathData="M0,0 h320 v180 h-320 z" />
+
+    <!-- gold rounded badge -->
+    <path
+        android:fillColor="#E6B34D"
+        android:pathData="M118,58 h84 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-84 a14,14 0 0 1 -14,-14 v-36 a14,14 0 0 1 14,-14 z" />
+
+    <!-- play triangle (ink) -->
+    <path
+        android:fillColor="#141210"
+        android:pathData="M150,74 L176,90 L150,106 z" />

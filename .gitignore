@@ -87,7 +87,10 @@ claude.md
 /add_missing_channels*.js
 /add_views_to_xcode.sh
 /"logo and splash"/
-MovieBoxZ/
+# Anchor to the iOS app folder only. A bare "MovieBoxZ/" also matched the Android
+# package dir "android/.../com/movieboxz/" (core.ignorecase=true on macOS), which
+# wrongly ignored the whole native Android project.
+/iOS/MovieBoxZ/
 
 # Backup and env files
 *.bak*
