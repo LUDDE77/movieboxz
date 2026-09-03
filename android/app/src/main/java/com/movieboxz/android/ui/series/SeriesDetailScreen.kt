@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -29,7 +30,7 @@ import com.movieboxz.android.util.YouTubeLauncher
 
 /** Series detail — header + seasons, each listing tappable episodes that open on YouTube. */
 @Composable
-fun SeriesDetailScreen(seriesId: String, vm: SeriesDetailViewModel = viewModel()) {
+fun SeriesDetailScreen(seriesId: String, onBack: () -> Unit = {}, vm: SeriesDetailViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsStateWithLifecycle()
 
@@ -45,6 +46,12 @@ fun SeriesDetailScreen(seriesId: String, vm: SeriesDetailViewModel = viewModel()
             LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
                 item {
                     Column(Modifier.padding(16.dp)) {
+                        TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Back")
+                        }
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             series?.title ?: "TV Series",
                             style = MaterialTheme.typography.headlineSmall,

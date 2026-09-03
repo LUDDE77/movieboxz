@@ -1,5 +1,6 @@
 package com.movieboxz.android.ui.welcome
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,11 +20,12 @@ import com.movieboxz.android.data.LegalContent
 import com.movieboxz.android.ui.settings.LegalDocumentScreen
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.movieboxz.android.R
 import com.movieboxz.android.ui.theme.MbzGold
 import com.movieboxz.android.ui.theme.MbzInk
 import com.movieboxz.android.ui.theme.MbzMuted
@@ -52,12 +54,11 @@ fun WelcomeScreen(onAccept: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)).background(MbzGold),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MbzInk, modifier = Modifier.size(42.dp))
-            }
+            Image(
+                painter = painterResource(R.drawable.mbz_logo),
+                contentDescription = "MovieBoxZ",
+                modifier = Modifier.size(96.dp),
+            )
             Spacer(Modifier.height(16.dp))
             Text("Welcome to MovieBoxZ", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = MbzGold)
             Spacer(Modifier.height(6.dp))

@@ -23,8 +23,8 @@
         android:name=".MovieBoxZApp"
         android:allowBackup="true"
         android:banner="@drawable/tv_banner"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/mbz_logo"
+        android:roundIcon="@drawable/mbz_logo"
         android:label="MovieBoxZ"
         android:supportsRtl="true"
         android:theme="@style/Theme.MovieBoxZ">

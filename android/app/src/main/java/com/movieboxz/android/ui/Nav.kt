@@ -124,13 +124,19 @@ fun MovieBoxZNav() {
                 Routes.DETAIL,
                 arguments = listOf(navArgument("movieId") { type = NavType.StringType }),
             ) { backStackEntry ->
-                MovieDetailScreen(movieId = backStackEntry.arguments?.getString("movieId").orEmpty())
+                MovieDetailScreen(
+                    movieId = backStackEntry.arguments?.getString("movieId").orEmpty(),
+                    onBack = { nav.popBackStack() },
+                )
             }
             composable(
                 Routes.SERIES_DETAIL,
                 arguments = listOf(navArgument("seriesId") { type = NavType.StringType }),
             ) { backStackEntry ->
-                SeriesDetailScreen(seriesId = backStackEntry.arguments?.getString("seriesId").orEmpty())
+                SeriesDetailScreen(
+                    seriesId = backStackEntry.arguments?.getString("seriesId").orEmpty(),
+                    onBack = { nav.popBackStack() },
+                )
             }
             composable(
                 Routes.CATEGORY,
@@ -143,6 +149,7 @@ fun MovieBoxZNav() {
                     categoryId = backStackEntry.arguments?.getString("catId").orEmpty(),
                     title = Uri.decode(backStackEntry.arguments?.getString("catTitle").orEmpty()),
                     onMovieClick = { nav.navigate(Routes.detail(it.id)) },
+                    onBack = { nav.popBackStack() },
                 )
             }
         }

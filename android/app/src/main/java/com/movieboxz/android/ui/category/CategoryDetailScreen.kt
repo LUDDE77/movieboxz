@@ -4,9 +4,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,15 +26,22 @@ import com.movieboxz.android.ui.theme.MbzGold
 
 /** Phone "See all" — every movie in a genre/category as a poster grid. */
 @Composable
-fun CategoryDetailScreen(categoryId: String, title: String, onMovieClick: (Movie) -> Unit, vm: CategoryViewModel = viewModel()) {
+fun CategoryDetailScreen(categoryId: String, title: String, onMovieClick: (Movie) -> Unit, onBack: () -> Unit = {}, vm: CategoryViewModel = viewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(categoryId) { vm.load(categoryId) }
 
     Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(start = 8.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Spacer(Modifier.width(6.dp))
+                Text("Back")
+            }
+        }
         Text(
             title,
             style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MbzGold,
-            modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
         )
         when {
             state.loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = MbzGold) }

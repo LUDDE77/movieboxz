@@ -1,19 +1,17 @@
 package com.movieboxz.android.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.movieboxz.android.R
 import com.movieboxz.android.data.local.WelcomeStore
 import com.movieboxz.android.ui.theme.MbzGold
 import com.movieboxz.android.ui.theme.MbzInk
@@ -52,15 +50,11 @@ fun AppRoot(content: @Composable () -> Unit) {
 private fun SplashContent() {
     Box(Modifier.fillMaxSize().background(MbzInk), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                Modifier
-                    .size(84.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MbzGold),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MbzInk, modifier = Modifier.size(48.dp))
-            }
+            Image(
+                painter = painterResource(R.drawable.mbz_logo),
+                contentDescription = "MovieBoxZ",
+                modifier = Modifier.size(148.dp),
+            )
             Spacer(Modifier.height(16.dp))
             Text("MovieBoxZ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MbzGold)
             Spacer(Modifier.height(4.dp))

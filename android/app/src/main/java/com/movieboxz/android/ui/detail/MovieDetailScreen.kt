@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -35,7 +36,7 @@ import kotlinx.coroutines.delay
 
 /** Movie detail — backdrop, metadata, description, and the Watch (deep-link) CTA. */
 @Composable
-fun MovieDetailScreen(movieId: String, vm: DetailViewModel = viewModel()) {
+fun MovieDetailScreen(movieId: String, onBack: () -> Unit = {}, vm: DetailViewModel = viewModel()) {
     val context = LocalContext.current
     val state by vm.state.collectAsStateWithLifecycle()
 
@@ -112,6 +113,12 @@ fun MovieDetailScreen(movieId: String, vm: DetailViewModel = viewModel()) {
                         Text("From $it on YouTube", color = MbzMuted, style = MaterialTheme.typography.bodySmall)
                     }
                 }
+            }
+            FilledTonalIconButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 8.dp, top = 32.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
             if (launching) YouTubeLoadingOverlay()
             }
