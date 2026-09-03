@@ -6,6 +6,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.rememberAsyncImagePainter
+import com.movieboxz.android.data.local.FavoritesStore
 import com.movieboxz.android.ui.detail.DetailViewModel
 import com.movieboxz.android.ui.theme.MbzGold
 import com.movieboxz.android.ui.theme.MbzInk
@@ -99,14 +102,30 @@ fun TvDetailScreen(movieId: String, vm: DetailViewModel = viewModel()) {
                     }
 
                     Spacer(Modifier.height(24.dp))
-                    Button(
-                        onClick = { YouTubeLauncher.watch(context, m.youtubeVideoId) },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.focusRequester(watchFocus),
-                    ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Watch on YouTube", fontWeight = FontWeight.Bold)
+                    val favorites by FavoritesStore.favorites.collectAsStateWithLifecycle()
+                    val isFav = favorites.any { it.id == m.id }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = { YouTubeLauncher.watch(context, m.youtubeVideoId) },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.focusRequester(watchFocus),
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Watch on YouTube", fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        OutlinedButton(
+                            onClick = { FavoritesStore.toggle(m) },
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(
+                                if (isFav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                contentDescription = if (isFav) "Remove from Library" else "Add to Library",
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (isFav) "In Library" else "Add to Library", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

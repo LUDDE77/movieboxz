@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +33,7 @@ val TV_DESTS = listOf(
     TvDest("Browse", Icons.Filled.Home),
     TvDest("Search", Icons.Filled.Search),
     TvDest("TV Series", Icons.Filled.Tv),
+    TvDest("Kids", Icons.Filled.Star),
     TvDest("Library", Icons.Filled.FavoriteBorder),
     TvDest("Settings", Icons.Filled.Settings),
 )

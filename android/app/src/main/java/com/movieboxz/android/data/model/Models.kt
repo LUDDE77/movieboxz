@@ -102,6 +102,10 @@ data class Pagination(val page: Int = 1, val limit: Int = 20, val total: Int? = 
 /** GET /movies/{id} — `data` is the movie itself (matches the iOS decode). */
 data class MovieDetailResponse(val success: Boolean = true, val data: Movie)
 
+/** GET /browse/genres/{id} — movies for one genre (used by the Kids rows). */
+data class GenreMoviesResponse(val data: GenreMoviesData)
+data class GenreMoviesData(val movies: List<Movie> = emptyList(), val pagination: Pagination? = null)
+
 /** GET /browse/home — the whole Browse tab in one response. */
 data class BrowseHomeResponse(val data: BrowseHomeData)
 

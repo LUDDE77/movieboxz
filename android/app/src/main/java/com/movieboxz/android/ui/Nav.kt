@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -26,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.movieboxz.android.ui.browse.BrowseScreen
 import com.movieboxz.android.ui.detail.MovieDetailScreen
+import com.movieboxz.android.ui.kids.KidsScreen
 import com.movieboxz.android.ui.library.LibraryScreen
 import com.movieboxz.android.ui.search.SearchScreen
 import com.movieboxz.android.ui.series.SeriesDetailScreen
@@ -36,6 +38,7 @@ object Routes {
     const val BROWSE = "browse"
     const val SEARCH = "search"
     const val TV = "tv"
+    const val KIDS = "kids"
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val DETAIL = "detail/{movieId}"
@@ -50,6 +53,7 @@ private val TABS = listOf(
     Tab(Routes.BROWSE, "Browse", Icons.Filled.Home),
     Tab(Routes.SEARCH, "Search", Icons.Filled.Search),
     Tab(Routes.TV, "TV", Icons.Filled.Tv),
+    Tab(Routes.KIDS, "Kids", Icons.Filled.Star),
     Tab(Routes.LIBRARY, "Library", Icons.Filled.FavoriteBorder),
     Tab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
@@ -96,6 +100,12 @@ fun MovieBoxZNav() {
             }
             composable(Routes.TV) {
                 SeriesScreen(onSeriesClick = { nav.navigate(Routes.seriesDetail(it.id)) })
+            }
+            composable(Routes.KIDS) {
+                KidsScreen(
+                    onMovieClick = { nav.navigate(Routes.detail(it.id)) },
+                    onSeriesClick = { nav.navigate(Routes.seriesDetail(it.id)) },
+                )
             }
             composable(Routes.LIBRARY) {
                 LibraryScreen(onMovieClick = { nav.navigate(Routes.detail(it.id)) })

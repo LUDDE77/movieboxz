@@ -1,6 +1,7 @@
 package com.movieboxz.android.data.remote
 
 import com.movieboxz.android.data.model.BrowseHomeResponse
+import com.movieboxz.android.data.model.GenreMoviesResponse
 import com.movieboxz.android.data.model.MovieDetailResponse
 import com.movieboxz.android.data.model.MoviesResponse
 import com.movieboxz.android.data.model.SeriesEpisodesResponse
@@ -53,8 +54,18 @@ interface MovieApi {
     suspend fun movie(@Path("id") id: String): MovieDetailResponse
 
     @GET("series")
-    suspend fun series(@Query("limit") limit: Int = 200): SeriesListResponse
+    suspend fun series(
+        @Query("limit") limit: Int = 200,
+        @Query("kids") kids: String? = null,
+    ): SeriesListResponse
 
     @GET("series/{id}/episodes")
     suspend fun seriesEpisodes(@Path("id") id: String): SeriesEpisodesResponse
+
+    @GET("browse/genres/{genreId}")
+    suspend fun moviesByGenre(
+        @Path("genreId") genreId: Int,
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50,
+    ): GenreMoviesResponse
 }

@@ -6,10 +6,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.movieboxz.android.data.model.Movie
 import com.movieboxz.android.data.model.TVSeries
-import com.movieboxz.android.ui.library.LibraryScreen
-import com.movieboxz.android.ui.search.SearchScreen
-import com.movieboxz.android.ui.series.SeriesScreen
-import com.movieboxz.android.ui.settings.SettingsScreen
 
 /**
  * The Android TV home: a persistent left nav rail + a content area that swaps
@@ -28,10 +24,11 @@ fun TvHomeScreen(
         Box(Modifier.weight(1f).fillMaxHeight()) {
             when (selected) {
                 0 -> TvBrowseScreen(onMovieClick = onMovieClick)
-                1 -> SearchScreen(onMovieClick = onMovieClick)
-                2 -> SeriesScreen(onSeriesClick = onSeriesClick)
-                3 -> LibraryScreen(onMovieClick = onMovieClick)
-                4 -> SettingsScreen()
+                1 -> TvSearchScreen(onMovieClick = onMovieClick)
+                2 -> TvSeriesScreen(onSeriesClick = onSeriesClick)
+                3 -> TvKidsScreen(onMovieClick = onMovieClick, onSeriesClick = onSeriesClick)
+                4 -> TvLibraryScreen(onMovieClick = onMovieClick)
+                5 -> TvSettingsScreen()
             }
         }
     }

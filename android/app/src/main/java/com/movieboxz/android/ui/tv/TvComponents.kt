@@ -19,10 +19,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
 import coil.compose.AsyncImage
 import com.movieboxz.android.data.model.Movie
 import com.movieboxz.android.data.model.MovieRail
+import com.movieboxz.android.data.model.TVSeries
 import com.movieboxz.android.ui.theme.MbzGold
+import com.movieboxz.android.ui.theme.MbzInk
 import com.movieboxz.android.ui.theme.MbzMuted
 import com.movieboxz.android.ui.theme.MbzScreen
 import com.movieboxz.android.util.ImageUrls
@@ -57,6 +61,59 @@ fun TvMovieCard(movie: Movie, onClick: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text(
             movie.displayTitle,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (focused) MbzScreen else MbzMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** A D-pad focusable TV series card (poster + episode-count badge + title). */
+@Composable
+fun TvSeriesCard(series: TVSeries, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "seriesScale")
+
+    Column(Modifier.width(150.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .scale(scale)
+                .clip(RoundedCornerShape(10.dp))
+                .then(
+                    if (focused) Modifier.border(BorderStroke(3.dp, MbzGold), RoundedCornerShape(10.dp))
+                    else Modifier
+                )
+                .onFocusChanged { focused = it.isFocused }
+                .clickable { onClick() },
+        ) {
+            AsyncImage(
+                model = ImageUrls.seriesPoster(series),
+                contentDescription = series.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            series.episodeCount?.takeIf { it > 0 }?.let { c ->
+                Text(
+                    "$c Eps",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MbzInk,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MbzGold)
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            series.title,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = if (focused) MbzScreen else MbzMuted,

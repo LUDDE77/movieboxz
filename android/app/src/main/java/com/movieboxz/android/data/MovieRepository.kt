@@ -50,6 +50,13 @@ class MovieRepository(private val api: MovieApi = ApiClient.create()) {
     /** All TV series for the TV tab. */
     suspend fun series(): List<TVSeries> = api.series().data.series
 
+    /** Kids-only TV series (episodes flagged kids content). */
+    suspend fun kidsSeries(): List<TVSeries> = api.series(kids = "true").data.series
+
+    /** Movies in one genre (e.g. Family=10751, Animation=16) for the Kids rows. */
+    suspend fun moviesByGenre(genreId: Int): List<Movie> =
+        api.moviesByGenre(genreId).data.movies.filter { it.isAvailable }
+
     /** A series' header + seasons (each with its available episodes). */
     suspend fun seriesEpisodes(id: String): SeriesEpisodesData {
         val d = api.seriesEpisodes(id).data
