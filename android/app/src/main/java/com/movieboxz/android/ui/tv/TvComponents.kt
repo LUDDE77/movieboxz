@@ -123,31 +123,20 @@ fun TvSeriesCard(series: TVSeries, onClick: () -> Unit) {
     }
 }
 
-/** A titled row of TV cards (D-pad left/right within, up/down between rows). */
+/** A titled row of TV cards (D-pad left/right within, up/down between rows).
+ *  "See all" is a focusable tile at the END of the row — press RIGHT past the last
+ *  poster to reach it. (A header-corner control is unreachable on TV: the full-width
+ *  hero above the first rail captures every UP press.) */
 @Composable
 fun TvMovieRow(rail: MovieRail, onMovieClick: (Movie) -> Unit, onSeeAll: (() -> Unit)? = null) {
     Column(Modifier.padding(vertical = 12.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 48.dp, end = 48.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                rail.title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MbzGold,
-                modifier = Modifier.weight(1f),
-            )
-            if (onSeeAll != null) {
-                var seeAllFocused by remember { mutableStateOf(false) }
-                Text(
-                    "See all ›",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (seeAllFocused) MbzGold else MbzMuted,
-                    modifier = Modifier
-                        .onFocusChanged { seeAllFocused = it.isFocused }
-                        .clickable { onSeeAll() },
-                )
-            }
-        }
+        Text(
+            rail.title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MbzGold,
+            modifier = Modifier.padding(start = 48.dp, end = 48.dp, bottom = 10.dp),
+        )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -155,6 +144,43 @@ fun TvMovieRow(rail: MovieRail, onMovieClick: (Movie) -> Unit, onSeeAll: (() -> 
             items(rail.movies, key = { it.id }) { movie ->
                 TvMovieCard(movie = movie, onClick = { onMovieClick(movie) })
             }
+            if (onSeeAll != null) {
+                item(key = "see-all") { TvSeeAllCard(onClick = onSeeAll) }
+            }
         }
+    }
+}
+
+/** A D-pad focusable "See all" tile that sits at the end of a rail. */
+@Composable
+fun TvSeeAllCard(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "seeAllScale")
+
+    Column(Modifier.width(150.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .scale(scale)
+                .clip(RoundedCornerShape(10.dp))
+                .background(if (focused) MbzGold else MbzScreen.copy(alpha = 0.12f))
+                .then(
+                    if (focused) Modifier.border(BorderStroke(3.dp, MbzGold), RoundedCornerShape(10.dp))
+                    else Modifier
+                )
+                .onFocusChanged { focused = it.isFocused }
+                .clickable { onClick() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "See all ›",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (focused) MbzInk else MbzGold,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("", style = MaterialTheme.typography.bodyMedium)  // align baseline with poster titles
     }
 }
